@@ -1,0 +1,6 @@
+{
+  "name": "Solo Leveling",
+  "description": "Reality OS — a real-life RPG productivity and personal development system with deterministic progression, seven core attributes, rank hierarchy, quests, and physical training telemetry.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,14 @@
+<resources>
+    <string name="app_name">Solo Leveling</string>
+    <string name="system_identity">SYSTEM // REALITY OS</string>
+    <string name="nav_home">Home</string>
+    <string name="nav_status">Status</string>
+    <string name="nav_quests">Quests</string>
+    <string name="nav_ai_system">System</string>
+    <string name="nav_modules">Modules</string>
+    <string name="action_log_activity">Log Activity</string>
+    <string name="action_complete_quest">Complete</string>
+    <string name="action_dismiss">Acknowledge</string>
+    <string name="status_verified">VERIFIED</string>
+    <string name="status_self_reported">SELF-REPORTED</string>
+</resources>

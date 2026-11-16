@@ -1,5 +1,6 @@
 package com.example.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -62,6 +63,7 @@ import com.example.ui.navigation.AcademicDashboardRoute
 import com.example.ui.navigation.AcademicExamsRoute
 import com.example.ui.navigation.AcademicFocusTimerRoute
 import com.example.ui.navigation.AcademicHistoryRoute
+import com.example.ui.navigation.AcademicIntelligenceRoute
 import com.example.ui.navigation.AcademicQuestsRoute
 import com.example.ui.navigation.AcademicRevisionsRoute
 import com.example.ui.navigation.AcademicSubjectDetailRoute
@@ -73,19 +75,30 @@ import com.example.ui.navigation.AchievementDetailsRoute
 import com.example.ui.navigation.AchievementsRoute
 import com.example.ui.navigation.ActiveBossBattleRoute
 import com.example.ui.navigation.ActiveDungeonRoute
+import com.example.ui.navigation.AdaptiveDailyPlanRoute
+import com.example.ui.navigation.AdaptiveDungeonsRoute
+import com.example.ui.navigation.AiCompanionRoute
 import com.example.ui.navigation.AiSystemRoute
+import com.example.ui.navigation.AutomationDashboardRoute
+import com.example.ui.navigation.AutomationHistoryRoute
 import com.example.ui.navigation.BossBattleDashboardRoute
 import com.example.ui.navigation.BossBattleDetailsRoute
+import com.example.ui.navigation.CelebrationHistoryRoute
 import com.example.ui.navigation.CloudBackupRoute
 import com.example.ui.navigation.CloudSyncDashboardRoute
 import com.example.ui.navigation.ConflictResolutionRoute
+import com.example.ui.navigation.ConsistencyAnalyticsRoute
+import com.example.ui.navigation.DailyExecutionTimelineRoute
 import com.example.ui.navigation.DailyScheduleRoute
+import com.example.ui.navigation.DataIntegrityDashboardRoute
+import com.example.ui.navigation.DevelopmentRoadmapRoute
 import com.example.ui.navigation.DisciplineAnalyticsRoute
 import com.example.ui.navigation.DungeonDetailsRoute
 import com.example.ui.navigation.DungeonDiscoveryRoute
 import com.example.ui.navigation.DungeonGateRoute
 import com.example.ui.navigation.DungeonHistoryRoute
 import com.example.ui.navigation.EmailVerificationRoute
+import com.example.ui.navigation.ErrorRecoveryCenterRoute
 import com.example.ui.navigation.ForgotPasswordRoute
 import com.example.ui.navigation.GoalDetailsRoute
 import com.example.ui.navigation.GoalManagementRoute
@@ -94,13 +107,23 @@ import com.example.ui.navigation.HabitDashboardRoute
 import com.example.ui.navigation.HabitEditorRoute
 import com.example.ui.navigation.HistoryRoute
 import com.example.ui.navigation.HomeRoute
+import com.example.ui.navigation.IntelligenceDashboardRoute
+import com.example.ui.navigation.IntelligencePreferencesRoute
 import com.example.ui.navigation.LifeDashboardRoute
 import com.example.ui.navigation.LoginRoute
+import com.example.ui.navigation.ModuleIntegrationStatusRoute
 import com.example.ui.navigation.ModulesHubRoute
 import com.example.ui.navigation.MonthlyCalendarRoute
+import com.example.ui.navigation.MonthlyIntelligenceReportRoute
+import com.example.ui.navigation.NotificationManagementRoute
 import com.example.ui.navigation.PendingChangesRoute
+import com.example.ui.navigation.PerformanceDiagnosticsRoute
+import com.example.ui.navigation.PersonalAdvisorRoute
 import com.example.ui.navigation.PersonalTaskManagerRoute
+import com.example.ui.navigation.PersonalizedRecommendationsRoute
+import com.example.ui.navigation.PhysicalIntelligenceRoute
 import com.example.ui.navigation.PhysicalRoute
+import com.example.ui.navigation.PlayerIntelligenceProfileRoute
 import com.example.ui.navigation.PlayerInventoryRoute
 import com.example.ui.navigation.QuestBoardRoute
 import com.example.ui.navigation.RegisteredDevicesRoute
@@ -115,11 +138,21 @@ import com.example.ui.navigation.SkillDetailsRoute
 import com.example.ui.navigation.SkillTreeExplorerRoute
 import com.example.ui.navigation.SkillsRoute
 import com.example.ui.navigation.StatusRoute
+import com.example.ui.navigation.StrengthsWeaknessesRoute
 import com.example.ui.navigation.SyncHistoryRoute
+import com.example.ui.navigation.SystemControlSettingsRoute
+import com.example.ui.navigation.SystemEventHistoryRoute
+import com.example.ui.navigation.SystemHealthMonitorRoute
+import com.example.ui.navigation.SystemOverviewRoute
+import com.example.ui.navigation.SystemVoiceSettingsRoute
 import com.example.ui.navigation.TaskDetailsRoute
 import com.example.ui.navigation.TitleCollectionRoute
+import com.example.ui.navigation.VoiceCommandRoute
 import com.example.ui.navigation.WeeklyCalendarRoute
+import com.example.ui.navigation.WeeklyIntelligenceReportRoute
 import com.example.ui.navigation.WeeklyReviewRoute
+import com.example.ui.navigation.WidgetHubRoute
+import com.example.ui.navigation.WorkloadBalanceRoute
 import com.example.ui.screens.HistoryScreen
 import com.example.ui.screens.HomeScreen
 import com.example.ui.screens.ModulesHubScreen
@@ -184,6 +217,40 @@ import com.example.ui.screens.rpg.SkillDashboardScreen
 import com.example.ui.screens.rpg.SkillDetailsScreen
 import com.example.ui.screens.rpg.SkillTreeExplorerScreen
 import com.example.ui.screens.rpg.TitleCollectionScreen
+import com.example.ui.screens.intelligence.AcademicIntelligenceScreen
+import com.example.ui.screens.intelligence.AdaptiveDailyPlanScreen
+import com.example.ui.screens.intelligence.AdaptiveDungeonsScreen
+import com.example.ui.screens.intelligence.ConsistencyAnalyticsScreen
+import com.example.ui.screens.intelligence.DevelopmentRoadmapScreen
+import com.example.ui.screens.intelligence.IntelligenceDashboardScreen
+import com.example.ui.screens.intelligence.IntelligencePreferencesScreen
+import com.example.ui.screens.intelligence.MonthlyIntelligenceReportScreen
+import com.example.ui.screens.intelligence.PersonalAdvisorScreen
+import com.example.ui.screens.intelligence.PersonalizedRecommendationsScreen
+import com.example.ui.screens.intelligence.PhysicalIntelligenceScreen
+import com.example.ui.screens.intelligence.PlayerIntelligenceProfileScreen
+import com.example.ui.screens.intelligence.StrengthsWeaknessesScreen
+import com.example.ui.screens.intelligence.WeeklyIntelligenceReportScreen
+import com.example.ui.screens.intelligence.WorkloadBalanceScreen
+import com.example.ui.screens.system.AutomationDashboardScreen
+import com.example.ui.screens.system.AutomationHistoryScreen
+import com.example.ui.screens.system.DailyExecutionTimelineScreen
+import com.example.ui.screens.system.DataIntegrityDashboardScreen
+import com.example.ui.screens.system.ErrorRecoveryCenterScreen
+import com.example.ui.screens.system.ModuleIntegrationStatusScreen
+import com.example.ui.screens.system.NotificationManagementScreen
+import com.example.ui.screens.system.PerformanceDiagnosticsScreen
+import com.example.ui.screens.system.SystemControlSettingsScreen
+import com.example.ui.screens.system.SystemEventHistoryScreen
+import com.example.ui.screens.system.SystemHealthMonitorScreen
+import com.example.ui.screens.system.SystemOverviewScreen
+import com.example.ui.screens.experience.AiCompanionScreen
+import com.example.ui.screens.experience.AwakeningScreen
+import com.example.ui.screens.experience.CelebrationHistoryScreen
+import com.example.ui.screens.experience.CelebrationModalOverlay
+import com.example.ui.screens.experience.SystemVoiceSettingsScreen
+import com.example.ui.screens.experience.VoiceCommandScreen
+import com.example.ui.screens.experience.WidgetHubScreen
 import com.example.ui.theme.SoloLevelingTheme
 import com.example.ui.theme.SystemColors
 import com.example.ui.viewmodel.AcademicUiState
@@ -192,12 +259,18 @@ import com.example.ui.viewmodel.AiSystemUiState
 import com.example.ui.viewmodel.AiSystemViewModel
 import com.example.ui.viewmodel.CloudSyncUiState
 import com.example.ui.viewmodel.CloudSyncViewModel
+import com.example.ui.viewmodel.IntelligenceUiState
+import com.example.ui.viewmodel.IntelligenceViewModel
 import com.example.ui.viewmodel.LifeManagementUiState
 import com.example.ui.viewmodel.LifeManagementViewModel
 import com.example.ui.viewmodel.RealityOsUiState
 import com.example.ui.viewmodel.RealityOsViewModel
 import com.example.ui.viewmodel.RpgUiState
 import com.example.ui.viewmodel.RpgViewModel
+import com.example.ui.viewmodel.SystemControlUiState
+import com.example.ui.viewmodel.SystemControlViewModel
+import com.example.ui.viewmodel.SystemExperienceUiState
+import com.example.ui.viewmodel.SystemExperienceViewModel
 
 private data class TopLevelNavItem(
     val label: String,
@@ -224,6 +297,9 @@ fun SoloLevelingApp(
     lifeManagementViewModel: LifeManagementViewModel,
     rpgViewModel: RpgViewModel,
     cloudSyncViewModel: CloudSyncViewModel,
+    intelligenceViewModel: IntelligenceViewModel,
+    systemControlViewModel: SystemControlViewModel,
+    systemExperienceViewModel: SystemExperienceViewModel,
     deepLinkRoute: String? = null,
     onDeepLinkConsumed: () -> Unit = {}
 ) {
@@ -233,6 +309,10 @@ fun SoloLevelingApp(
     val lifeUiState by lifeManagementViewModel.uiState.collectAsStateWithLifecycle()
     val rpgUiState by rpgViewModel.uiState.collectAsStateWithLifecycle()
     val cloudSyncUiState by cloudSyncViewModel.uiState.collectAsStateWithLifecycle()
+    val intelligenceUiState by intelligenceViewModel.uiState.collectAsStateWithLifecycle()
+    val systemControlUiState by systemControlViewModel.uiState.collectAsStateWithLifecycle()
+    val systemExperienceUiState by systemExperienceViewModel.uiState.collectAsStateWithLifecycle()
+    val expReady = systemExperienceUiState as? SystemExperienceUiState.Ready
     val hudGlowEnabled = (uiState as? RealityOsUiState.Ready)?.preferences?.hudGlowEnabled ?: true
 
     SoloLevelingTheme(hudGlowEnabled = hudGlowEnabled) {
@@ -241,65 +321,13 @@ fun SoloLevelingApp(
         val currentDestination = backStackEntry?.destination
 
         LaunchedEffect(deepLinkRoute) {
-            when (deepLinkRoute) {
-                "physical" -> {
-                    navigateTopLevel(navController, PhysicalRoute)
-                    onDeepLinkConsumed()
-                }
-                "quest_board" -> {
-                    navigateTopLevel(navController, QuestBoardRoute)
-                    onDeepLinkConsumed()
-                }
-                "academic_revisions" -> {
-                    navController.navigate(AcademicRevisionsRoute)
-                    onDeepLinkConsumed()
-                }
-                "academic_exams" -> {
-                    navController.navigate(AcademicExamsRoute)
-                    onDeepLinkConsumed()
-                }
-                "ai_system" -> {
-                    navController.navigate(AiSystemRoute)
-                    onDeepLinkConsumed()
-                }
-                "life_dashboard" -> {
-                    navController.navigate(LifeDashboardRoute)
-                    onDeepLinkConsumed()
-                }
-                "routines" -> {
-                    navController.navigate(RoutineManagerRoute)
-                    onDeepLinkConsumed()
-                }
-                "habits" -> {
-                    navController.navigate(HabitDashboardRoute)
-                    onDeepLinkConsumed()
-                }
-                "tasks" -> {
-                    navController.navigate(PersonalTaskManagerRoute)
-                    onDeepLinkConsumed()
-                }
-                "goals" -> {
-                    navController.navigate(GoalManagementRoute)
-                    onDeepLinkConsumed()
-                }
-                "daily_schedule" -> {
-                    navController.navigate(DailyScheduleRoute)
-                    onDeepLinkConsumed()
-                }
-                "weekly_review" -> {
-                    navController.navigate(WeeklyReviewRoute)
-                    onDeepLinkConsumed()
-                }
-                "cloud_sync" -> {
-                    navController.navigate(CloudSyncDashboardRoute)
-                    onDeepLinkConsumed()
-                }
-                "account_gateway" -> {
-                    navController.navigate(AccountGatewayRoute)
-                    onDeepLinkConsumed()
-                }
-                null -> Unit
-                else -> onDeepLinkConsumed()
+            if (!deepLinkRoute.isNullOrBlank()) {
+                handleDeepLinkRoute(
+                    route = deepLinkRoute,
+                    navController = navController,
+                    experienceViewModel = systemExperienceViewModel
+                )
+                onDeepLinkConsumed()
             }
         }
 
@@ -363,6 +391,38 @@ fun SoloLevelingApp(
             currentDestination?.hasRoute<RegisteredDevicesRoute>() == true -> "DEVICES"
             currentDestination?.hasRoute<CloudBackupRoute>() == true -> "CLOUD BACKUPS"
             currentDestination?.hasRoute<RestorePreviewRoute>() == true -> "RESTORE PREVIEW"
+            currentDestination?.hasRoute<IntelligenceDashboardRoute>() == true -> "INTELLIGENCE CENTER"
+            currentDestination?.hasRoute<PlayerIntelligenceProfileRoute>() == true -> "INTELLIGENCE PROFILE"
+            currentDestination?.hasRoute<StrengthsWeaknessesRoute>() == true -> "STRENGTHS & RISKS"
+            currentDestination?.hasRoute<AdaptiveDailyPlanRoute>() == true -> "ADAPTIVE DAILY PLAN"
+            currentDestination?.hasRoute<WorkloadBalanceRoute>() == true -> "WORKLOAD BALANCE"
+            currentDestination?.hasRoute<ConsistencyAnalyticsRoute>() == true -> "CONSISTENCY FORECAST"
+            currentDestination?.hasRoute<PersonalizedRecommendationsRoute>() == true -> "RECOMMENDATIONS"
+            currentDestination?.hasRoute<AcademicIntelligenceRoute>() == true -> "ACADEMIC INTELLIGENCE"
+            currentDestination?.hasRoute<PhysicalIntelligenceRoute>() == true -> "PHYSICAL INTELLIGENCE"
+            currentDestination?.hasRoute<AdaptiveDungeonsRoute>() == true -> "ADAPTIVE DUNGEONS"
+            currentDestination?.hasRoute<DevelopmentRoadmapRoute>() == true -> "DEVELOPMENT ROADMAP"
+            currentDestination?.hasRoute<WeeklyIntelligenceReportRoute>() == true -> "WEEKLY REPORT"
+            currentDestination?.hasRoute<MonthlyIntelligenceReportRoute>() == true -> "MONTHLY REPORT"
+            currentDestination?.hasRoute<PersonalAdvisorRoute>() == true -> "PERSONAL ADVISOR"
+            currentDestination?.hasRoute<IntelligencePreferencesRoute>() == true -> "INTEL PREFERENCES"
+            currentDestination?.hasRoute<SystemOverviewRoute>() == true -> "SYSTEM CONTROL CENTER"
+            currentDestination?.hasRoute<ModuleIntegrationStatusRoute>() == true -> "MODULE INTEGRATION"
+            currentDestination?.hasRoute<AutomationDashboardRoute>() == true -> "AUTOMATION WORKERS"
+            currentDestination?.hasRoute<AutomationHistoryRoute>() == true -> "AUTOMATION HISTORY"
+            currentDestination?.hasRoute<DailyExecutionTimelineRoute>() == true -> "EXECUTION TIMELINE"
+            currentDestination?.hasRoute<SystemEventHistoryRoute>() == true -> "EVENT BUS HISTORY"
+            currentDestination?.hasRoute<DataIntegrityDashboardRoute>() == true -> "DATA INTEGRITY"
+            currentDestination?.hasRoute<SystemHealthMonitorRoute>() == true -> "SYSTEM HEALTH"
+            currentDestination?.hasRoute<PerformanceDiagnosticsRoute>() == true -> "PERFORMANCE"
+            currentDestination?.hasRoute<ErrorRecoveryCenterRoute>() == true -> "RECOVERY CENTER"
+            currentDestination?.hasRoute<NotificationManagementRoute>() == true -> "NOTIFICATIONS"
+            currentDestination?.hasRoute<SystemControlSettingsRoute>() == true -> "CONTROL SETTINGS"
+            currentDestination?.hasRoute<AiCompanionRoute>() == true -> "AI COMPANION"
+            currentDestination?.hasRoute<VoiceCommandRoute>() == true -> "VOICE CONSOLE"
+            currentDestination?.hasRoute<SystemVoiceSettingsRoute>() == true -> "SYSTEM VOICE"
+            currentDestination?.hasRoute<WidgetHubRoute>() == true -> "HOME WIDGETS"
+            currentDestination?.hasRoute<CelebrationHistoryRoute>() == true -> "CELEBRATION VAULT"
             else -> null
         }
 
@@ -477,11 +537,50 @@ fun SoloLevelingApp(
                                 rpgState = rpgUiState,
                                 rpgViewModel = rpgViewModel,
                                 cloudSyncState = cloudSyncUiState,
-                                cloudSyncViewModel = cloudSyncViewModel
+                                cloudSyncViewModel = cloudSyncViewModel,
+                                intelligenceState = intelligenceUiState,
+                                intelligenceViewModel = intelligenceViewModel,
+                                systemControlState = systemControlUiState,
+                                systemControlViewModel = systemControlViewModel,
+                                systemExperienceState = systemExperienceUiState,
+                                systemExperienceViewModel = systemExperienceViewModel
                             )
                         }
                     }
                 }
+            }
+
+            // Milestone 10: Cinematic Awakening Sequence (first launch or replay)
+            if (expReady != null && !expReady.preferences.hasCompletedAwakening) {
+                BackHandler {
+                    systemExperienceViewModel.completeAwakening()
+                }
+                AwakeningScreen(
+                    player = expReady.player,
+                    animationsEnabled = expReady.preferences.animationsEnabled,
+                    reducedMotionEnabled = expReady.preferences.reducedMotionEnabled,
+                    onStageShown = { stage ->
+                        systemExperienceViewModel.speakAwakeningStage(stage, expReady.player)
+                    },
+                    onComplete = systemExperienceViewModel::completeAwakening
+                )
+            }
+
+            // Milestone 10: Event-Driven Level-Up / Rank-Promotion Celebration Overlay
+            val activeCelebration = expReady?.activeReplayCelebration
+                ?: expReady?.unacknowledgedCelebrations?.firstOrNull()
+            if (activeCelebration != null && expReady != null && expReady.preferences.hasCompletedAwakening) {
+                CelebrationModalOverlay(
+                    event = activeCelebration,
+                    animationsEnabled = expReady.preferences.animationsEnabled,
+                    reducedMotionEnabled = expReady.preferences.reducedMotionEnabled,
+                    onAcknowledge = {
+                        systemExperienceViewModel.acknowledgeCelebration(activeCelebration.celebrationId)
+                    },
+                    onOpenStatus = {
+                        navigateTopLevel(navController, StatusRoute)
+                    }
+                )
             }
         }
     }
@@ -544,11 +643,27 @@ private fun RealityOsNavHost(
     rpgState: RpgUiState,
     rpgViewModel: RpgViewModel,
     cloudSyncState: CloudSyncUiState,
-    cloudSyncViewModel: CloudSyncViewModel
+    cloudSyncViewModel: CloudSyncViewModel,
+    intelligenceState: IntelligenceUiState,
+    intelligenceViewModel: IntelligenceViewModel,
+    systemControlState: SystemControlUiState,
+    systemControlViewModel: SystemControlViewModel,
+    systemExperienceState: SystemExperienceUiState,
+    systemExperienceViewModel: SystemExperienceViewModel
 ) {
     val context = LocalContext.current
     val academicSummary = (academicState as? AcademicUiState.Ready)?.summary ?: AcademicDashboardSummary()
     val lifeSummary = (lifeState as? LifeManagementUiState.Ready)?.dashboard ?: LifeDashboardSummary()
+    val rpgReady = rpgState as? RpgUiState.Ready
+    val unlockedTitles = rpgReady?.snapshot?.titles?.filter { it.isUnlocked }.orEmpty()
+    val unlockedAchievements = rpgReady?.snapshot?.achievements?.filter { it.isUnlocked }.orEmpty()
+    val expReady = systemExperienceState as? SystemExperienceUiState.Ready
+    val intelReady = intelligenceState as? IntelligenceUiState.Ready
+    val intelligenceHeadline = intelReady?.workload?.adjustmentDirective
+        ?: intelReady?.profile?.let { "Measured ${it.measuredDataRatioPercent}% • Peak ${it.behavioralPeakWindow}" }
+        ?: "Adaptive planning, predictions & personalized coaching ready"
+    val systemHealthStatusLabel = (systemControlState as? SystemControlUiState.Ready)
+        ?.healthReport?.overallStatus?.label ?: "Active"
     NavHost(
         navController = navController,
         startDestination = HomeRoute
@@ -567,11 +682,25 @@ private fun RealityOsNavHost(
                 academicSummary = academicSummary,
                 onNavigateToAcademic = { navController.navigate(AcademicDashboardRoute) },
                 lifeSummary = lifeSummary,
-                onNavigateToLife = { navController.navigate(LifeDashboardRoute) }
+                onNavigateToLife = { navController.navigate(LifeDashboardRoute) },
+                intelligenceHeadline = intelligenceHeadline,
+                onNavigateToIntelligence = { navController.navigate(IntelligenceDashboardRoute) },
+                systemHealthStatusLabel = systemHealthStatusLabel,
+                onNavigateToSystemControl = { navController.navigate(SystemOverviewRoute) },
+                onNavigateToAiCompanion = { navController.navigate(AiCompanionRoute) },
+                onNavigateToVoiceConsole = { navController.navigate(VoiceCommandRoute) }
             )
         }
         composable<StatusRoute> {
-            StatusScreen(state = state)
+            StatusScreen(
+                state = state,
+                academicSummary = academicSummary,
+                lifeSummary = lifeSummary,
+                unlockedTitles = unlockedTitles,
+                unlockedAchievements = unlockedAchievements,
+                onOpenTitles = { navController.navigate(TitleCollectionRoute) },
+                onOpenAchievements = { navController.navigate(AchievementsRoute) }
+            )
         }
         composable<PhysicalRoute> {
             PhysicalDevelopmentScreen(
@@ -649,7 +778,14 @@ private fun RealityOsNavHost(
                     } else {
                         navController.navigate(AccountGatewayRoute)
                     }
-                }
+                },
+                onOpenIntelligenceCenter = { navController.navigate(IntelligenceDashboardRoute) },
+                onOpenSystemControl = { navController.navigate(SystemOverviewRoute) },
+                onOpenAiCompanion = { navController.navigate(AiCompanionRoute) },
+                onOpenVoiceConsole = { navController.navigate(VoiceCommandRoute) },
+                onOpenSystemVoiceSettings = { navController.navigate(SystemVoiceSettingsRoute) },
+                onOpenWidgetHub = { navController.navigate(WidgetHubRoute) },
+                onOpenCelebrationVault = { navController.navigate(CelebrationHistoryRoute) }
             )
         }
         // Milestone 6: Dungeons, Boss Battles, Skills & RPG Systems (17 Screens)
@@ -843,7 +979,10 @@ private fun RealityOsNavHost(
                 onSetSupabaseSync = viewModel::setSupabaseCloudSyncEnabled,
                 syncSummary = cloudSyncState.summary,
                 onOpenCloudGateway = { navController.navigate(AccountGatewayRoute) },
-                onOpenCloudSyncDashboard = { navController.navigate(CloudSyncDashboardRoute) }
+                onOpenCloudSyncDashboard = { navController.navigate(CloudSyncDashboardRoute) },
+                onOpenSystemVoiceSettings = { navController.navigate(SystemVoiceSettingsRoute) },
+                onOpenWidgetHub = { navController.navigate(WidgetHubRoute) },
+                onReplayAwakening = systemExperienceViewModel::replayAwakening
             )
         }
 
@@ -1268,6 +1407,379 @@ private fun RealityOsNavHost(
                 }
             )
         }
+
+        // Milestone 8: Intelligence, Personalization & Adaptive System (15 Screens)
+        composable<IntelligenceDashboardRoute> {
+            IntelligenceDashboardScreen(
+                uiState = intelligenceState,
+                onRefresh = { intelligenceViewModel.refreshIntelligence(force = true) },
+                onClearFeedback = intelligenceViewModel::clearFeedback,
+                onOpenProfile = { navController.navigate(PlayerIntelligenceProfileRoute) },
+                onOpenStrengths = { navController.navigate(StrengthsWeaknessesRoute) },
+                onOpenDailyPlan = { navController.navigate(AdaptiveDailyPlanRoute) },
+                onOpenWorkload = { navController.navigate(WorkloadBalanceRoute) },
+                onOpenConsistency = { navController.navigate(ConsistencyAnalyticsRoute) },
+                onOpenRecommendations = { navController.navigate(PersonalizedRecommendationsRoute) },
+                onOpenAcademicIntel = { navController.navigate(AcademicIntelligenceRoute) },
+                onOpenPhysicalIntel = { navController.navigate(PhysicalIntelligenceRoute) },
+                onOpenAdaptiveDungeons = { navController.navigate(AdaptiveDungeonsRoute) },
+                onOpenRoadmap = { navController.navigate(DevelopmentRoadmapRoute) },
+                onOpenWeeklyReport = { navController.navigate(WeeklyIntelligenceReportRoute) },
+                onOpenMonthlyReport = { navController.navigate(MonthlyIntelligenceReportRoute) },
+                onOpenAdvisor = { navController.navigate(PersonalAdvisorRoute) },
+                onOpenPreferences = { navController.navigate(IntelligencePreferencesRoute) }
+            )
+        }
+        composable<PlayerIntelligenceProfileRoute> {
+            PlayerIntelligenceProfileScreen(
+                uiState = intelligenceState,
+                onRefresh = { intelligenceViewModel.refreshIntelligence(force = true) }
+            )
+        }
+        composable<StrengthsWeaknessesRoute> {
+            StrengthsWeaknessesScreen(
+                uiState = intelligenceState,
+                onRefresh = { intelligenceViewModel.refreshIntelligence(force = true) }
+            )
+        }
+        composable<AdaptiveDailyPlanRoute> {
+            AdaptiveDailyPlanScreen(
+                uiState = intelligenceState,
+                onClearFeedback = intelligenceViewModel::clearFeedback,
+                onGeneratePlan = intelligenceViewModel::generateDailyPlan,
+                onApprovePlan = intelligenceViewModel::approveDailyPlan,
+                onUpdateBlockProgress = intelligenceViewModel::updateBlockProgress,
+                onRescheduleBlock = intelligenceViewModel::rescheduleBlock
+            )
+        }
+        composable<WorkloadBalanceRoute> {
+            WorkloadBalanceScreen(
+                uiState = intelligenceState,
+                onRefresh = { intelligenceViewModel.refreshIntelligence(force = true) }
+            )
+        }
+        composable<ConsistencyAnalyticsRoute> {
+            ConsistencyAnalyticsScreen(
+                uiState = intelligenceState,
+                onRefresh = { intelligenceViewModel.refreshIntelligence(force = true) }
+            )
+        }
+        composable<PersonalizedRecommendationsRoute> {
+            PersonalizedRecommendationsScreen(
+                uiState = intelligenceState,
+                onRefresh = { intelligenceViewModel.refreshIntelligence(force = true) },
+                onClearFeedback = intelligenceViewModel::clearFeedback,
+                onRespond = intelligenceViewModel::respondToRecommendation,
+                onNavigateDeepLink = { target ->
+                    when (target) {
+                        "physical" -> navigateTopLevel(navController, PhysicalRoute)
+                        "academic_revisions" -> navController.navigate(AcademicRevisionsRoute)
+                        "academic_dashboard" -> navController.navigate(AcademicDashboardRoute)
+                        "daily_schedule" -> navController.navigate(DailyScheduleRoute)
+                        "dungeon_discovery" -> navController.navigate(DungeonDiscoveryRoute)
+                        "tasks" -> navController.navigate(PersonalTaskManagerRoute)
+                        else -> navController.navigate(IntelligenceDashboardRoute)
+                    }
+                }
+            )
+        }
+        composable<AcademicIntelligenceRoute> {
+            AcademicIntelligenceScreen(
+                uiState = intelligenceState,
+                onRefresh = { intelligenceViewModel.refreshIntelligence(force = true) }
+            )
+        }
+        composable<PhysicalIntelligenceRoute> {
+            PhysicalIntelligenceScreen(
+                uiState = intelligenceState,
+                onRefresh = { intelligenceViewModel.refreshIntelligence(force = true) }
+            )
+        }
+        composable<AdaptiveDungeonsRoute> {
+            AdaptiveDungeonsScreen(
+                uiState = intelligenceState,
+                onRefresh = { intelligenceViewModel.refreshIntelligence(force = true) },
+                onOpenDungeonDetails = { dId -> navController.navigate(DungeonDetailsRoute(dId)) }
+            )
+        }
+        composable<DevelopmentRoadmapRoute> {
+            DevelopmentRoadmapScreen(
+                uiState = intelligenceState,
+                onClearFeedback = intelligenceViewModel::clearFeedback,
+                onGenerateRoadmap = intelligenceViewModel::generateRoadmap,
+                onApproveRoadmap = intelligenceViewModel::approveRoadmap,
+                onToggleMilestone = intelligenceViewModel::toggleRoadmapMilestone,
+                onEditMilestone = intelligenceViewModel::editRoadmapMilestone
+            )
+        }
+        composable<WeeklyIntelligenceReportRoute> {
+            WeeklyIntelligenceReportScreen(
+                uiState = intelligenceState,
+                onClearFeedback = intelligenceViewModel::clearFeedback,
+                onGenerateReport = { intelligenceViewModel.generateReport(com.example.domain.model.ReportPeriodType.WEEKLY) }
+            )
+        }
+        composable<MonthlyIntelligenceReportRoute> {
+            MonthlyIntelligenceReportScreen(
+                uiState = intelligenceState,
+                onClearFeedback = intelligenceViewModel::clearFeedback,
+                onGenerateReport = { intelligenceViewModel.generateReport(com.example.domain.model.ReportPeriodType.MONTHLY) }
+            )
+        }
+        composable<PersonalAdvisorRoute> {
+            PersonalAdvisorScreen(
+                uiState = intelligenceState,
+                onClearFeedback = intelligenceViewModel::clearFeedback,
+                onAskAdvisor = intelligenceViewModel::askAdvisor
+            )
+        }
+        composable<IntelligencePreferencesRoute> {
+            IntelligencePreferencesScreen(
+                uiState = intelligenceState,
+                onClearFeedback = intelligenceViewModel::clearFeedback,
+                onSavePreferences = intelligenceViewModel::updatePreferences,
+                onClearAllData = intelligenceViewModel::clearAllIntelligenceData
+            )
+        }
+
+        // Milestone 9: System Integration, Automation & Reliability (12 Screens)
+        composable<SystemOverviewRoute> {
+            SystemOverviewScreen(
+                uiState = systemControlState,
+                onRetry = { systemControlViewModel.refreshSystemDiagnostics(silent = false) },
+                onClearFeedback = systemControlViewModel::clearFeedback,
+                onOpenModulesStatus = { navController.navigate(ModuleIntegrationStatusRoute) },
+                onOpenAutomations = { navController.navigate(AutomationDashboardRoute) },
+                onOpenAutomationHistory = { navController.navigate(AutomationHistoryRoute) },
+                onOpenExecutionTimeline = { navController.navigate(DailyExecutionTimelineRoute) },
+                onOpenEventHistory = { navController.navigate(SystemEventHistoryRoute) },
+                onOpenDataIntegrity = { navController.navigate(DataIntegrityDashboardRoute) },
+                onOpenHealthMonitor = { navController.navigate(SystemHealthMonitorRoute) },
+                onOpenPerformance = { navController.navigate(PerformanceDiagnosticsRoute) },
+                onOpenRecoveryCenter = { navController.navigate(ErrorRecoveryCenterRoute) },
+                onOpenNotifications = { navController.navigate(NotificationManagementRoute) },
+                onOpenSettings = { navController.navigate(SystemControlSettingsRoute) },
+                onOpenAiCompanion = { navController.navigate(AiCompanionRoute) },
+                onOpenVoiceConsole = { navController.navigate(VoiceCommandRoute) },
+                onOpenSystemVoiceSettings = { navController.navigate(SystemVoiceSettingsRoute) },
+                onOpenWidgetHub = { navController.navigate(WidgetHubRoute) },
+                onOpenCelebrationVault = { navController.navigate(CelebrationHistoryRoute) }
+            )
+        }
+        composable<ModuleIntegrationStatusRoute> {
+            ModuleIntegrationStatusScreen(
+                uiState = systemControlState,
+                onRetry = { systemControlViewModel.refreshSystemDiagnostics(silent = false) },
+                onClearFeedback = systemControlViewModel::clearFeedback,
+                onNavigateToModule = { routeKey ->
+                    when (routeKey) {
+                        "profile" -> navigateTopLevel(navController, StatusRoute)
+                        "physical" -> navigateTopLevel(navController, PhysicalRoute)
+                        "academic" -> navController.navigate(AcademicDashboardRoute)
+                        "life_management" -> navController.navigate(LifeDashboardRoute)
+                        "rpg_hub" -> navController.navigate(DungeonGateRoute)
+                        "cloud_sync" -> navController.navigate(CloudSyncDashboardRoute)
+                        "intelligence_hub" -> navController.navigate(IntelligenceDashboardRoute)
+                        "automation_dashboard" -> navController.navigate(AutomationDashboardRoute)
+                        else -> navController.navigate(SystemOverviewRoute)
+                    }
+                }
+            )
+        }
+        composable<AutomationDashboardRoute> {
+            AutomationDashboardScreen(
+                uiState = systemControlState,
+                onRetry = { systemControlViewModel.refreshSystemDiagnostics(silent = false) },
+                onClearFeedback = systemControlViewModel::clearFeedback,
+                onToggleJob = systemControlViewModel::toggleAutomationEnabled,
+                onRunJobNow = systemControlViewModel::runAutomationNow,
+                onRunDailyCycleNow = systemControlViewModel::runDailyCycleNow,
+                onOpenHistory = { navController.navigate(AutomationHistoryRoute) }
+            )
+        }
+        composable<AutomationHistoryRoute> {
+            AutomationHistoryScreen(
+                uiState = systemControlState,
+                onRetry = { systemControlViewModel.refreshSystemDiagnostics(silent = false) },
+                onClearFeedback = systemControlViewModel::clearFeedback
+            )
+        }
+        composable<DailyExecutionTimelineRoute> {
+            DailyExecutionTimelineScreen(
+                uiState = systemControlState,
+                onRetry = { systemControlViewModel.refreshSystemDiagnostics(silent = false) },
+                onClearFeedback = systemControlViewModel::clearFeedback,
+                onUpdateStatus = systemControlViewModel::updateExecutionStatus,
+                onLoadRescheduleSlots = systemControlViewModel::loadRescheduleSlots,
+                onClearReschedule = systemControlViewModel::clearRescheduleSelection
+            )
+        }
+        composable<SystemEventHistoryRoute> {
+            SystemEventHistoryScreen(
+                uiState = systemControlState,
+                onRetry = { systemControlViewModel.refreshSystemDiagnostics(silent = false) },
+                onClearFeedback = systemControlViewModel::clearFeedback,
+                onRetryEvent = systemControlViewModel::retryEvent
+            )
+        }
+        composable<DataIntegrityDashboardRoute> {
+            DataIntegrityDashboardScreen(
+                uiState = systemControlState,
+                onRetry = { systemControlViewModel.refreshSystemDiagnostics(silent = false) },
+                onClearFeedback = systemControlViewModel::clearFeedback,
+                onRunScan = systemControlViewModel::runIntegrityScan,
+                onRepairFinding = systemControlViewModel::repairIntegrityFinding,
+                onDismissFinding = systemControlViewModel::dismissIntegrityFinding
+            )
+        }
+        composable<SystemHealthMonitorRoute> {
+            SystemHealthMonitorScreen(
+                uiState = systemControlState,
+                onRetry = { systemControlViewModel.refreshSystemDiagnostics(silent = false) },
+                onClearFeedback = systemControlViewModel::clearFeedback,
+                onRunFullRecovery = systemControlViewModel::executeFullRecovery
+            )
+        }
+        composable<PerformanceDiagnosticsRoute> {
+            PerformanceDiagnosticsScreen(
+                uiState = systemControlState,
+                onRetry = { systemControlViewModel.refreshSystemDiagnostics(silent = false) },
+                onClearFeedback = systemControlViewModel::clearFeedback
+            )
+        }
+        composable<ErrorRecoveryCenterRoute> {
+            ErrorRecoveryCenterScreen(
+                uiState = systemControlState,
+                onRetry = { systemControlViewModel.refreshSystemDiagnostics(silent = false) },
+                onClearFeedback = systemControlViewModel::clearFeedback,
+                onExecuteFullRecovery = systemControlViewModel::executeFullRecovery
+            )
+        }
+        composable<NotificationManagementRoute> {
+            NotificationManagementScreen(
+                uiState = systemControlState,
+                onRetry = { systemControlViewModel.refreshSystemDiagnostics(silent = false) },
+                onClearFeedback = systemControlViewModel::clearFeedback,
+                onUpdateNotificationPrefs = systemControlViewModel::updateNotificationPreferences,
+                onMarkRead = systemControlViewModel::markNotificationRead,
+                onClearRead = systemControlViewModel::clearReadNotifications
+            )
+        }
+        composable<SystemControlSettingsRoute> {
+            SystemControlSettingsScreen(
+                uiState = systemControlState,
+                onRetry = { systemControlViewModel.refreshSystemDiagnostics(silent = false) },
+                onClearFeedback = systemControlViewModel::clearFeedback,
+                onUpdateSystemPreferences = systemControlViewModel::updateSystemPreferences,
+                experiencePrefs = expReady?.preferences ?: com.example.domain.model.SystemExperiencePreferences(),
+                onUpdateExperiencePrefs = systemExperienceViewModel::updatePreferences,
+                onReplayAwakening = systemExperienceViewModel::replayAwakening,
+                onOpenSystemVoiceSettings = { navController.navigate(SystemVoiceSettingsRoute) },
+                onOpenVoiceConsole = { navController.navigate(VoiceCommandRoute) },
+                onOpenWidgetHub = { navController.navigate(WidgetHubRoute) },
+                onOpenCelebrationVault = { navController.navigate(CelebrationHistoryRoute) }
+            )
+        }
+
+        // Milestone 10: The Awakening — Immersive System Experience (5 Screens)
+        composable<AiCompanionRoute> {
+            AiCompanionScreen(
+                uiState = aiSystemState,
+                ttsEnabled = expReady?.preferences?.ttsEnabled ?: true,
+                onRetryInit = viewModel::retryInitialization,
+                onSendChatMessage = aiSystemViewModel::sendChatMessage,
+                onRetryLastPrompt = aiSystemViewModel::retryLastPrompt,
+                onNewConversation = aiSystemViewModel::startNewConversation,
+                onClearAllConversations = aiSystemViewModel::clearAllConversations,
+                onSpeakMessage = { msg -> systemExperienceViewModel.speakText(msg) },
+                onOpenVoiceConsole = { navController.navigate(VoiceCommandRoute) },
+                onOpenAiSettings = { navController.navigate(AiSystemRoute) }
+            )
+        }
+        composable<VoiceCommandRoute> {
+            VoiceCommandScreen(
+                uiState = systemExperienceState,
+                onRetry = viewModel::retryInitialization,
+                onSubmitTranscript = { transcript ->
+                    systemExperienceViewModel.submitVoiceTranscript(transcript) { route ->
+                        handleDeepLinkRoute(route, navController, systemExperienceViewModel)
+                    }
+                },
+                onConfirmPending = {
+                    systemExperienceViewModel.confirmPendingVoiceCommand { route ->
+                        handleDeepLinkRoute(route, navController, systemExperienceViewModel)
+                    }
+                },
+                onDismissPending = systemExperienceViewModel::dismissPendingVoiceConfirmation,
+                onClearHistory = systemExperienceViewModel::clearVoiceHistory
+            )
+        }
+        composable<SystemVoiceSettingsRoute> {
+            SystemVoiceSettingsScreen(
+                uiState = systemExperienceState,
+                onRetry = viewModel::retryInitialization,
+                onUpdatePreferences = systemExperienceViewModel::updatePreferences,
+                onTestVoice = systemExperienceViewModel::testSystemVoice,
+                onStopVoice = systemExperienceViewModel::stopVoice,
+                onMarkAnnouncementRead = systemExperienceViewModel::markAnnouncementRead,
+                onMarkAllRead = systemExperienceViewModel::markAllAnnouncementsRead
+            )
+        }
+        composable<WidgetHubRoute> {
+            WidgetHubScreen(
+                uiState = systemExperienceState,
+                onRetry = viewModel::retryInitialization,
+                onRefreshWidgets = systemExperienceViewModel::refreshWidgets
+            )
+        }
+        composable<CelebrationHistoryRoute> {
+            CelebrationHistoryScreen(
+                celebrations = expReady?.celebrationHistory.orEmpty(),
+                onReplayCelebration = systemExperienceViewModel::replayCelebration
+            )
+        }
+    }
+}
+
+private fun handleDeepLinkRoute(
+    route: String,
+    navController: NavHostController,
+    experienceViewModel: SystemExperienceViewModel
+) {
+    when (route) {
+        "home" -> navigateTopLevel(navController, HomeRoute)
+        "status" -> navigateTopLevel(navController, StatusRoute)
+        "physical" -> navigateTopLevel(navController, PhysicalRoute)
+        "quest_board" -> navigateTopLevel(navController, QuestBoardRoute)
+        "academic_revisions" -> navController.navigate(AcademicRevisionsRoute)
+        "academic_exams" -> navController.navigate(AcademicExamsRoute)
+        "academic_focus" -> navController.navigate(AcademicFocusTimerRoute())
+        "ai_system" -> navController.navigate(AiSystemRoute)
+        "ai_companion" -> navController.navigate(AiCompanionRoute)
+        "voice_commands" -> navController.navigate(VoiceCommandRoute)
+        "system_voice" -> navController.navigate(SystemVoiceSettingsRoute)
+        "widgets" -> navController.navigate(WidgetHubRoute)
+        "celebrations" -> navController.navigate(CelebrationHistoryRoute)
+        "life_dashboard" -> navController.navigate(LifeDashboardRoute)
+        "routines" -> navController.navigate(RoutineManagerRoute)
+        "habits" -> navController.navigate(HabitDashboardRoute)
+        "tasks" -> navController.navigate(PersonalTaskManagerRoute)
+        "goals" -> navController.navigate(GoalManagementRoute)
+        "daily_schedule" -> navController.navigate(DailyScheduleRoute)
+        "weekly_review" -> navController.navigate(WeeklyReviewRoute)
+        "dungeon_gate" -> navController.navigate(DungeonGateRoute)
+        "boss_battles" -> navController.navigate(BossBattleDashboardRoute)
+        "cloud_sync" -> navController.navigate(CloudSyncDashboardRoute)
+        "account_gateway" -> navController.navigate(AccountGatewayRoute)
+        "intelligence_dashboard" -> navController.navigate(IntelligenceDashboardRoute)
+        "intelligence_daily_plan" -> navController.navigate(AdaptiveDailyPlanRoute)
+        "intelligence_roadmap" -> navController.navigate(DevelopmentRoadmapRoute)
+        "intelligence_dungeons" -> navController.navigate(AdaptiveDungeonsRoute)
+        "weekly_intelligence" -> navController.navigate(WeeklyIntelligenceReportRoute)
+        "system_control" -> navController.navigate(SystemOverviewRoute)
+        "automation_dashboard" -> navController.navigate(AutomationDashboardRoute)
+        "awakening" -> experienceViewModel.replayAwakening()
+        else -> Unit
     }
 }
 

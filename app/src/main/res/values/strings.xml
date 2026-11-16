@@ -11,4 +11,12 @@
     <string name="action_dismiss">Acknowledge</string>
     <string name="status_verified">VERIFIED</string>
     <string name="status_self_reported">SELF-REPORTED</string>
+    <string name="widget_player_status_name">System Player Status</string>
+    <string name="widget_player_status_desc">Live Rank, Level, XP progress, and Recovery status at a glance.</string>
+    <string name="widget_daily_quest_name">Daily Quests</string>
+    <string name="widget_daily_quest_desc">Today\'s pending System quests and targets.</string>
+    <string name="widget_daily_progress_name">Daily Progress HUD</string>
+    <string name="widget_daily_progress_desc">Jogging, study minutes, daily quests, and discipline score.</string>
+    <string name="widget_quick_action_name">System Quick Actions</string>
+    <string name="widget_quick_action_desc">One-tap shortcuts to Focus Timer, Workout, AI Companion, and Status.</string>
 </resources>

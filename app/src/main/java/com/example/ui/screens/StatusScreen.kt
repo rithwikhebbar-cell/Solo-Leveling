@@ -33,8 +33,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import com.example.domain.model.AcademicDashboardSummary
+import com.example.domain.model.AchievementWithStatus
 import com.example.domain.model.AttributeBreakdown
 import com.example.domain.model.HunterRank
+import com.example.domain.model.LifeDashboardSummary
+import com.example.domain.model.PlayerTitleDefinition
+import com.example.domain.model.RecoveryStatus
 import com.example.ui.components.AttributeRadarChart
 import com.example.ui.components.GlowingProgressBar
 import com.example.ui.components.HolographicPanel
@@ -47,11 +52,18 @@ import com.example.ui.viewmodel.RealityOsUiState
 @Composable
 fun StatusScreen(
     state: RealityOsUiState.Ready,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    academicSummary: AcademicDashboardSummary = AcademicDashboardSummary(),
+    lifeSummary: LifeDashboardSummary = LifeDashboardSummary(),
+    unlockedTitles: List<PlayerTitleDefinition> = emptyList(),
+    unlockedAchievements: List<AchievementWithStatus> = emptyList(),
+    onOpenTitles: () -> Unit = {},
+    onOpenAchievements: () -> Unit = {}
 ) {
     val player = state.player
     val nextRank = state.nextRankProgress
     val attributes = player.attributes.asList()
+    val equippedTitle = unlockedTitles.firstOrNull { it.isEquipped }?.name ?: player.title
 
     Box(
         modifier = modifier
@@ -92,7 +104,7 @@ fun StatusScreen(
                                     color = SystemColors.PureIce
                                 )
                                 Text(
-                                    text = "${player.rank.displayName} • ${player.title}",
+                                    text = "${player.rank.displayName} • $equippedTitle",
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = SystemColors.rankAccent(player.rank)
                                 )
@@ -254,6 +266,125 @@ fun StatusScreen(
                                         )
                                     }
                                 }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Real-World Domain Overview & Recovery Readiness
+            item {
+                SystemSectionTitle(
+                    title = "Real-World Domain Telemetry",
+                    subtitle = "Physical • Academic • Discipline • Recovery readiness"
+                )
+            }
+
+            item {
+                val recColor = when (state.physicalState.recoveryStatus) {
+                    RecoveryStatus.OPTIMAL -> SystemColors.VerifiedEmerald
+                    RecoveryStatus.MODERATE_LOAD -> SystemColors.WarningAmber
+                    RecoveryStatus.RECOVERY_REQUIRED -> SystemColors.DangerCrimson
+                }
+                HolographicPanel(
+                    modifier = Modifier.fillMaxWidth().testTag("status_domain_telemetry_card"),
+                    accentColor = recColor,
+                    secondaryColor = SystemColors.ElectricCyan
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("RECOVERY READINESS", style = MaterialTheme.typography.labelLarge, color = recColor)
+                            Text(
+                                text = "${state.physicalState.recoveryStatus.label} (${player.recoveryScore}/100)",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = SystemColors.PureIce
+                            )
+                        }
+                        Text(
+                            text = "Physical: ${state.physicalState.completedJoggingMinutesToday}/${state.physicalState.effectiveJoggingTarget}m jogging • ${state.physicalState.weeklySessionsCompleted} weekly sessions",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = SystemColors.MetallicSilver
+                        )
+                        Text(
+                            text = "Academic: ${academicSummary.todayStudyMinutes}/${academicSummary.dailyStudyGoalMinutes}m study • ${academicSummary.pendingRevisionsCount} revisions due",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = SystemColors.MetallicSilver
+                        )
+                        Text(
+                            text = "Discipline: Score ${lifeSummary.todayDisciplineScore}/100 • ${lifeSummary.completedHabitsToday}/${lifeSummary.activeHabitsCount} habits",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = SystemColors.MetallicSilver
+                        )
+                    }
+                }
+            }
+
+            // Titles & Achievements Highlights
+            item {
+                HolographicPanel(
+                    modifier = Modifier.fillMaxWidth(),
+                    accentColor = SystemColors.MonarchGold,
+                    secondaryColor = SystemColors.ArcaneViolet
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("TITLES & ACHIEVEMENTS", style = MaterialTheme.typography.titleMedium, color = SystemColors.MonarchGold)
+                            Text("${unlockedTitles.size} Titles • ${unlockedAchievements.size} Unlocked", style = MaterialTheme.typography.labelSmall, color = SystemColors.ElectricCyan)
+                        }
+                        Text(
+                            text = "Equipped Honorific: $equippedTitle",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = SystemColors.PureIce
+                        )
+                        if (unlockedAchievements.isNotEmpty()) {
+                            unlockedAchievements.take(3).forEach { ach ->
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.VerifiedUser,
+                                        contentDescription = ach.definition.title,
+                                        tint = SystemColors.MonarchGold,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "${ach.definition.title} (${ach.definition.rarity.label})",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = SystemColors.MetallicSilver
+                                    )
+                                }
+                            }
+                        } else {
+                            Text(
+                                text = "Complete verified sessions and quests to unlock titles and achievement badges.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = SystemColors.MutedSilver
+                            )
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            androidx.compose.material3.OutlinedButton(
+                                onClick = onOpenTitles,
+                                modifier = Modifier.weight(1f),
+                                border = BorderStroke(1.dp, SystemColors.MonarchGold)
+                            ) {
+                                Text("ALL TITLES", color = SystemColors.MonarchGold, style = MaterialTheme.typography.labelMedium)
+                            }
+                            androidx.compose.material3.OutlinedButton(
+                                onClick = onOpenAchievements,
+                                modifier = Modifier.weight(1f),
+                                border = BorderStroke(1.dp, SystemColors.ElectricCyan)
+                            ) {
+                                Text("ACHIEVEMENTS", color = SystemColors.ElectricCyan, style = MaterialTheme.typography.labelMedium)
                             }
                         }
                     }

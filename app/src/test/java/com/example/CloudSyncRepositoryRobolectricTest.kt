@@ -79,21 +79,28 @@ class CloudSyncRepositoryRobolectricTest {
         fakeServer = FakeSupabaseServer()
     }
 
+    private val openTrackers = mutableListOf<SyncStatusTracker>()
+    private val openDbs = mutableListOf<SoloLevelingDatabase>()
+
     private fun newDb(): SoloLevelingDatabase = Room.inMemoryDatabaseBuilder(
         context,
         SoloLevelingDatabase::class.java
-    ).allowMainThreadQueries().build()
+    ).allowMainThreadQueries().build().also { openDbs += it }
 
     private fun buildRepo(db: SoloLevelingDatabase, storage: FakeTokenStorage): SyncRepository {
         val queueManager = SyncQueueManager(db)
         val tracker = SyncStatusTracker(db) { fakeServer.isConfigured() }
+        openTrackers += tracker
         tracker.setOnline(true)
         val engine = CloudSyncEngine(db, fakeServer, storage, queueManager, tracker)
         return SyncRepository(db, prefs, fakeServer, storage, queueManager, tracker, engine)
     }
 
     @After
-    fun tearDown() = Unit
+    fun tearDown() {
+        openTrackers.forEach { it.close() }
+        openDbs.forEach { if (it.isOpen) it.close() }
+    }
 
     @Test
     fun authRegistrationLoginVerificationRefreshRecoveryAndExpiredSession() = runTest {
@@ -316,7 +323,7 @@ class CloudSyncRepositoryRobolectricTest {
         val resolveMerge = repo.resolveConflict(conflictId, ConflictResolutionChoice.MERGE_SAFE)
         assertTrue(resolveMerge.isSuccess)
         assertEquals(ConflictStatus.RESOLVED_MERGED.name, db.syncConflictDao().getById(conflictId)?.statusName)
-        val updatedTask = db.personalTaskDao().getTaskByIdOnce(taskId)!!
+        val updatedTask = db.personalTaskDao().getTaskById(taskId)!!
         assertEquals("Cloud description", updatedTask.description)
         assertEquals(3, updatedTask.postponeCount)
         assertTrue(db.syncQueueDao().getAllOnce().any { it.localKey == taskId.toString() })
@@ -448,19 +455,39 @@ class CloudSyncRepositoryRobolectricTest {
                         db.execSQL(
                             """
                             CREATE TABLE IF NOT EXISTS `player_profile` (
-                                `id` INTEGER NOT NULL, `codename` TEXT NOT NULL, `title` TEXT NOT NULL,
-                                `level` INTEGER NOT NULL, `currentLevelXp` INTEGER NOT NULL, `totalXp` INTEGER NOT NULL,
+                                `id` INTEGER NOT NULL,
+                                `codename` TEXT NOT NULL,
+                                `title` TEXT NOT NULL,
+                                `level` INTEGER NOT NULL,
+                                `currentLevelXp` INTEGER NOT NULL,
+                                `totalXp` INTEGER NOT NULL,
                                 `rankName` TEXT NOT NULL,
-                                `strBase` INTEGER NOT NULL, `strVerified` INTEGER NOT NULL, `strSelf` INTEGER NOT NULL,
-                                `vitBase` INTEGER NOT NULL, `vitVerified` INTEGER NOT NULL, `vitSelf` INTEGER NOT NULL,
-                                `agiBase` INTEGER NOT NULL, `agiVerified` INTEGER NOT NULL, `agiSelf` INTEGER NOT NULL,
-                                `intBase` INTEGER NOT NULL, `intVerified` INTEGER NOT NULL, `intSelf` INTEGER NOT NULL,
-                                `disBase` INTEGER NOT NULL, `disVerified` INTEGER NOT NULL, `disSelf` INTEGER NOT NULL,
-                                `wisBase` INTEGER NOT NULL, `wisVerified` INTEGER NOT NULL, `wisSelf` INTEGER NOT NULL,
-                                `chaBase` INTEGER NOT NULL, `chaVerified` INTEGER NOT NULL, `chaSelf` INTEGER NOT NULL,
-                                `streakDays` INTEGER NOT NULL, `verifiedActivitiesCount` INTEGER NOT NULL,
-                                `selfReportedActivitiesCount` INTEGER NOT NULL, `consistencyScore` INTEGER NOT NULL,
-                                `lastActiveEpochDay` INTEGER NOT NULL,
+                                `strVerified` INTEGER NOT NULL,
+                                `strSelfReported` INTEGER NOT NULL,
+                                `strProgressXp` INTEGER NOT NULL,
+                                `vitVerified` INTEGER NOT NULL,
+                                `vitSelfReported` INTEGER NOT NULL,
+                                `vitProgressXp` INTEGER NOT NULL,
+                                `agiVerified` INTEGER NOT NULL,
+                                `agiSelfReported` INTEGER NOT NULL,
+                                `agiProgressXp` INTEGER NOT NULL,
+                                `intVerified` INTEGER NOT NULL,
+                                `intSelfReported` INTEGER NOT NULL,
+                                `intProgressXp` INTEGER NOT NULL,
+                                `disVerified` INTEGER NOT NULL,
+                                `disSelfReported` INTEGER NOT NULL,
+                                `disProgressXp` INTEGER NOT NULL,
+                                `wisVerified` INTEGER NOT NULL,
+                                `wisSelfReported` INTEGER NOT NULL,
+                                `wisProgressXp` INTEGER NOT NULL,
+                                `chaVerified` INTEGER NOT NULL,
+                                `chaSelfReported` INTEGER NOT NULL,
+                                `chaProgressXp` INTEGER NOT NULL,
+                                `streakDays` INTEGER NOT NULL,
+                                `verifiedActivitiesCount` INTEGER NOT NULL,
+                                `selfReportedActivitiesCount` INTEGER NOT NULL,
+                                `recoveryScore` INTEGER NOT NULL,
+                                `createdAtEpochMs` INTEGER NOT NULL,
                                 PRIMARY KEY(`id`)
                             )
                             """.trimIndent()
@@ -468,33 +495,67 @@ class CloudSyncRepositoryRobolectricTest {
                         db.execSQL(
                             """
                             CREATE TABLE IF NOT EXISTS `quests` (
-                                `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `title` TEXT NOT NULL, `description` TEXT NOT NULL,
-                                `typeName` TEXT NOT NULL, `categoryName` TEXT NOT NULL, `targetValue` INTEGER NOT NULL,
-                                `currentValue` INTEGER NOT NULL, `unit` TEXT NOT NULL, `xpReward` INTEGER NOT NULL,
-                                `primaryAttributeName` TEXT NOT NULL, `primaryAttrXpReward` INTEGER NOT NULL,
-                                `secondaryAttributeName` TEXT, `secondaryAttrXpReward` INTEGER NOT NULL,
-                                `verificationStatusName` TEXT NOT NULL, `isCompleted` INTEGER NOT NULL,
-                                `completedAtEpochMs` INTEGER, `createdAtEpochMs` INTEGER NOT NULL
+                                `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                                `title` TEXT NOT NULL,
+                                `description` TEXT NOT NULL,
+                                `typeName` TEXT NOT NULL,
+                                `categoryName` TEXT NOT NULL,
+                                `targetValue` INTEGER NOT NULL,
+                                `currentValue` INTEGER NOT NULL,
+                                `unit` TEXT NOT NULL,
+                                `xpReward` INTEGER NOT NULL,
+                                `primaryAttrName` TEXT NOT NULL,
+                                `primaryAttrXpReward` INTEGER NOT NULL,
+                                `secondaryAttrName` TEXT,
+                                `secondaryAttrXpReward` INTEGER NOT NULL,
+                                `isCompleted` INTEGER NOT NULL,
+                                `verificationStatusName` TEXT NOT NULL,
+                                `createdAtEpochMs` INTEGER NOT NULL,
+                                `completedAtEpochMs` INTEGER
                             )
                             """.trimIndent()
                         )
                         db.execSQL(
                             """
                             CREATE TABLE IF NOT EXISTS `activity_logs` (
-                                `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `sourceId` TEXT NOT NULL,
-                                `title` TEXT NOT NULL, `categoryName` TEXT NOT NULL, `durationMinutes` INTEGER NOT NULL,
-                                `distanceMeters` REAL, `xpAwarded` INTEGER NOT NULL, `verificationStatusName` TEXT NOT NULL,
+                                `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                                `title` TEXT NOT NULL,
+                                `categoryName` TEXT NOT NULL,
+                                `durationMinutes` INTEGER NOT NULL,
+                                `verificationStatusName` TEXT NOT NULL,
+                                `xpAwarded` INTEGER NOT NULL,
+                                `primaryAttrName` TEXT NOT NULL,
+                                `primaryAttrXpAwarded` INTEGER NOT NULL,
+                                `notes` TEXT NOT NULL,
                                 `timestampEpochMs` INTEGER NOT NULL
                             )
                             """.trimIndent()
                         )
-                        db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_activity_logs_sourceId` ON `activity_logs` (`sourceId`)")
+                        db.execSQL(
+                            """
+                            CREATE TABLE IF NOT EXISTS `physical_state` (
+                                `id` INTEGER NOT NULL,
+                                `baseJoggingTargetMinutes` INTEGER NOT NULL,
+                                `aiRecommendedJoggingMinutes` INTEGER NOT NULL,
+                                `completedJoggingMinutesToday` INTEGER NOT NULL,
+                                `workoutStatusName` TEXT NOT NULL,
+                                `recoveryStatusName` TEXT NOT NULL,
+                                `weeklySessionsCompleted` INTEGER NOT NULL,
+                                `lastSessionTimestampMs` INTEGER,
+                                `aiTrainingNote` TEXT NOT NULL,
+                                PRIMARY KEY(`id`)
+                            )
+                            """.trimIndent()
+                        )
                         db.execSQL(
                             """
                             CREATE TABLE IF NOT EXISTS `system_notifications` (
-                                `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `title` TEXT NOT NULL,
-                                `message` TEXT NOT NULL, `categoryName` TEXT NOT NULL,
-                                `isRead` INTEGER NOT NULL, `timestampEpochMs` INTEGER NOT NULL
+                                `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                                `title` TEXT NOT NULL,
+                                `message` TEXT NOT NULL,
+                                `categoryName` TEXT NOT NULL,
+                                `isRead` INTEGER NOT NULL,
+                                `timestampEpochMs` INTEGER NOT NULL
                             )
                             """.trimIndent()
                         )
@@ -541,7 +602,10 @@ class CloudSyncRepositoryRobolectricTest {
                 SoloLevelingDatabase.MIGRATION_3_4,
                 SoloLevelingDatabase.MIGRATION_4_5,
                 SoloLevelingDatabase.MIGRATION_5_6,
-                SoloLevelingDatabase.MIGRATION_6_7
+                SoloLevelingDatabase.MIGRATION_6_7,
+                SoloLevelingDatabase.MIGRATION_7_8,
+                SoloLevelingDatabase.MIGRATION_8_9,
+                SoloLevelingDatabase.MIGRATION_9_10
             )
             .allowMainThreadQueries()
             .build()

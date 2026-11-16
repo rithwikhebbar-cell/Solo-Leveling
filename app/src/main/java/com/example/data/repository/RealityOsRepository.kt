@@ -31,6 +31,7 @@ import com.example.domain.model.Quest
 import com.example.domain.model.QuestCategory
 import com.example.domain.model.QuestType
 import com.example.domain.model.RecoveryAssessment
+import com.example.domain.model.SystemEventType
 import com.example.domain.model.SystemNotification
 import com.example.domain.model.VerificationStatus
 import com.example.domain.model.WorkoutCategory
@@ -57,7 +58,8 @@ class RealityOsRepository(
     val healthConnectPort: HealthConnectPort,
     private val healthConnectDataSource: HealthConnectDataSource,
     val cloudSyncPort: CloudSyncPort,
-    val aiGameMasterPort: AiGameMasterPort
+    val aiGameMasterPort: AiGameMasterPort,
+    private val systemEventRepository: SystemEventRepository? = null
 ) {
     private val playerDao = database.playerDao()
     private val questDao = database.questDao()
@@ -948,6 +950,20 @@ class RealityOsRepository(
                 ).toEntity()
             )
         }
+
+        val eventType = if (activityCategory == QuestCategory.PHYSICAL) {
+            SystemEventType.PHYSICAL_ACTIVITY_RECORDED
+        } else {
+            SystemEventType.PLAYER_PROFILE_UPDATED
+        }
+        systemEventRepository?.publishEvent(
+            eventType = eventType,
+            relatedEntityId = activityTitle,
+            sourceModule = if (activityCategory == QuestCategory.PHYSICAL) "PHYSICAL" else "PLAYER",
+            metadata = mapOf("xpAwarded" to xpGained.toString(), "verification" to verificationStatus.name),
+            processImmediately = false,
+            nowEpochMs = timestamp
+        )
 
         return updatedProfile
     }

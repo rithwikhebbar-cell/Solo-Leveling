@@ -18,6 +18,7 @@ import com.example.domain.model.PersonalTaskStatus
 import com.example.domain.model.PhysicalActivityKind
 import com.example.domain.model.PlayerAttributes
 import com.example.domain.model.PlayerProfile
+import com.example.domain.model.RoutineActivityStatus
 import com.example.domain.model.RoutineCompletionRecord
 import com.example.domain.model.SyncEntityType
 import com.example.domain.model.VerificationStatus
@@ -122,7 +123,7 @@ class CloudSyncEngineUnitTest {
     fun mergeHabitAndRoutineCompletionsPreserveAppendOnlyUnion() {
         val localHabits = listOf(
             HabitCompletionRecord(1L, 1L, 20001L, HabitDayStatus.COMPLETED, 30.0, "", "Done on Phone A", 1000L),
-            HabitCompletionRecord(2L, 1L, 20002L, HabitDayStatus.PENDING, 0.0, "", "", 1000L)
+            HabitCompletionRecord(2L, 1L, 20002L, HabitDayStatus.PARTIAL, 15.0, "", "", 1000L)
         )
         val cloudHabits = listOf(
             HabitCompletionRecord(9L, 1L, 20002L, HabitDayStatus.COMPLETED, 30.0, "", "Done on Tablet B", 2000L),
@@ -132,8 +133,8 @@ class CloudSyncEngineUnitTest {
         assertEquals(3, mergedHabits.size)
         assertTrue(mergedHabits.all { it.status == HabitDayStatus.COMPLETED })
 
-        val localRoutines = listOf(RoutineCompletionRecord(1L, 1L, 10L, 20001L, 1000L))
-        val cloudRoutines = listOf(RoutineCompletionRecord(2L, 1L, 11L, 20001L, 2000L))
+        val localRoutines = listOf(RoutineCompletionRecord(1L, 1L, 10L, 20001L, RoutineActivityStatus.COMPLETED, "", 1000L))
+        val cloudRoutines = listOf(RoutineCompletionRecord(2L, 1L, 11L, 20001L, RoutineActivityStatus.COMPLETED, "", 2000L))
         val mergedRoutines = SyncConflictResolver.mergeRoutineCompletions(localRoutines, cloudRoutines)
         assertEquals(2, mergedRoutines.size)
     }

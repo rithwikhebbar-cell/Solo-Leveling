@@ -43,6 +43,9 @@ interface RoutineDao {
     @Query("SELECT * FROM routine_activities ORDER BY routineId ASC, orderIndex ASC, id ASC")
     fun observeAllActivities(): Flow<List<RoutineActivityEntity>>
 
+    @Query("SELECT * FROM routine_activities ORDER BY routineId ASC, orderIndex ASC, id ASC")
+    suspend fun getAllActivitiesOnce(): List<RoutineActivityEntity>
+
     @Query("SELECT * FROM routine_activities WHERE routineId = :routineId ORDER BY orderIndex ASC, id ASC")
     suspend fun getActivitiesForRoutine(routineId: Long): List<RoutineActivityEntity>
 
@@ -159,6 +162,9 @@ interface GoalDao {
 
     @Query("SELECT * FROM goal_milestones ORDER BY goalId ASC, orderIndex ASC, id ASC")
     fun observeAllMilestones(): Flow<List<GoalMilestoneEntity>>
+
+    @Query("SELECT * FROM goal_milestones")
+    suspend fun getAllMilestonesOnce(): List<GoalMilestoneEntity>
 
     @Query("SELECT * FROM goal_milestones WHERE goalId = :goalId ORDER BY orderIndex ASC, id ASC")
     suspend fun getMilestonesForGoal(goalId: Long): List<GoalMilestoneEntity>

@@ -38,7 +38,10 @@ class CloudSyncWorker(
         if (!syncRepo.isCloudConfigured()) return Result.success()
 
         val trigger = inputData.getString(KEY_TRIGGER) ?: "BACKGROUND_WORKER"
-        val outcome = syncRepo.syncNow(triggerSource = trigger)
+        val outcome = app.container.automationOrchestrator.runJobNow(
+            automationId = com.example.data.automation.AutomationOrchestrator.JOB_CLOUD_SYNC,
+            triggerSource = trigger
+        )
         return if (outcome.isSuccess) {
             Result.success()
         } else {

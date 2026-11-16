@@ -42,6 +42,7 @@ import com.example.domain.model.SyncOperationType
 import com.example.domain.model.SyncQueueItem
 import com.example.domain.model.SyncState
 import com.example.domain.model.SyncSummaryState
+import com.example.domain.model.SystemEventType
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
@@ -58,7 +59,8 @@ class SyncRepository(
     private val tokenStorage: TokenStorage,
     val queueManager: SyncQueueManager,
     val statusTracker: SyncStatusTracker,
-    private val syncEngine: CloudSyncEngine
+    private val syncEngine: CloudSyncEngine,
+    private val systemEventRepository: SystemEventRepository? = null
 ) {
 
     fun observePlayerIdentity(): Flow<PlayerIdentity?> =
@@ -389,8 +391,29 @@ class SyncRepository(
         return Result.success("Device access revoked.")
     }
 
-    suspend fun syncNow(triggerSource: String = "MANUAL"): Result<SyncDiagnosticsLog> =
-        syncEngine.runIncrementalSync(triggerSource)
+    suspend fun syncNow(triggerSource: String = "MANUAL"): Result<SyncDiagnosticsLog> {
+        val res = syncEngine.runIncrementalSync(triggerSource)
+        res.onSuccess { log ->
+            systemEventRepository?.publishEvent(
+                eventType = SystemEventType.SYNC_COMPLETED,
+                relatedEntityId = log.operationUuid,
+                sourceModule = "CLOUD",
+                metadata = mapOf(
+                    "uploaded" to log.recordsUploaded.toString(),
+                    "downloaded" to log.recordsDownloaded.toString()
+                ),
+                processImmediately = false
+            )
+        }.onFailure { err ->
+            systemEventRepository?.publishEvent(
+                eventType = SystemEventType.SYNC_FAILED,
+                sourceModule = "CLOUD",
+                metadata = mapOf("error" to (err.message ?: "Sync failed").take(120)),
+                processImmediately = false
+            )
+        }
+        return res
+    }
 
     suspend fun retryQueueItem(queueId: Long) {
         queueManager.retryItemNow(queueId)

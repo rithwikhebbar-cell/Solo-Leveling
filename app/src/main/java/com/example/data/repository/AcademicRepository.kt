@@ -32,6 +32,7 @@ import com.example.domain.model.RevisionRecord
 import com.example.domain.model.StudySession
 import com.example.domain.model.SubjectColorToken
 import com.example.domain.model.SubjectIconKey
+import com.example.domain.model.SystemEventType
 import com.example.domain.model.SystemNotification
 import com.example.domain.model.VerificationStatus
 import kotlinx.coroutines.flow.Flow
@@ -43,7 +44,8 @@ import java.util.UUID
 
 class AcademicRepository(
     private val database: SoloLevelingDatabase,
-    private val preferencesRepository: UserPreferencesRepository
+    private val preferencesRepository: UserPreferencesRepository,
+    private val systemEventRepository: SystemEventRepository? = null
 ) {
     private val playerDao = database.playerDao()
     private val activityLogDao = database.activityLogDao()
@@ -970,6 +972,21 @@ class AcademicRepository(
                 category = NotificationCategory.QUEST_UPDATE,
                 timestampEpochMs = nowEpochMs
             ).toEntity()
+        )
+
+        val evType = when (activityKind) {
+            AcademicActivityKind.REVISION -> SystemEventType.REVISION_COMPLETED
+            AcademicActivityKind.PRACTICE_ASSESSMENT,
+            AcademicActivityKind.EXAM_ASSESSMENT -> SystemEventType.ASSESSMENT_RECORDED
+            else -> SystemEventType.ACADEMIC_SESSION_COMPLETED
+        }
+        systemEventRepository?.publishEvent(
+            eventType = evType,
+            relatedEntityId = subjectId?.toString().orEmpty(),
+            sourceModule = "ACADEMIC",
+            metadata = mapOf("xpAwarded" to xpAwarded.toString(), "rewardKey" to rewardKey),
+            processImmediately = false,
+            nowEpochMs = nowEpochMs
         )
     }
 

@@ -5,6 +5,8 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Requested strictly on explicit user microphone tap for allowlisted voice commands (zero background recording) -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
     <!-- Least-privilege Health Connect read permissions for verified physical training & recovery -->
     <uses-permission android:name="android.permission.health.READ_EXERCISE" />
@@ -14,6 +16,12 @@
 
     <queries>
         <package android:name="com.google.android.apps.healthdata" />
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
     </queries>
 
     <application
@@ -59,6 +67,54 @@
                 <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
             </intent-filter>
         </activity-alias>
+
+        <receiver
+            android:name=".widget.PlayerStatusWidgetReceiver"
+            android:exported="true"
+            android:label="@string/widget_player_status_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_player_status_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widget.DailyQuestWidgetReceiver"
+            android:exported="true"
+            android:label="@string/widget_daily_quest_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_daily_quest_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widget.DailyProgressWidgetReceiver"
+            android:exported="true"
+            android:label="@string/widget_daily_progress_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_daily_progress_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widget.QuickActionWidgetReceiver"
+            android:exported="true"
+            android:label="@string/widget_quick_action_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_quick_action_info" />
+        </receiver>
     </application>
 
 </manifest>

@@ -166,7 +166,10 @@ fun SettingsScreen(
     modifier: Modifier = Modifier,
     syncSummary: SyncSummaryState = SyncSummaryState(),
     onOpenCloudGateway: () -> Unit = {},
-    onOpenCloudSyncDashboard: () -> Unit = {}
+    onOpenCloudSyncDashboard: () -> Unit = {},
+    onOpenSystemVoiceSettings: () -> Unit = {},
+    onOpenWidgetHub: () -> Unit = {},
+    onReplayAwakening: () -> Unit = {}
 ) {
     var codenameInput by rememberSaveable(state.player.codename) {
         mutableStateOf(state.player.codename)
@@ -318,6 +321,43 @@ fun SettingsScreen(
                         )
                     ) {
                         Text("SYNC DASHBOARD")
+                    }
+                }
+            }
+
+            item {
+                HolographicPanel(
+                    modifier = Modifier.fillMaxWidth(),
+                    accentColor = SystemColors.ElectricCyan
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("IMMERSIVE SYSTEM EXPERIENCE", style = MaterialTheme.typography.titleMedium, color = SystemColors.ElectricCyan)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = onOpenSystemVoiceSettings,
+                                modifier = Modifier.weight(1f).testTag("settings_open_voice"),
+                                border = BorderStroke(1.dp, SystemColors.ElectricCyan)
+                            ) {
+                                Text("SYSTEM VOICE", color = SystemColors.ElectricCyan)
+                            }
+                            OutlinedButton(
+                                onClick = onOpenWidgetHub,
+                                modifier = Modifier.weight(1f).testTag("settings_open_widgets"),
+                                border = BorderStroke(1.dp, SystemColors.ArcaneViolet)
+                            ) {
+                                Text("WIDGETS", color = SystemColors.ArcaneViolet)
+                            }
+                        }
+                        OutlinedButton(
+                            onClick = onReplayAwakening,
+                            modifier = Modifier.fillMaxWidth().testTag("settings_replay_awakening"),
+                            border = BorderStroke(1.dp, SystemColors.MonarchGold)
+                        ) {
+                            Text("REPLAY SYSTEM AWAKENING", color = SystemColors.MonarchGold)
+                        }
                     }
                 }
             }

@@ -58,6 +58,12 @@ interface AcademicSubjectDao {
     @Query("SELECT * FROM academic_subjects WHERE isArchived = 0 ORDER BY createdAtEpochMs DESC")
     suspend fun getActiveSubjectsOnce(): List<AcademicSubjectEntity>
 
+    @Query("SELECT * FROM academic_subjects")
+    suspend fun getAllSubjectsOnce(): List<AcademicSubjectEntity>
+
+    @Query("SELECT * FROM academic_chapters")
+    suspend fun getAllChaptersOnce(): List<AcademicChapterEntity>
+
     @Query("SELECT * FROM academic_topics ORDER BY id ASC")
     fun observeAllTopics(): Flow<List<AcademicTopicEntity>>
 
@@ -75,6 +81,9 @@ interface AcademicSubjectDao {
 
     @Update
     suspend fun updateTopic(topic: AcademicTopicEntity)
+
+    @Query("DELETE FROM academic_topics WHERE id = :topicId")
+    suspend fun deleteTopicById(topicId: Long)
 }
 
 @Dao

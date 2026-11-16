@@ -8,10 +8,12 @@ import com.example.domain.model.SyncSummaryState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -66,6 +68,8 @@ class SyncStatusTracker(
             lastSuccessfulSyncEpochMs = latestSuccess?.completedAtEpochMs ?: session?.lastSyncAtEpochMs,
             lastErrorSummary = lastError
         )
+    }.catch {
+        // Safely ignore Flow teardown exceptions when database closes during tests or process shutdown
     }.stateIn(scope, SharingStarted.Eagerly, SyncSummaryState(isCloudConfigured = isCloudConfiguredProvider()))
 
     fun observeDiagnostics(): Flow<List<SyncDiagnosticsLog>> =
@@ -81,5 +85,9 @@ class SyncStatusTracker(
 
     fun setLastError(error: String?) {
         lastErrorFlow.value = error
+    }
+
+    fun close() {
+        scope.cancel()
     }
 }

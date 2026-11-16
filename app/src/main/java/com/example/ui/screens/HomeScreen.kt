@@ -31,6 +31,7 @@ import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.DirectionsRun
 import androidx.compose.material.icons.rounded.DoneAll
+import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.RadioButtonUnchecked
 import androidx.compose.material.icons.rounded.Shield
@@ -106,7 +107,13 @@ fun HomeScreen(
     academicSummary: AcademicDashboardSummary = AcademicDashboardSummary(),
     onNavigateToAcademic: () -> Unit = {},
     lifeSummary: LifeDashboardSummary = LifeDashboardSummary(),
-    onNavigateToLife: () -> Unit = {}
+    onNavigateToLife: () -> Unit = {},
+    intelligenceHeadline: String = "Adaptive planning, predictions & personalized coaching ready",
+    onNavigateToIntelligence: () -> Unit = {},
+    systemHealthStatusLabel: String = "Healthy",
+    onNavigateToSystemControl: () -> Unit = {},
+    onNavigateToAiCompanion: () -> Unit = {},
+    onNavigateToVoiceConsole: () -> Unit = {}
 ) {
     var showLogSheet by rememberSaveable { mutableStateOf(false) }
 
@@ -157,6 +164,43 @@ fun HomeScreen(
                 )
             }
 
+            // 2B. SYSTEM INTERACTION BAR (AI COMPANION + VOICE CONSOLE)
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = onNavigateToAiCompanion,
+                        modifier = Modifier.weight(1f).testTag("home_open_ai_companion"),
+                        border = BorderStroke(1.dp, SystemColors.ElectricCyan)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.AutoAwesome,
+                            contentDescription = "AI Companion",
+                            tint = SystemColors.ElectricCyan,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("AI COMPANION", style = MaterialTheme.typography.labelMedium, color = SystemColors.ElectricCyan)
+                    }
+                    OutlinedButton(
+                        onClick = onNavigateToVoiceConsole,
+                        modifier = Modifier.weight(1f).testTag("home_open_voice_console"),
+                        border = BorderStroke(1.dp, SystemColors.ArcaneViolet)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Mic,
+                            contentDescription = "Voice Command",
+                            tint = SystemColors.ArcaneViolet,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("VOICE CMD", style = MaterialTheme.typography.labelMedium, color = SystemColors.ArcaneViolet)
+                    }
+                }
+            }
+
             // 3. ATTRIBUTE OVERVIEW
             item {
                 AttributeOverviewSection(
@@ -200,6 +244,22 @@ fun HomeScreen(
                 LifeDisciplineOverviewSection(
                     summary = lifeSummary,
                     onOpenLifeEngine = onNavigateToLife
+                )
+            }
+
+            // 5D. INTELLIGENCE CENTER
+            item {
+                IntelligenceCenterOverviewSection(
+                    headline = intelligenceHeadline,
+                    onOpenIntelligence = onNavigateToIntelligence
+                )
+            }
+
+            // 5E. SYSTEM CONTROL CENTER
+            item {
+                SystemControlOverviewBanner(
+                    statusLabel = systemHealthStatusLabel,
+                    onOpenSystemControl = onNavigateToSystemControl
                 )
             }
 
@@ -921,6 +981,88 @@ private fun LifeDisciplineOverviewSection(
                     color = SystemColors.MetallicSilver
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun IntelligenceCenterOverviewSection(
+    headline: String,
+    onOpenIntelligence: () -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        SystemSectionTitle(
+            title = "Intelligence Center",
+            subtitle = "Adaptive Daily Plan • Forecasts • Roadmaps • AI Advisor",
+            trailing = {
+                TextButton(
+                    onClick = onOpenIntelligence,
+                    modifier = Modifier.testTag("open_intelligence_center_button")
+                ) {
+                    Text("OPEN HUB", style = MaterialTheme.typography.labelMedium)
+                }
+            }
+        )
+        HolographicPanel(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onOpenIntelligence),
+            accentColor = SystemColors.ElectricCyan,
+            secondaryColor = SystemColors.ArcaneViolet
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    text = "PERSONAL DEVELOPMENT INTELLIGENCE",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = SystemColors.PureIce
+                )
+                Text(
+                    text = headline,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = SystemColors.MetallicSilver
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SystemControlOverviewBanner(
+    statusLabel: String,
+    onOpenSystemControl: () -> Unit
+) {
+    HolographicPanel(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onOpenSystemControl)
+            .testTag("home_system_control_card"),
+        accentColor = SystemColors.VerifiedEmerald,
+        secondaryColor = SystemColors.ElectricCyan,
+        contentPadding = 14.dp
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = "SYSTEM CONTROL CENTER // $statusLabel".uppercase(),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = SystemColors.ElectricCyan
+                )
+                Text(
+                    text = "Automations • Execution Timeline • Integrity • Health",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = SystemColors.MutedSilver
+                )
+            }
+            Icon(
+                imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
+                contentDescription = "Open System Control Center",
+                tint = SystemColors.ElectricCyan,
+                modifier = Modifier.size(18.dp)
+            )
         }
     }
 }

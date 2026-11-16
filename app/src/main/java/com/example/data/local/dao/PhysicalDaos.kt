@@ -38,6 +38,12 @@ interface WorkoutSessionDao {
     @Query("SELECT * FROM exercise_records ORDER BY timestampEpochMs DESC")
     fun observeAllExerciseRecords(): Flow<List<ExerciseRecordEntity>>
 
+    @Query("SELECT * FROM exercise_records")
+    suspend fun getAllExerciseRecordsOnce(): List<ExerciseRecordEntity>
+
+    @Query("DELETE FROM exercise_records WHERE id = :id")
+    suspend fun deleteExerciseById(id: Long)
+
     @Query("SELECT * FROM exercise_records WHERE workoutSessionId = :sessionId")
     suspend fun getExercisesForSession(sessionId: Long): List<ExerciseRecordEntity>
 

@@ -23,6 +23,7 @@ import com.example.domain.engine.HabitEngine
 import com.example.domain.engine.PersonalDevelopmentAnalyst
 import com.example.domain.engine.PlayerContextEngine
 import com.example.domain.engine.PlayerTelemetrySnapshot
+import com.example.domain.engine.PromptSanitizer
 import com.example.domain.engine.RecoveryEngine
 import com.example.domain.engine.RevisionEngine
 import com.example.domain.engine.RoutineEngine
@@ -408,7 +409,7 @@ class AiSystemRepository(
                 systemPrompt = GAME_MASTER_SYSTEM_PROMPT,
                 contextSummary = PlayerContextEngine.formatCompactPromptContext(snapshot),
                 recentTurns = HttpBackendAiGateway.buildBoundedTurns(historyBefore, maxTurns = 6),
-                userPrompt = cleanPrompt,
+                userPrompt = PromptSanitizer.sanitize(cleanPrompt, maxChars = 600),
                 stream = modelPrefs.streamingEnabled && modelOption.supportsStreaming
             )
 

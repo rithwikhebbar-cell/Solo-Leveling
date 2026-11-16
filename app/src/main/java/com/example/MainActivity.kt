@@ -15,9 +15,12 @@ import com.example.ui.SoloLevelingApp
 import com.example.ui.viewmodel.AcademicViewModel
 import com.example.ui.viewmodel.AiSystemViewModel
 import com.example.ui.viewmodel.CloudSyncViewModel
+import com.example.ui.viewmodel.IntelligenceViewModel
 import com.example.ui.viewmodel.LifeManagementViewModel
 import com.example.ui.viewmodel.RealityOsViewModel
 import com.example.ui.viewmodel.RpgViewModel
+import com.example.ui.viewmodel.SystemControlViewModel
+import com.example.ui.viewmodel.SystemExperienceViewModel
 import com.example.worker.SystemNotificationWorker
 
 class MainActivity : ComponentActivity() {
@@ -64,6 +67,25 @@ class MainActivity : ComponentActivity() {
                     syncRepository = app.container.syncRepository
                 )
             )
+            val intelligenceViewModel: IntelligenceViewModel = viewModel(
+                factory = IntelligenceViewModel.factory(
+                    repository = app.container.intelligenceRepository
+                )
+            )
+            val systemControlViewModel: SystemControlViewModel = viewModel(
+                factory = SystemControlViewModel.factory(
+                    systemControlRepository = app.container.systemControlRepository,
+                    systemEventRepository = app.container.systemEventRepository,
+                    automationOrchestrator = app.container.automationOrchestrator,
+                    context = applicationContext
+                )
+            )
+            val systemExperienceViewModel: SystemExperienceViewModel = viewModel(
+                factory = SystemExperienceViewModel.factory(
+                    experienceRepository = app.container.systemExperienceRepository,
+                    realityOsRepository = app.container.repository
+                )
+            )
             SoloLevelingApp(
                 viewModel = viewModel,
                 academicViewModel = academicViewModel,
@@ -71,6 +93,9 @@ class MainActivity : ComponentActivity() {
                 lifeManagementViewModel = lifeManagementViewModel,
                 rpgViewModel = rpgViewModel,
                 cloudSyncViewModel = cloudSyncViewModel,
+                intelligenceViewModel = intelligenceViewModel,
+                systemControlViewModel = systemControlViewModel,
+                systemExperienceViewModel = systemExperienceViewModel,
                 deepLinkRoute = deepLinkRouteState,
                 onDeepLinkConsumed = { deepLinkRouteState = null }
             )

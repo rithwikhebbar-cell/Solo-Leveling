@@ -1,6 +1,7 @@
 package com.example.data.local.entity
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 import com.example.domain.engine.ProgressionEngine
 import com.example.domain.model.ActivityLog
@@ -77,7 +78,10 @@ data class QuestEntity(
     val completedAtEpochMs: Long?
 )
 
-@Entity(tableName = "activity_logs")
+@Entity(
+    tableName = "activity_logs",
+    indices = [Index("timestampEpochMs")]
+)
 data class ActivityLogEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val title: String,

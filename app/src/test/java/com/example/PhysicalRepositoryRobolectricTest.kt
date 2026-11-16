@@ -378,7 +378,10 @@ class PhysicalRepositoryRobolectricTest {
                 SoloLevelingDatabase.MIGRATION_3_4,
                 SoloLevelingDatabase.MIGRATION_4_5,
                 SoloLevelingDatabase.MIGRATION_5_6,
-                SoloLevelingDatabase.MIGRATION_6_7
+                SoloLevelingDatabase.MIGRATION_6_7,
+                SoloLevelingDatabase.MIGRATION_7_8,
+                SoloLevelingDatabase.MIGRATION_8_9,
+                SoloLevelingDatabase.MIGRATION_9_10
             )
             .allowMainThreadQueries()
             .build()

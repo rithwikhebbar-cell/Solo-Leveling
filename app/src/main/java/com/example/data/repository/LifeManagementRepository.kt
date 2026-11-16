@@ -57,6 +57,7 @@ import com.example.domain.model.ScheduleConflict
 import com.example.domain.model.ScheduledActivityItem
 import com.example.domain.model.ScheduledActivityReference
 import com.example.domain.model.ScheduledSourceType
+import com.example.domain.model.SystemEventType
 import com.example.domain.model.SystemNotification
 import com.example.domain.model.TaskCategory
 import com.example.domain.model.TaskPriority
@@ -83,7 +84,8 @@ data class LifeMutationFeedback(
 
 class LifeManagementRepository(
     private val database: SoloLevelingDatabase,
-    private val preferencesRepository: UserPreferencesRepository
+    private val preferencesRepository: UserPreferencesRepository,
+    private val systemEventRepository: SystemEventRepository? = null
 ) {
     private val routineDao = database.routineDao()
     private val habitDao = database.habitDao()
@@ -1078,6 +1080,20 @@ class LifeManagementRepository(
                 )
             }
         }
+
+        val evType = when (kind) {
+            LifeActivityKind.HABIT_COMPLETION -> SystemEventType.HABIT_COMPLETED
+            LifeActivityKind.ROUTINE_COMPLETION -> SystemEventType.ROUTINE_COMPLETED
+            LifeActivityKind.GOAL_MILESTONE, LifeActivityKind.GOAL_REVIEW -> SystemEventType.GOAL_MILESTONE_COMPLETED
+            else -> SystemEventType.TASK_COMPLETED
+        }
+        systemEventRepository?.publishEvent(
+            eventType = evType,
+            relatedEntityId = rewardKey,
+            sourceModule = "LIFE",
+            metadata = mapOf("xpAwarded" to awarded.toString(), "title" to title),
+            processImmediately = false
+        )
 
         val summaryMsg = if (awarded > 0) "$title (+$awarded XP)" else "$title • $feedbackNote"
         return LifeMutationFeedback(

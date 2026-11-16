@@ -16,14 +16,19 @@ import com.example.data.local.dao.AiConfigDao
 import com.example.data.local.dao.AiConversationDao
 import com.example.data.local.dao.AiProposalDao
 import com.example.data.local.dao.AiRequestAuditDao
+import com.example.data.local.dao.AutomationDao
 import com.example.data.local.dao.BossBattleDao
 import com.example.data.local.dao.CloudAuthDao
 import com.example.data.local.dao.CloudBackupDao
+import com.example.data.local.dao.DailyCycleDao
 import com.example.data.local.dao.DisciplineDao
 import com.example.data.local.dao.DungeonDao
 import com.example.data.local.dao.GoalDao
 import com.example.data.local.dao.HabitDao
+import com.example.data.local.dao.AdaptivePlanDao
 import com.example.data.local.dao.ImportedActivityDao
+import com.example.data.local.dao.IntelligenceProfileDao
+import com.example.data.local.dao.IntelligenceReportDao
 import com.example.data.local.dao.InventoryShadowDao
 import com.example.data.local.dao.JoggingSessionDao
 import com.example.data.local.dao.LifeProgressionDao
@@ -32,9 +37,11 @@ import com.example.data.local.dao.PhysicalAuditDao
 import com.example.data.local.dao.PhysicalStateDao
 import com.example.data.local.dao.PlayerDao
 import com.example.data.local.dao.QuestDao
+import com.example.data.local.dao.RecommendationDao
 import com.example.data.local.dao.RecoveryAssessmentDao
 import com.example.data.local.dao.RegisteredDeviceDao
 import com.example.data.local.dao.RevisionRecordDao
+import com.example.data.local.dao.RoadmapDao
 import com.example.data.local.dao.RoutineDao
 import com.example.data.local.dao.RpgAuditDao
 import com.example.data.local.dao.ScheduleDao
@@ -44,8 +51,14 @@ import com.example.data.local.dao.SyncConflictDao
 import com.example.data.local.dao.SyncDiagnosticsDao
 import com.example.data.local.dao.SyncMetaDao
 import com.example.data.local.dao.SyncQueueDao
+import com.example.data.local.dao.SystemEventDao
+import com.example.data.local.dao.SystemExperienceDao
+import com.example.data.local.dao.SystemIntegrityHealthDao
 import com.example.data.local.dao.SystemNotificationDao
 import com.example.data.local.dao.WorkoutSessionDao
+import com.example.data.local.entity.AdaptiveDailyPlanEntity
+import com.example.data.local.entity.AdaptivePlanBlockEntity
+import com.example.data.local.entity.AdvisorConsultationEntity
 import com.example.data.local.entity.AcademicAssessmentEntity
 import com.example.data.local.entity.AcademicChapterEntity
 import com.example.data.local.entity.AcademicExamEntity
@@ -72,6 +85,8 @@ import com.example.data.local.entity.BossDefinitionEntity
 import com.example.data.local.entity.CloudAuthSessionEntity
 import com.example.data.local.entity.CloudBackupEntity
 import com.example.data.local.entity.CloudSyncCursorEntity
+import com.example.data.local.entity.ConsistencyPredictionEntity
+import com.example.data.local.entity.DevelopmentRoadmapEntity
 import com.example.data.local.entity.DisciplineAssessmentEntity
 import com.example.data.local.entity.DungeonCompletionRecordEntity
 import com.example.data.local.entity.DungeonDefinitionEntity
@@ -84,6 +99,9 @@ import com.example.data.local.entity.HabitCompletionEntity
 import com.example.data.local.entity.HabitEntity
 import com.example.data.local.entity.HealthConnectSyncStateEntity
 import com.example.data.local.entity.ImportedActivityEntity
+import com.example.data.local.entity.IntelligencePreferencesEntity
+import com.example.data.local.entity.IntelligenceProfileEntity
+import com.example.data.local.entity.IntelligenceReportEntity
 import com.example.data.local.entity.InventoryItemEntity
 import com.example.data.local.entity.JoggingSessionEntity
 import com.example.data.local.entity.LifeGoalEntity
@@ -91,14 +109,17 @@ import com.example.data.local.entity.LifeProgressionRecordEntity
 import com.example.data.local.entity.LifeRoutineEntity
 import com.example.data.local.entity.NotificationPreferenceEntity
 import com.example.data.local.entity.PersonalTaskEntity
+import com.example.data.local.entity.PersonalizedRecommendationEntity
 import com.example.data.local.entity.PhysicalStateEntity
 import com.example.data.local.entity.PlayerEntity
 import com.example.data.local.entity.PlayerInventoryRecordEntity
 import com.example.data.local.entity.PlayerTitleEntity
 import com.example.data.local.entity.QuestEntity
+import com.example.data.local.entity.RecommendationFeedbackEntity
 import com.example.data.local.entity.RecoveryAssessmentEntity
 import com.example.data.local.entity.RegisteredDeviceEntity
 import com.example.data.local.entity.RevisionRecordEntity
+import com.example.data.local.entity.RoadmapMilestoneEntity
 import com.example.data.local.entity.RoutineActivityEntity
 import com.example.data.local.entity.RoutineCompletionEntity
 import com.example.data.local.entity.RpgRewardAuditEntity
@@ -108,6 +129,7 @@ import com.example.data.local.entity.SkillDefinitionEntity
 import com.example.data.local.entity.SkillEffectConfigEntity
 import com.example.data.local.entity.SkillTreeDependencyEntity
 import com.example.data.local.entity.SkillUnlockRecordEntity
+import com.example.data.local.entity.StrengthWeaknessFindingEntity
 import com.example.data.local.entity.StudySessionEntity
 import com.example.data.local.entity.SyncConflictEntity
 import com.example.data.local.entity.SyncOperationLogEntity
@@ -115,7 +137,21 @@ import com.example.data.local.entity.SyncQueueEntity
 import com.example.data.local.entity.SyncRecordMetaEntity
 import com.example.data.local.entity.SystemNotificationEntity
 import com.example.data.local.entity.TaskRecurrenceEntity
+import com.example.data.local.entity.WorkloadAssessmentEntity
 import com.example.data.local.entity.WorkoutSessionEntity
+import com.example.data.local.entity.SystemEventEntity
+import com.example.data.local.entity.AutomationJobEntity
+import com.example.data.local.entity.AutomationExecutionLogEntity
+import com.example.data.local.entity.DailyCycleExecutionEntity
+import com.example.data.local.entity.DailyExecutionItemEntity
+import com.example.data.local.entity.SystemIntegrityFindingEntity
+import com.example.data.local.entity.SystemHealthSnapshotEntity
+import com.example.data.local.entity.RecoveryOperationRecordEntity
+import com.example.data.local.entity.SystemAnnouncementEntity
+import com.example.data.local.entity.SystemCelebrationEntity
+import com.example.data.local.entity.SystemExperiencePreferenceEntity
+import com.example.data.local.entity.SystemPreferencesEntity
+import com.example.data.local.entity.VoiceCommandHistoryEntity
 import com.example.data.local.entity.toEntity
 import com.example.domain.engine.RecoveryEngine
 import com.example.domain.model.AttributeType
@@ -200,9 +236,35 @@ import com.example.domain.model.VerificationStatus
         SyncConflictEntity::class,
         SyncOperationLogEntity::class,
         CloudBackupEntity::class,
-        CloudSyncCursorEntity::class
+        CloudSyncCursorEntity::class,
+        IntelligenceProfileEntity::class,
+        StrengthWeaknessFindingEntity::class,
+        AdaptiveDailyPlanEntity::class,
+        AdaptivePlanBlockEntity::class,
+        WorkloadAssessmentEntity::class,
+        ConsistencyPredictionEntity::class,
+        PersonalizedRecommendationEntity::class,
+        RecommendationFeedbackEntity::class,
+        DevelopmentRoadmapEntity::class,
+        RoadmapMilestoneEntity::class,
+        IntelligenceReportEntity::class,
+        IntelligencePreferencesEntity::class,
+        AdvisorConsultationEntity::class,
+        SystemEventEntity::class,
+        AutomationJobEntity::class,
+        AutomationExecutionLogEntity::class,
+        DailyCycleExecutionEntity::class,
+        DailyExecutionItemEntity::class,
+        SystemIntegrityFindingEntity::class,
+        SystemHealthSnapshotEntity::class,
+        RecoveryOperationRecordEntity::class,
+        SystemPreferencesEntity::class,
+        SystemExperiencePreferenceEntity::class,
+        SystemAnnouncementEntity::class,
+        SystemCelebrationEntity::class,
+        VoiceCommandHistoryEntity::class
     ],
-    version = 7,
+    version = 10,
     exportSchema = false
 )
 abstract class SoloLevelingDatabase : RoomDatabase() {
@@ -246,6 +308,16 @@ abstract class SoloLevelingDatabase : RoomDatabase() {
     abstract fun syncConflictDao(): SyncConflictDao
     abstract fun syncDiagnosticsDao(): SyncDiagnosticsDao
     abstract fun cloudBackupDao(): CloudBackupDao
+    abstract fun intelligenceProfileDao(): IntelligenceProfileDao
+    abstract fun adaptivePlanDao(): AdaptivePlanDao
+    abstract fun recommendationDao(): RecommendationDao
+    abstract fun roadmapDao(): RoadmapDao
+    abstract fun intelligenceReportDao(): IntelligenceReportDao
+    abstract fun systemEventDao(): SystemEventDao
+    abstract fun automationDao(): AutomationDao
+    abstract fun dailyCycleDao(): DailyCycleDao
+    abstract fun systemIntegrityHealthDao(): SystemIntegrityHealthDao
+    abstract fun systemExperienceDao(): SystemExperienceDao
 
     companion object {
         @Volatile
@@ -1600,6 +1672,610 @@ abstract class SoloLevelingDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_7_8: Migration = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `intelligence_profiles` (
+                        `id` INTEGER NOT NULL,
+                        `sourceFingerprint` TEXT NOT NULL,
+                        `evaluatedAtEpochMs` INTEGER NOT NULL,
+                        `playerLevel` INTEGER NOT NULL,
+                        `hunterRankName` TEXT NOT NULL,
+                        `physicalActivityScore` INTEGER NOT NULL,
+                        `academicActivityScore` INTEGER NOT NULL,
+                        `disciplineConsistencyScore` INTEGER NOT NULL,
+                        `rpgEngagementScore` INTEGER NOT NULL,
+                        `behavioralPeakWindow` TEXT NOT NULL,
+                        `averageSessionMinutes` INTEGER NOT NULL,
+                        `measuredDataRatioPercent` INTEGER NOT NULL,
+                        `activeDaysLast30` INTEGER NOT NULL,
+                        `hasMinimumBaseline` INTEGER NOT NULL,
+                        `dataCoverageNotesJoined` TEXT NOT NULL,
+                        `dataCompletenessPercent` INTEGER NOT NULL,
+                        `provenanceSummary` TEXT NOT NULL,
+                        PRIMARY KEY(`id`)
+                    )
+                    """.trimIndent()
+                )
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `strength_weakness_findings` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `findingUuid` TEXT NOT NULL,
+                        `kindName` TEXT NOT NULL,
+                        `categoryName` TEXT NOT NULL,
+                        `title` TEXT NOT NULL,
+                        `description` TEXT NOT NULL,
+                        `evidenceSummary` TEXT NOT NULL,
+                        `dateRangeLabel` TEXT NOT NULL,
+                        `provenanceName` TEXT NOT NULL,
+                        `confidenceName` TEXT NOT NULL,
+                        `priorityRank` INTEGER NOT NULL,
+                        `insufficientData` INTEGER NOT NULL,
+                        `createdAtEpochMs` INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_strength_weakness_findings_findingUuid` ON `strength_weakness_findings` (`findingUuid`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_strength_weakness_findings_priorityRank` ON `strength_weakness_findings` (`priorityRank`)")
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `adaptive_daily_plans` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `planUuid` TEXT NOT NULL,
+                        `targetDateEpochDay` INTEGER NOT NULL,
+                        `generatedAtEpochMs` INTEGER NOT NULL,
+                        `workloadLevelName` TEXT NOT NULL,
+                        `totalPlannedMinutes` INTEGER NOT NULL,
+                        `availableMinutes` INTEGER NOT NULL,
+                        `isApproved` INTEGER NOT NULL,
+                        `isPartialDay` INTEGER NOT NULL,
+                        `notes` TEXT NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_adaptive_daily_plans_planUuid` ON `adaptive_daily_plans` (`planUuid`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_adaptive_daily_plans_targetDateEpochDay` ON `adaptive_daily_plans` (`targetDateEpochDay`)")
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `adaptive_plan_blocks` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `blockUuid` TEXT NOT NULL,
+                        `planUuid` TEXT NOT NULL,
+                        `title` TEXT NOT NULL,
+                        `module` TEXT NOT NULL,
+                        `scheduledDateEpochDay` INTEGER NOT NULL,
+                        `startMinuteOfDay` INTEGER NOT NULL,
+                        `durationMinutes` INTEGER NOT NULL,
+                        `priorityWeight` INTEGER NOT NULL,
+                        `priorityScore` INTEGER NOT NULL,
+                        `priorityReason` TEXT NOT NULL,
+                        `dependencies` TEXT NOT NULL,
+                        `statusName` TEXT NOT NULL,
+                        `completedMinutes` INTEGER NOT NULL,
+                        `isLocked` INTEGER NOT NULL,
+                        `linkedSourceTypeName` TEXT NOT NULL,
+                        `linkedSourceId` INTEGER NOT NULL,
+                        `isRecoveryProtected` INTEGER NOT NULL,
+                        FOREIGN KEY(`planUuid`) REFERENCES `adaptive_daily_plans`(`planUuid`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_adaptive_plan_blocks_blockUuid` ON `adaptive_plan_blocks` (`blockUuid`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_adaptive_plan_blocks_planUuid` ON `adaptive_plan_blocks` (`planUuid`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_adaptive_plan_blocks_scheduledDateEpochDay_startMinuteOfDay` ON `adaptive_plan_blocks` (`scheduledDateEpochDay`, `startMinuteOfDay`)")
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `workload_assessments` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `assessmentUuid` TEXT NOT NULL,
+                        `dateEpochDay` INTEGER NOT NULL,
+                        `workloadLevelName` TEXT NOT NULL,
+                        `loadScore` INTEGER NOT NULL,
+                        `physicalLoadMinutes48h` INTEGER NOT NULL,
+                        `academicLoadMinutesToday` INTEGER NOT NULL,
+                        `activeCommitmentsCount` INTEGER NOT NULL,
+                        `overdueItemsCount` INTEGER NOT NULL,
+                        `scheduleConflictCount` INTEGER NOT NULL,
+                        `recoveryStateName` TEXT NOT NULL,
+                        `adjustmentDirective` TEXT NOT NULL,
+                        `preservesRestWithoutPunishment` INTEGER NOT NULL,
+                        `provenanceName` TEXT NOT NULL,
+                        `evaluatedAtEpochMs` INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_workload_assessments_assessmentUuid` ON `workload_assessments` (`assessmentUuid`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_workload_assessments_dateEpochDay` ON `workload_assessments` (`dateEpochDay`)")
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `consistency_predictions` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `predictionUuid` TEXT NOT NULL,
+                        `domainLabel` TEXT NOT NULL,
+                        `horizonDays` INTEGER NOT NULL,
+                        `currentConsistencyPercent` INTEGER NOT NULL,
+                        `predictedConsistencyPercent` INTEGER NOT NULL,
+                        `slopePerWeek` REAL NOT NULL,
+                        `confidenceName` TEXT NOT NULL,
+                        `insufficientData` INTEGER NOT NULL,
+                        `limitationNote` TEXT NOT NULL,
+                        `atRiskGoalsJoined` TEXT NOT NULL,
+                        `riskLevelLabel` TEXT NOT NULL,
+                        `trendSeriesEncoded` TEXT NOT NULL,
+                        `provenanceName` TEXT NOT NULL,
+                        `evaluatedAtEpochMs` INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_consistency_predictions_predictionUuid` ON `consistency_predictions` (`predictionUuid`)")
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `personalized_recommendations` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `recUuid` TEXT NOT NULL,
+                        `categoryName` TEXT NOT NULL,
+                        `title` TEXT NOT NULL,
+                        `description` TEXT NOT NULL,
+                        `rationale` TEXT NOT NULL,
+                        `expectedImpact` TEXT NOT NULL,
+                        `actionLabel` TEXT NOT NULL,
+                        `deepLinkRoute` TEXT NOT NULL,
+                        `priorityScore` INTEGER NOT NULL,
+                        `statusName` TEXT NOT NULL,
+                        `provenanceName` TEXT NOT NULL,
+                        `confidenceName` TEXT NOT NULL,
+                        `expiresAtEpochMs` INTEGER NOT NULL,
+                        `cooldownUntilEpochMs` INTEGER NOT NULL,
+                        `sourceFingerprint` TEXT NOT NULL,
+                        `createdAtEpochMs` INTEGER NOT NULL,
+                        `respondedAtEpochMs` INTEGER
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_personalized_recommendations_recUuid` ON `personalized_recommendations` (`recUuid`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_personalized_recommendations_statusName` ON `personalized_recommendations` (`statusName`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_personalized_recommendations_priorityScore` ON `personalized_recommendations` (`priorityScore`)")
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `recommendation_feedback` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `recUuid` TEXT NOT NULL,
+                        `categoryName` TEXT NOT NULL,
+                        `actionName` TEXT NOT NULL,
+                        `feedbackNote` TEXT NOT NULL,
+                        `timestampEpochMs` INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_recommendation_feedback_recUuid` ON `recommendation_feedback` (`recUuid`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_recommendation_feedback_timestampEpochMs` ON `recommendation_feedback` (`timestampEpochMs`)")
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `development_roadmaps` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `roadmapUuid` TEXT NOT NULL,
+                        `title` TEXT NOT NULL,
+                        `horizonName` TEXT NOT NULL,
+                        `visionSummary` TEXT NOT NULL,
+                        `focusDomainsJoined` TEXT NOT NULL,
+                        `dependenciesSummary` TEXT NOT NULL,
+                        `riskNotes` TEXT NOT NULL,
+                        `nextReviewDateEpochDay` INTEGER NOT NULL,
+                        `isApproved` INTEGER NOT NULL,
+                        `createdAtEpochMs` INTEGER NOT NULL,
+                        `updatedAtEpochMs` INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_development_roadmaps_roadmapUuid` ON `development_roadmaps` (`roadmapUuid`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_development_roadmaps_updatedAtEpochMs` ON `development_roadmaps` (`updatedAtEpochMs`)")
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `roadmap_milestones` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `milestoneUuid` TEXT NOT NULL,
+                        `roadmapUuid` TEXT NOT NULL,
+                        `title` TEXT NOT NULL,
+                        `domain` TEXT NOT NULL,
+                        `targetDayOffset` INTEGER NOT NULL,
+                        `targetDateEpochDay` INTEGER NOT NULL,
+                        `isCompleted` INTEGER NOT NULL,
+                        `isUserEdited` INTEGER NOT NULL,
+                        `orderIndex` INTEGER NOT NULL,
+                        `notes` TEXT NOT NULL,
+                        FOREIGN KEY(`roadmapUuid`) REFERENCES `development_roadmaps`(`roadmapUuid`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_roadmap_milestones_milestoneUuid` ON `roadmap_milestones` (`milestoneUuid`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_roadmap_milestones_roadmapUuid` ON `roadmap_milestones` (`roadmapUuid`)")
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `intelligence_reports` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `reportUuid` TEXT NOT NULL,
+                        `periodTypeName` TEXT NOT NULL,
+                        `periodLabel` TEXT NOT NULL,
+                        `periodStartEpochDay` INTEGER NOT NULL,
+                        `periodEndEpochDay` INTEGER NOT NULL,
+                        `activeDaysObserved` INTEGER NOT NULL,
+                        `isPartialDataWindow` INTEGER NOT NULL,
+                        `measuredStatsSummary` TEXT NOT NULL,
+                        `selfReportedStatsSummary` TEXT NOT NULL,
+                        `workoutsCount` INTEGER NOT NULL,
+                        `joggingMinutes` INTEGER NOT NULL,
+                        `studyMinutes` INTEGER NOT NULL,
+                        `revisionsCount` INTEGER NOT NULL,
+                        `habitsCompletedCount` INTEGER NOT NULL,
+                        `tasksCompletedCount` INTEGER NOT NULL,
+                        `dungeonsClearedCount` INTEGER NOT NULL,
+                        `xpGainedWindow` INTEGER NOT NULL,
+                        `highlightsJoined` TEXT NOT NULL,
+                        `risksJoined` TEXT NOT NULL,
+                        `aiNarrativeSummary` TEXT,
+                        `aiUsedFallback` INTEGER NOT NULL,
+                        `generatedAtEpochMs` INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_intelligence_reports_reportUuid` ON `intelligence_reports` (`reportUuid`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_intelligence_reports_periodTypeName_generatedAtEpochMs` ON `intelligence_reports` (`periodTypeName`, `generatedAtEpochMs`)")
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `intelligence_preferences` (
+                        `id` INTEGER NOT NULL,
+                        `planningStyleName` TEXT NOT NULL,
+                        `preferredStudyHour` INTEGER NOT NULL,
+                        `preferredWorkoutHour` INTEGER NOT NULL,
+                        `maxDailyFocusMinutes` INTEGER NOT NULL,
+                        `maxDailyWorkoutMinutes` INTEGER NOT NULL,
+                        `maxRecommendationsPerDay` INTEGER NOT NULL,
+                        `notificationIntensityName` TEXT NOT NULL,
+                        `enableProactivePlanning` INTEGER NOT NULL,
+                        `enableWeeklyReports` INTEGER NOT NULL,
+                        `enableMonthlyReports` INTEGER NOT NULL,
+                        `enableAdaptiveDungeons` INTEGER NOT NULL,
+                        `shareIntelligenceWithCloudAi` INTEGER NOT NULL,
+                        `sharePhysicalWithIntelligence` INTEGER NOT NULL,
+                        `shareAcademicWithIntelligence` INTEGER NOT NULL,
+                        `shareLifeWithIntelligence` INTEGER NOT NULL,
+                        `shareRpgWithIntelligence` INTEGER NOT NULL,
+                        `restDaysCsv` TEXT NOT NULL,
+                        `updatedAtEpochMs` INTEGER NOT NULL,
+                        PRIMARY KEY(`id`)
+                    )
+                    """.trimIndent()
+                )
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `advisor_consultations` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `consultationUuid` TEXT NOT NULL,
+                        `question` TEXT NOT NULL,
+                        `deterministicSummary` TEXT NOT NULL,
+                        `aiResponse` TEXT NOT NULL,
+                        `provenanceTagsJoined` TEXT NOT NULL,
+                        `confidenceName` TEXT NOT NULL,
+                        `connectionStatusName` TEXT NOT NULL,
+                        `usedFallback` INTEGER NOT NULL,
+                        `limitationNotesJoined` TEXT NOT NULL,
+                        `timestampEpochMs` INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_advisor_consultations_consultationUuid` ON `advisor_consultations` (`consultationUuid`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_advisor_consultations_timestampEpochMs` ON `advisor_consultations` (`timestampEpochMs`)")
+            }
+        }
+
+        val MIGRATION_8_9: Migration = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_activity_logs_timestampEpochMs` ON `activity_logs` (`timestampEpochMs`)")
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `system_events` (
+                        `eventId` TEXT NOT NULL,
+                        `eventTypeName` TEXT NOT NULL,
+                        `timestampEpochMs` INTEGER NOT NULL,
+                        `sourceModule` TEXT NOT NULL,
+                        `relatedEntityId` TEXT NOT NULL,
+                        `metadataJson` TEXT NOT NULL,
+                        `schemaVersion` INTEGER NOT NULL,
+                        `processingStatusName` TEXT NOT NULL,
+                        `retryCount` INTEGER NOT NULL,
+                        `errorMessage` TEXT,
+                        `processedAtEpochMs` INTEGER,
+                        `correlationId` TEXT NOT NULL,
+                        PRIMARY KEY(`eventId`)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_system_events_processingStatusName` ON `system_events` (`processingStatusName`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_system_events_timestampEpochMs` ON `system_events` (`timestampEpochMs`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_system_events_eventTypeName` ON `system_events` (`eventTypeName`)")
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `automation_jobs` (
+                        `automationId` TEXT NOT NULL,
+                        `name` TEXT NOT NULL,
+                        `description` TEXT NOT NULL,
+                        `triggerTypeName` TEXT NOT NULL,
+                        `frequencyLabel` TEXT NOT NULL,
+                        `constraintsSummary` TEXT NOT NULL,
+                        `isEnabled` INTEGER NOT NULL,
+                        `lastExecutionEpochMs` INTEGER,
+                        `nextEligibleEpochMs` INTEGER,
+                        `currentStatusName` TEXT NOT NULL,
+                        `retryCount` INTEGER NOT NULL,
+                        `lastFailureReason` TEXT,
+                        `executionCount` INTEGER NOT NULL,
+                        PRIMARY KEY(`automationId`)
+                    )
+                    """.trimIndent()
+                )
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `automation_execution_logs` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `executionUuid` TEXT NOT NULL,
+                        `automationId` TEXT NOT NULL,
+                        `triggerSource` TEXT NOT NULL,
+                        `startedAtEpochMs` INTEGER NOT NULL,
+                        `completedAtEpochMs` INTEGER NOT NULL,
+                        `statusName` TEXT NOT NULL,
+                        `summaryMessage` TEXT NOT NULL,
+                        `retryCount` INTEGER NOT NULL,
+                        `failureReason` TEXT
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_automation_execution_logs_automationId` ON `automation_execution_logs` (`automationId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_automation_execution_logs_startedAtEpochMs` ON `automation_execution_logs` (`startedAtEpochMs`)")
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `daily_cycle_executions` (
+                        `epochDay` INTEGER NOT NULL,
+                        `timezoneId` TEXT NOT NULL,
+                        `executedAtEpochMs` INTEGER NOT NULL,
+                        `triggerSource` TEXT NOT NULL,
+                        `dailyQuestsResetCount` INTEGER NOT NULL,
+                        `missedDaysCaughtUp` INTEGER NOT NULL,
+                        `status` TEXT NOT NULL,
+                        `notes` TEXT NOT NULL,
+                        PRIMARY KEY(`epochDay`)
+                    )
+                    """.trimIndent()
+                )
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `daily_execution_items` (
+                        `executionKey` TEXT NOT NULL,
+                        `dateEpochDay` INTEGER NOT NULL,
+                        `activityTypeName` TEXT NOT NULL,
+                        `sourceRecordId` INTEGER NOT NULL,
+                        `statusName` TEXT NOT NULL,
+                        `actualStartEpochMs` INTEGER,
+                        `actualCompletionEpochMs` INTEGER,
+                        `completedMinutes` INTEGER NOT NULL,
+                        `plannedStartMinuteOverride` INTEGER,
+                        `evidenceReference` TEXT NOT NULL,
+                        `notes` TEXT NOT NULL,
+                        `updatedAtEpochMs` INTEGER NOT NULL,
+                        PRIMARY KEY(`executionKey`)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_daily_execution_items_dateEpochDay` ON `daily_execution_items` (`dateEpochDay`)")
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `system_integrity_findings` (
+                        `findingUuid` TEXT NOT NULL,
+                        `categoryName` TEXT NOT NULL,
+                        `severityName` TEXT NOT NULL,
+                        `title` TEXT NOT NULL,
+                        `description` TEXT NOT NULL,
+                        `affectedTable` TEXT NOT NULL,
+                        `affectedRecordKey` TEXT NOT NULL,
+                        `repairProposal` TEXT NOT NULL,
+                        `isDestructiveRepair` INTEGER NOT NULL,
+                        `statusName` TEXT NOT NULL,
+                        `detectedAtEpochMs` INTEGER NOT NULL,
+                        `resolvedAtEpochMs` INTEGER,
+                        PRIMARY KEY(`findingUuid`)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_system_integrity_findings_statusName` ON `system_integrity_findings` (`statusName`)")
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `system_health_snapshots` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `overallStatusName` TEXT NOT NULL,
+                        `componentsSummaryJson` TEXT NOT NULL,
+                        `evaluatedAtEpochMs` INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_system_health_snapshots_evaluatedAtEpochMs` ON `system_health_snapshots` (`evaluatedAtEpochMs`)")
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `recovery_operation_records` (
+                        `operationUuid` TEXT NOT NULL,
+                        `operationType` TEXT NOT NULL,
+                        `reason` TEXT NOT NULL,
+                        `status` TEXT NOT NULL,
+                        `details` TEXT NOT NULL,
+                        `createdAtEpochMs` INTEGER NOT NULL,
+                        `completedAtEpochMs` INTEGER,
+                        PRIMARY KEY(`operationUuid`)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_recovery_operation_records_createdAtEpochMs` ON `recovery_operation_records` (`createdAtEpochMs`)")
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `system_preferences` (
+                        `id` INTEGER NOT NULL,
+                        `enableAutoProgressionEvents` INTEGER NOT NULL,
+                        `enableAutoIntelligenceRefresh` INTEGER NOT NULL,
+                        `enableDailyCycleAutomation` INTEGER NOT NULL,
+                        `enableCloudAutoSync` INTEGER NOT NULL,
+                        `enablePerformanceCaching` INTEGER NOT NULL,
+                        `enableBackgroundNotifications` INTEGER NOT NULL,
+                        `preferredTimezoneId` TEXT NOT NULL,
+                        `updatedAtEpochMs` INTEGER NOT NULL,
+                        PRIMARY KEY(`id`)
+                    )
+                    """.trimIndent()
+                )
+            }
+        }
+
+        val MIGRATION_9_10: Migration = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `system_experience_preferences` (
+                        `id` INTEGER NOT NULL,
+                        `hasCompletedAwakening` INTEGER NOT NULL,
+                        `lastCelebratedLevel` INTEGER NOT NULL,
+                        `lastCelebratedRankName` TEXT NOT NULL,
+                        `ttsEnabled` INTEGER NOT NULL,
+                        `ttsSpeechRate` REAL NOT NULL,
+                        `ttsPitch` REAL NOT NULL,
+                        `ttsSpeakQuestUpdates` INTEGER NOT NULL,
+                        `ttsSpeakLevelAndRank` INTEGER NOT NULL,
+                        `ttsSpeakDungeonsAndBosses` INTEGER NOT NULL,
+                        `ttsSpeakRecoveryWarnings` INTEGER NOT NULL,
+                        `ttsSpeakRecommendations` INTEGER NOT NULL,
+                        `ttsSpeakDailySummary` INTEGER NOT NULL,
+                        `voiceCommandsEnabled` INTEGER NOT NULL,
+                        `voiceLocaleTag` TEXT NOT NULL,
+                        `animationsEnabled` INTEGER NOT NULL,
+                        `reducedMotionEnabled` INTEGER NOT NULL,
+                        `soundEffectsEnabled` INTEGER NOT NULL,
+                        `hapticFeedbackEnabled` INTEGER NOT NULL,
+                        `updatedAtEpochMs` INTEGER NOT NULL,
+                        PRIMARY KEY(`id`)
+                    )
+                    """.trimIndent()
+                )
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `system_announcement_history` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `announcementKey` TEXT NOT NULL,
+                        `eventId` TEXT NOT NULL,
+                        `categoryName` TEXT NOT NULL,
+                        `channelId` TEXT NOT NULL,
+                        `title` TEXT NOT NULL,
+                        `message` TEXT NOT NULL,
+                        `voiceSummary` TEXT NOT NULL,
+                        `deepLinkRoute` TEXT NOT NULL,
+                        `actionLabel` TEXT NOT NULL,
+                        `priorityName` TEXT NOT NULL,
+                        `wasSpoken` INTEGER NOT NULL,
+                        `wasDispatchedOs` INTEGER NOT NULL,
+                        `isRead` INTEGER NOT NULL,
+                        `createdAtEpochMs` INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_system_announcement_history_announcementKey` ON `system_announcement_history` (`announcementKey`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_system_announcement_history_createdAtEpochMs` ON `system_announcement_history` (`createdAtEpochMs`)")
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `system_celebration_history` (
+                        `celebrationId` TEXT NOT NULL,
+                        `typeName` TEXT NOT NULL,
+                        `previousLevel` INTEGER NOT NULL,
+                        `newLevel` INTEGER NOT NULL,
+                        `previousRankName` TEXT NOT NULL,
+                        `newRankName` TEXT NOT NULL,
+                        `titleUnlocked` TEXT NOT NULL,
+                        `attributeDeltaSummary` TEXT NOT NULL,
+                        `headline` TEXT NOT NULL,
+                        `message` TEXT NOT NULL,
+                        `isAcknowledged` INTEGER NOT NULL,
+                        `createdAtEpochMs` INTEGER NOT NULL,
+                        PRIMARY KEY(`celebrationId`)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_system_celebration_history_createdAtEpochMs` ON `system_celebration_history` (`createdAtEpochMs`)")
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `voice_command_history` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `transcript` TEXT NOT NULL,
+                        `matchedActionName` TEXT NOT NULL,
+                        `outcome` TEXT NOT NULL,
+                        `executedAtEpochMs` INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_voice_command_history_executedAtEpochMs` ON `voice_command_history` (`executedAtEpochMs`)")
+
+                db.execSQL(
+                    """
+                    INSERT OR IGNORE INTO `system_experience_preferences` (
+                        `id`, `hasCompletedAwakening`, `lastCelebratedLevel`, `lastCelebratedRankName`,
+                        `ttsEnabled`, `ttsSpeechRate`, `ttsPitch`,
+                        `ttsSpeakQuestUpdates`, `ttsSpeakLevelAndRank`, `ttsSpeakDungeonsAndBosses`,
+                        `ttsSpeakRecoveryWarnings`, `ttsSpeakRecommendations`, `ttsSpeakDailySummary`,
+                        `voiceCommandsEnabled`, `voiceLocaleTag`, `animationsEnabled`, `reducedMotionEnabled`,
+                        `soundEffectsEnabled`, `hapticFeedbackEnabled`, `updatedAtEpochMs`
+                    )
+                    SELECT 1, 0, COALESCE(`level`, 1), COALESCE(`rankName`, 'E_RANK'),
+                           1, 1.0, 1.0,
+                           1, 1, 1,
+                           1, 0, 1,
+                           1, 'en-US', 1, 0,
+                           1, 1, 0
+                    FROM `player_profile` WHERE `id` = 1
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    """
+                    INSERT OR IGNORE INTO `system_experience_preferences` VALUES (
+                        1, 0, 1, 'E_RANK',
+                        1, 1.0, 1.0,
+                        1, 1, 1,
+                        1, 0, 1,
+                        1, 'en-US', 1, 0,
+                        1, 1, 0
+                    )
+                    """.trimIndent()
+                )
+            }
+        }
+
         fun getInstance(context: Context): SoloLevelingDatabase {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
@@ -1607,7 +2283,17 @@ abstract class SoloLevelingDatabase : RoomDatabase() {
                     SoloLevelingDatabase::class.java,
                     "solo_leveling_reality_os.db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+                    .addMigrations(
+                        MIGRATION_1_2,
+                        MIGRATION_2_3,
+                        MIGRATION_3_4,
+                        MIGRATION_4_5,
+                        MIGRATION_5_6,
+                        MIGRATION_6_7,
+                        MIGRATION_7_8,
+                        MIGRATION_8_9,
+                        MIGRATION_9_10
+                    )
                     .build()
                     .also { INSTANCE = it }
             }
@@ -1639,6 +2325,15 @@ object DatabaseInitializer {
         }
         if (db.aiConfigDao().getNotificationPreferencesOnce() == null) {
             db.aiConfigDao().upsertNotificationPreferences(NotificationPreferenceEntity())
+        }
+        if (db.intelligenceReportDao().getPreferencesOnce() == null) {
+            db.intelligenceReportDao().upsertPreferences(IntelligencePreferencesEntity())
+        }
+        if (db.systemIntegrityHealthDao().getPreferencesOnce() == null) {
+            db.systemIntegrityHealthDao().upsertPreferences(SystemPreferencesEntity())
+        }
+        if (db.systemExperienceDao().getPreferencesOnce() == null) {
+            db.systemExperienceDao().upsertPreferences(SystemExperiencePreferenceEntity())
         }
 
         if (db.recoveryAssessmentDao().getLatestOnce() == null) {

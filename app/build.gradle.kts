@@ -108,6 +108,7 @@ dependencies {
   implementation(libs.androidx.room.runtime)
   implementation(libs.androidx.work.runtime.ktx)
   implementation(libs.androidx.health.connect.client)
+  implementation(libs.androidx.glance.appwidget)
   // implementation(libs.coil.compose)
   // implementation(libs.converter.moshi)
   // implementation(libs.firebase.ai)

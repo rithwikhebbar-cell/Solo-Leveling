@@ -51,6 +51,7 @@ import com.example.domain.model.RecoveryState
 import com.example.domain.model.RpgRewardAuditRecord
 import com.example.domain.model.ShadowCollectibleWithStatus
 import com.example.domain.model.SkillWithStatus
+import com.example.domain.model.SystemEventType
 import com.example.domain.model.VerificationStatus
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -83,7 +84,8 @@ data class RpgDashboardSnapshot(
  */
 class RpgRepository(
     private val database: SoloLevelingDatabase,
-    @Suppress("unused") private val preferencesRepository: UserPreferencesRepository
+    @Suppress("unused") private val preferencesRepository: UserPreferencesRepository,
+    private val systemEventRepository: SystemEventRepository? = null
 ) {
     private val playerDao = database.playerDao()
     private val dungeonDao = database.dungeonDao()
@@ -1121,6 +1123,22 @@ class RpgRepository(
                 )
             )
         }
+
+        val evType = when (sourceType.uppercase()) {
+            "DUNGEON" -> SystemEventType.DUNGEON_COMPLETED
+            "BOSS" -> SystemEventType.BOSS_BATTLE_COMPLETED
+            "SKILL" -> SystemEventType.SKILL_UNLOCKED
+            "TITLE" -> SystemEventType.TITLE_EARNED
+            else -> SystemEventType.ACHIEVEMENT_UNLOCKED
+        }
+        systemEventRepository?.publishEvent(
+            eventType = evType,
+            relatedEntityId = sourceId,
+            sourceModule = "RPG",
+            metadata = mapOf("xpAwarded" to xpAwarded.toString(), "rewardKey" to rewardKey),
+            processImmediately = false,
+            nowEpochMs = nowEpochMs
+        )
     }
 
     private data class DungeonTablesBundle(

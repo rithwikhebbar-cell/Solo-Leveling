@@ -59,6 +59,9 @@ interface ActivityLogDao {
     @Query("SELECT * FROM activity_logs ORDER BY timestampEpochMs DESC")
     fun observeAllLogs(): Flow<List<ActivityLogEntity>>
 
+    @Query("SELECT * FROM activity_logs ORDER BY timestampEpochMs DESC LIMIT :limit")
+    suspend fun getRecentLogs(limit: Int = 50): List<ActivityLogEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertLog(log: ActivityLogEntity): Long
 }

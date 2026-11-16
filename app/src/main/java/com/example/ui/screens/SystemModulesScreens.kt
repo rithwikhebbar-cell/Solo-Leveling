@@ -31,6 +31,7 @@ import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Inventory2
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.MilitaryTech
+import androidx.compose.material.icons.rounded.Psychology
 import androidx.compose.material.icons.rounded.ReceiptLong
 import androidx.compose.material.icons.rounded.School
 import androidx.compose.material.icons.rounded.Security
@@ -70,9 +71,23 @@ fun ModulesHubScreen(
     onOpenInventory: () -> Unit = {},
     onOpenShadowCollection: () -> Unit = {},
     onOpenRpgRewardHistory: () -> Unit = {},
-    onOpenCloudSync: () -> Unit = {}
+    onOpenCloudSync: () -> Unit = {},
+    onOpenIntelligenceCenter: () -> Unit = {},
+    onOpenSystemControl: () -> Unit = {},
+    onOpenAiCompanion: () -> Unit = {},
+    onOpenVoiceConsole: () -> Unit = {},
+    onOpenSystemVoiceSettings: () -> Unit = {},
+    onOpenWidgetHub: () -> Unit = {},
+    onOpenCelebrationVault: () -> Unit = {}
 ) {
     val modules = listOf(
+        ModuleEntry("AI System Companion", "Holographic interactive guidance, voice output & privacy-safe Q&A", Icons.Rounded.AutoAwesome, SystemColors.ElectricCyan, onOpenAiCompanion),
+        ModuleEntry("Voice Command Console", "Tap-to-speak allowlisted System navigation & confirmation", Icons.Rounded.Bolt, SystemColors.ElectricCyan, onOpenVoiceConsole),
+        ModuleEntry("System Voice & Announcements", "Native Android TTS engine, priority alerts & speech controls", Icons.Rounded.Psychology, SystemColors.ArcaneViolet, onOpenSystemVoiceSettings),
+        ModuleEntry("Home-Screen Widgets", "4 Jetpack Glance widgets & live telemetry snapshots", Icons.Rounded.Shield, SystemColors.VerifiedEmerald, onOpenWidgetHub),
+        ModuleEntry("Celebration Vault", "Replayable verified Level-Up and Rank Promotion milestones", Icons.Rounded.EmojiEvents, SystemColors.MonarchGold, onOpenCelebrationVault),
+        ModuleEntry("System Control Center", "Health, automation workers, daily timeline, integrity & recovery", Icons.Rounded.Shield, SystemColors.ElectricCyan, onOpenSystemControl),
+        ModuleEntry("Intelligence Center", "Adaptive planning, predictions, roadmaps, reports & Q&A", Icons.Rounded.Psychology, SystemColors.ElectricCyan, onOpenIntelligenceCenter),
         ModuleEntry("Cloud Sync & Account", "Supabase identity, multi-device sync, conflicts & backups", Icons.Rounded.CloudSync, SystemColors.ElectricCyan, onOpenCloudSync),
         ModuleEntry("Life & Discipline OS", "Routines, Habits, Tasks, Goals & Unified Calendar", Icons.Rounded.CalendarToday, SystemColors.VerifiedEmerald, onOpenLifeEngine),
         ModuleEntry("Academic Engine", "Subjects, Focus Timer, Revisions & Exams", Icons.Rounded.School, SystemColors.ElectricCyan, onOpenAcademicEngine),

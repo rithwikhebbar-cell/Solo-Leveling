@@ -204,3 +204,102 @@ data object CloudBackupRoute
 
 @Serializable
 data object RestorePreviewRoute
+
+// Milestone 8: Intelligence, Personalization & Adaptive System (15 Screens)
+@Serializable
+data object IntelligenceDashboardRoute
+
+@Serializable
+data object PlayerIntelligenceProfileRoute
+
+@Serializable
+data object StrengthsWeaknessesRoute
+
+@Serializable
+data object AdaptiveDailyPlanRoute
+
+@Serializable
+data object WorkloadBalanceRoute
+
+@Serializable
+data object ConsistencyAnalyticsRoute
+
+@Serializable
+data object PersonalizedRecommendationsRoute
+
+@Serializable
+data object AcademicIntelligenceRoute
+
+@Serializable
+data object PhysicalIntelligenceRoute
+
+@Serializable
+data object AdaptiveDungeonsRoute
+
+@Serializable
+data object DevelopmentRoadmapRoute
+
+@Serializable
+data object WeeklyIntelligenceReportRoute
+
+@Serializable
+data object MonthlyIntelligenceReportRoute
+
+@Serializable
+data object PersonalAdvisorRoute
+
+@Serializable
+data object IntelligencePreferencesRoute
+
+// Milestone 9: System Integration, Automation & Reliability (12 Screens)
+@Serializable
+data object SystemOverviewRoute
+
+@Serializable
+data object ModuleIntegrationStatusRoute
+
+@Serializable
+data object AutomationDashboardRoute
+
+@Serializable
+data object AutomationHistoryRoute
+
+@Serializable
+data object DailyExecutionTimelineRoute
+
+@Serializable
+data object SystemEventHistoryRoute
+
+@Serializable
+data object DataIntegrityDashboardRoute
+
+@Serializable
+data object SystemHealthMonitorRoute
+
+@Serializable
+data object PerformanceDiagnosticsRoute
+
+@Serializable
+data object ErrorRecoveryCenterRoute
+
+@Serializable
+data object NotificationManagementRoute
+
+@Serializable
+data object SystemControlSettingsRoute
+
+// Milestone 10: The Awakening — Immersive System Experience (5 dedicated screens + overlays)
+@Serializable
+data object AiCompanionRoute
+
+@Serializable
+data object VoiceCommandRoute
+
+@Serializable
+data object SystemVoiceSettingsRoute
+
+@Serializable
+data object WidgetHubRoute
+
+@Serializable
+data object CelebrationHistoryRoute

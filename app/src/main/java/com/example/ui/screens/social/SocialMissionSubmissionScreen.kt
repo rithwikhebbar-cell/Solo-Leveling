@@ -1,0 +1,315 @@
+package com.example.ui.screens.social
+
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.example.domain.engine.SocialMissionCatalog
+import com.example.domain.model.SocialMissionEvidenceType
+import com.example.ui.viewmodel.SocialMasteryViewModel
+
+private val ObsidianBlack = Color(0xFF070A13)
+private val DeepNavy = Color(0xFF0D1424)
+private val SurfaceNavy = Color(0xFF1E293B)
+private val ElectricCyan = Color(0xFF00E5FF)
+private val ArcaneViolet = Color(0xFF8B5CF6)
+private val BorderCyan = Color(0x3300E5FF)
+private val TextWhite = Color(0xFFF8FAFC)
+private val TextMuted = Color(0xFF94A3B8)
+private val GoldHighlight = Color(0xFFFFD700)
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SocialMissionSubmissionScreen(
+    missionId: String,
+    viewModel: SocialMasteryViewModel,
+    onNavigateBack: () -> Unit,
+    onSubmissionSuccess: () -> Unit
+) {
+    val mission = SocialMissionCatalog.getMissionById(missionId)
+    val uiState by viewModel.uiState.collectAsState()
+    val scrollState = rememberScrollState()
+
+    val activeRecord = uiState.activeMissionRecords.find { it.missionId == missionId }
+
+    var selectedEvidenceType by remember { mutableStateOf(SocialMissionEvidenceType.SELF_REFLECTION) }
+    var reflectionText by remember { mutableStateOf("") }
+    var humanConfirmingRole by remember { mutableStateOf("") }
+    var artifactNote by remember { mutableStateOf("") }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = {
+                    Text(
+                        text = "SUBMIT MISSION EVIDENCE",
+                        color = TextWhite,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace
+                    )
+                },
+                navigationIcon = {
+                    IconButton(onClick = onNavigateBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = ElectricCyan)
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = ObsidianBlack)
+            )
+        },
+        containerColor = ObsidianBlack
+    ) { paddingValues ->
+        if (mission == null || activeRecord == null) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text(
+                    text = "No active mission record found. Please accept the mission first.",
+                    color = TextMuted,
+                    modifier = Modifier.padding(24.dp)
+                )
+            }
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .verticalScroll(scrollState)
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Mission Header
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = DeepNavy),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Text(
+                            text = mission.difficulty.label,
+                            color = ArcaneViolet,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = mission.title,
+                            color = TextWhite,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
+                // Privacy Guarantees Notice
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = SurfaceNavy),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.Info, contentDescription = null, tint = ElectricCyan, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Privacy Guarantee: Never submit private third-party data, secret recordings, or phone numbers. Self-reflections remain strictly local.",
+                            color = TextMuted,
+                            fontSize = 11.sp
+                        )
+                    }
+                }
+
+                // Evidence Category Selector
+                Text(
+                    text = "SELECT EVIDENCE CATEGORY",
+                    color = ElectricCyan,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace
+                )
+
+                SocialMissionEvidenceType.entries.forEach { type ->
+                    val isSelected = selectedEvidenceType == type
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (isSelected) DeepNavy else SurfaceNavy)
+                            .border(1.dp, if (isSelected) ElectricCyan else Color.Transparent, RoundedCornerShape(8.dp))
+                            .clickable { selectedEvidenceType = type }
+                            .padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(16.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (isSelected) ElectricCyan else TextMuted)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                text = type.label,
+                                color = TextWhite,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "Verification Tier: ${type.verificationTier.name.replace("_", " ")}",
+                                color = TextMuted,
+                                fontSize = 11.sp
+                            )
+                        }
+                    }
+                }
+
+                // Conditional inputs based on evidence type
+                if (selectedEvidenceType == SocialMissionEvidenceType.HUMAN_CONFIRMED) {
+                    OutlinedTextField(
+                        value = humanConfirmingRole,
+                        onValueChange = { humanConfirmingRole = it },
+                        label = { Text("Confirming Person's Role (e.g. Mentor, Teammate)") },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = ElectricCyan,
+                            unfocusedBorderColor = BorderCyan,
+                            focusedTextColor = TextWhite,
+                            unfocusedTextColor = TextWhite
+                        )
+                    )
+                }
+
+                if (selectedEvidenceType == SocialMissionEvidenceType.OPTIONAL_ARTIFACT) {
+                    OutlinedTextField(
+                        value = artifactNote,
+                        onValueChange = { artifactNote = it },
+                        label = { Text("Artifact Title / Summary (e.g. Slide deck title, PR description)") },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = ElectricCyan,
+                            unfocusedBorderColor = BorderCyan,
+                            focusedTextColor = TextWhite,
+                            unfocusedTextColor = TextWhite
+                        )
+                    )
+                }
+
+                // Written Reflection
+                Text(
+                    text = "STRUCTURED REFLECTION",
+                    color = ElectricCyan,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace
+                )
+
+                OutlinedTextField(
+                    value = reflectionText,
+                    onValueChange = { reflectionText = it },
+                    placeholder = {
+                        Text(
+                            "Describe what you did, the other person's response, challenges faced, and what you would refine next time...",
+                            color = TextMuted,
+                            fontSize = 12.sp
+                        )
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(140.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = ElectricCyan,
+                        unfocusedBorderColor = BorderCyan,
+                        focusedTextColor = TextWhite,
+                        unfocusedTextColor = TextWhite
+                    )
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "Words: ${reflectionText.trim().split(Regex("\\s+")).filter { it.isNotBlank() }.size}",
+                        color = TextMuted,
+                        fontSize = 11.sp
+                    )
+                    OutlinedButton(
+                        onClick = { viewModel.requestAiReflectionReview(mission, reflectionText) },
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = GoldHighlight)
+                    ) {
+                        Text("REQUEST AI ADVISORY", fontSize = 10.sp)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Button(
+                    onClick = {
+                        viewModel.submitMissionReflection(
+                            recordId = activeRecord.recordId,
+                            evidenceType = selectedEvidenceType,
+                            reflectionText = reflectionText,
+                            humanConfirmingRole = humanConfirmingRole.ifBlank { null },
+                            artifactNote = artifactNote.ifBlank { null }
+                        )
+                        onSubmissionSuccess()
+                    },
+                    enabled = reflectionText.length >= 20 && !uiState.isSubmittingMission,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = ElectricCyan, contentColor = ObsidianBlack)
+                ) {
+                    if (uiState.isSubmittingMission) {
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp), color = ObsidianBlack)
+                    } else {
+                        Text("SUBMIT MISSION REFLECTION", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
+}

@@ -16,7 +16,31 @@ data class ProgressionCommand(
     val secondaryAttrXp: Int = 0,
     val verificationStatus: VerificationStatus,
     val isTrustedSystemAction: Boolean = false
-)
+) {
+    companion object {
+        fun fromSocialReward(
+            idempotencyKey: String,
+            sourceRecordId: String,
+            title: String,
+            calculation: ActivityRewardCalculation,
+            verificationStatus: VerificationStatus
+        ): ProgressionCommand {
+            return ProgressionCommand(
+                idempotencyKey = idempotencyKey,
+                sourceModule = "SOCIAL_MASTERY",
+                sourceRecordId = sourceRecordId,
+                title = title,
+                xpAwarded = calculation.xpAwarded,
+                primaryAttribute = calculation.primaryAttribute,
+                primaryAttrXp = calculation.primaryAttrXpAwarded,
+                secondaryAttribute = calculation.secondaryAttribute,
+                secondaryAttrXp = calculation.secondaryAttrXpAwarded,
+                verificationStatus = verificationStatus,
+                isTrustedSystemAction = true
+            )
+        }
+    }
+}
 
 data class ProgressionOrchestrationOutcome(
     val updatedProfile: PlayerProfile,

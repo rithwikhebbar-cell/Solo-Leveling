@@ -28,6 +28,19 @@ import com.example.data.repository.SyncRepository
 import com.example.data.repository.SystemControlRepository
 import com.example.data.repository.SystemEventRepository
 import com.example.data.repository.SystemExperienceRepository
+import com.example.data.repository.ShadowArmyRepository
+import com.example.data.repository.SocialRepository
+import com.example.data.repository.SocialRepositoryImpl
+import com.example.domain.engine.CommunicationPracticeEngine
+import com.example.domain.engine.SocialMasteryAnalyticsEngine
+import com.example.service.AudioLifecycleManager
+import com.example.service.SocialMasteryAiCoach
+import com.example.service.SocialPrivacyService
+import com.example.service.SocialVoiceCoachController
+import com.example.domain.engine.MonarchProgressionEngine
+import com.example.domain.engine.ShadowDeploymentEngine
+import com.example.domain.engine.ShadowEvolutionEngine
+import com.example.domain.engine.ShadowExtractionEngine
 import com.example.data.sync.CloudSyncEngine
 import com.example.data.sync.SyncQueueManager
 import com.example.data.sync.SyncStatusTracker
@@ -165,6 +178,83 @@ class AppContainer(application: Application) {
             voiceEngine = voiceEngine
         )
     }
+
+    val shadowArmyRepository: ShadowArmyRepository by lazy {
+        val monarchProgressionEngine = MonarchProgressionEngine(
+            monarchProfileDao = database.shadowMonarchProfileDao(),
+            monarchSkillUnlockDao = database.monarchSkillUnlockDao(),
+            shadowDao = database.shadowDao(),
+            shadowResourceDao = database.shadowResourceDao(),
+            shadowQuestProgressDao = database.shadowQuestProgressDao()
+        )
+        val extractionEngine = ShadowExtractionEngine(
+            database = database,
+            shadowDao = database.shadowDao(),
+            extractionDao = database.shadowExtractionDao(),
+            monarchProfileDao = database.shadowMonarchProfileDao(),
+            monarchProgressionEngine = monarchProgressionEngine
+        )
+        val evolutionEngine = ShadowEvolutionEngine(
+            shadowDao = database.shadowDao(),
+            shadowSkillUnlockDao = database.shadowSkillUnlockDao(),
+            monarchProgressionEngine = monarchProgressionEngine
+        )
+        val deploymentEngine = ShadowDeploymentEngine(
+            shadowDao = database.shadowDao(),
+            deploymentDao = database.shadowDeploymentDao(),
+            formationDao = database.shadowFormationDao()
+        )
+        ShadowArmyRepository(
+            monarchProfileDao = database.shadowMonarchProfileDao(),
+            shadowDao = database.shadowDao(),
+            extractionDao = database.shadowExtractionDao(),
+            skillUnlockDao = database.shadowSkillUnlockDao(),
+            deploymentDao = database.shadowDeploymentDao(),
+            formationDao = database.shadowFormationDao(),
+            monarchSkillUnlockDao = database.monarchSkillUnlockDao(),
+            questProgressDao = database.shadowQuestProgressDao(),
+            resourceDao = database.shadowResourceDao(),
+            monarchProgressionEngine = monarchProgressionEngine,
+            extractionEngine = extractionEngine,
+            evolutionEngine = evolutionEngine,
+            deploymentEngine = deploymentEngine
+        )
+    }
+
+    val audioLifecycleManager: AudioLifecycleManager by lazy {
+        AudioLifecycleManager(application, database)
+    }
+
+    val socialPrivacyService: SocialPrivacyService by lazy {
+        SocialPrivacyService(preferencesRepository)
+    }
+
+    val socialRepository: SocialRepository by lazy {
+        SocialRepositoryImpl(
+            database = database,
+            audioLifecycleManager = audioLifecycleManager
+        )
+    }
+
+    val socialAiCoach: SocialMasteryAiCoach by lazy {
+        SocialMasteryAiCoach(
+            backendAiGateway = backendAiGateway,
+            socialPrivacyService = socialPrivacyService
+        )
+    }
+
+    val socialVoiceCoachController: SocialVoiceCoachController by lazy {
+        SocialVoiceCoachController(
+            context = application,
+            aiCoach = socialAiCoach,
+            voiceEngine = voiceEngine,
+            coroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+        )
+    }
+
+    val socialAnalyticsEngine: SocialMasteryAnalyticsEngine by lazy {
+        SocialMasteryAnalyticsEngine(socialRepository)
+    }
 }
 
 class SoloLevelingApplication : Application() {
@@ -187,6 +277,9 @@ class SoloLevelingApplication : Application() {
             container.systemControlRepository.evaluateSystemHealthAndPerformance()
             container.automationOrchestrator.scheduleAllEnabledWorkers()
             container.systemExperienceRepository.syncCelebrationsFromPlayerProfile()
+            container.socialRepository.seedInitialScenariosIfEmpty()
+            container.socialRepository.initializeMissingModuleProgress("local_vault_player_1")
+            container.audioLifecycleManager.reconcileOrphanFiles("local_vault_player_1")
         }
         CloudSyncWorker.enqueueImmediateSync(this, "APP_STARTUP")
         observeNetworkRestoration()
@@ -217,6 +310,18 @@ class SoloLevelingApplication : Application() {
         }
         busRepo.registerHandler(SystemEventType.DAILY_RESET_COMPLETED) {
             container.systemControlRepository.evaluateSystemHealthAndPerformance()
+            Result.success(Unit)
+        }
+        busRepo.registerHandler(SystemEventType.DUNGEON_COMPLETED) { event ->
+            container.shadowArmyRepository.monarchProgressionEngine.checkAndUpdateQuestProgress(
+                event.sourceEventId.ifBlank { event.eventId }
+            )
+            Result.success(Unit)
+        }
+        busRepo.registerHandler(SystemEventType.BOSS_BATTLE_COMPLETED) { event ->
+            container.shadowArmyRepository.monarchProgressionEngine.checkAndUpdateQuestProgress(
+                event.sourceEventId.ifBlank { event.eventId }
+            )
             Result.success(Unit)
         }
         SystemEventType.entries.forEach { eventType ->

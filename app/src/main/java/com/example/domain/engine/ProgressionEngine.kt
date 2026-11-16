@@ -62,6 +62,8 @@ object ProgressionEngine {
     const val DAILY_SELF_REPORTED_ACADEMIC_LIMIT = 4
     const val DAILY_LIFE_XP_CAP = 200
     const val DAILY_SELF_REPORTED_LIFE_LIMIT = 5
+    const val DAILY_SOCIAL_XP_CAP = 180
+    const val DAILY_SELF_REPORTED_SOCIAL_LIMIT = 3
     const val DAILY_RPG_XP_CAP = 300
     const val MAX_SESSION_MINUTES = 360
 
@@ -576,5 +578,88 @@ object ProgressionEngine {
             todayTrainingMinutes >= 45 || weeklySessions >= 5 -> RecoveryStatus.MODERATE_LOAD
             else -> RecoveryStatus.OPTIMAL
         }
+    }
+
+    /**
+     * Milestone 12: Canonical Social Mastery reward calculation.
+     * Sole authorized formula engine for social activities, rehearsal, scenarios and assessments.
+     * Maps strictly to verified attributes: CHA, WIS, DIS, INT.
+     */
+    fun calculateSocialReward(
+        module: com.example.domain.model.SocialModuleIdentifier,
+        activityKind: com.example.domain.model.SocialActivityKind,
+        durationMinutes: Int,
+        verificationStatus: VerificationStatus,
+        socialXpAlreadyEarnedToday: Int,
+        selfReportedSocialCountToday: Int,
+        rubricScorePercent: Int? = null
+    ): ActivityRewardCalculation {
+        val primary = module.primaryAttribute
+        val secondary = module.secondaryAttribute
+
+        if (!verificationStatus.isVerified && selfReportedSocialCountToday >= DAILY_SELF_REPORTED_SOCIAL_LIMIT) {
+            return ActivityRewardCalculation(
+                xpAwarded = 0,
+                primaryAttribute = primary,
+                primaryAttrXpAwarded = 0,
+                secondaryAttribute = secondary,
+                secondaryAttrXpAwarded = 0,
+                wasCapped = true,
+                validationNote = "Daily self-reported social limit ($DAILY_SELF_REPORTED_SOCIAL_LIMIT/day) reached. Activity logged without extra XP."
+            )
+        }
+
+        val multiplier = multiplierFor(verificationStatus)
+        val safeMinutes = durationMinutes.coerceIn(1, 180)
+        val rawBaseXp = when (activityKind) {
+            com.example.domain.model.SocialActivityKind.PRACTICE,
+            com.example.domain.model.SocialActivityKind.LISTENING_EXERCISE,
+            com.example.domain.model.SocialActivityKind.LANGUAGE_PRACTICE -> (safeMinutes * 1.2f + 6f)
+            com.example.domain.model.SocialActivityKind.SPEAKING_REHEARSAL,
+            com.example.domain.model.SocialActivityKind.PRESENTATION -> (safeMinutes * 1.5f + 10f)
+            com.example.domain.model.SocialActivityKind.SCENARIO,
+            com.example.domain.model.SocialActivityKind.NEGOTIATION_EXERCISE -> 30f
+            com.example.domain.model.SocialActivityKind.REFLECTION -> 15f
+            com.example.domain.model.SocialActivityKind.REAL_WORLD_ACTIVITY -> (safeMinutes * 0.8f + 8f)
+        }
+
+        val qualityFactor = rubricScorePercent?.let { score ->
+            when {
+                score >= 90 -> 1.20f
+                score >= 75 -> 1.00f
+                score >= 60 -> 0.80f
+                else -> 0.50f
+            }
+        } ?: 1.0f
+
+        val scaledXp = (rawBaseXp * qualityFactor * multiplier).toInt().coerceAtLeast(4)
+        val remainingCap = (DAILY_SOCIAL_XP_CAP - socialXpAlreadyEarnedToday).coerceAtLeast(0)
+        val awardedXp = scaledXp.coerceAtMost(remainingCap)
+        val wasCapped = awardedXp < scaledXp
+
+        val capRatio = if (scaledXp <= 0) 0f else awardedXp.toFloat() / scaledXp
+        val rawPrimaryAttrXp = (rawBaseXp * 1.2f * multiplier * module.primaryRatio).toInt().coerceAtLeast(4)
+        val rawSecondaryAttrXp = (rawBaseXp * 0.8f * multiplier * module.secondaryRatio).toInt().coerceAtLeast(2)
+
+        val finalPrimaryAttrXp = (rawPrimaryAttrXp * capRatio).toInt()
+        val finalSecondaryAttrXp = (rawSecondaryAttrXp * capRatio).toInt()
+
+        val provenanceNote = when (verificationStatus) {
+            VerificationStatus.VERIFIED_SYSTEM_TIMER -> "System timer verified in-app rehearsal."
+            VerificationStatus.VERIFIED_ASSESSMENT -> "Assessment evidence evaluated."
+            VerificationStatus.VERIFIED_HEALTH_CONNECT -> "Health Connect verified."
+            VerificationStatus.SELF_REPORTED -> "Self-reported social action (0.65x weight)."
+        }
+        val capNote = if (wasCapped) " Daily social XP cap ($DAILY_SOCIAL_XP_CAP XP) reached." else ""
+
+        return ActivityRewardCalculation(
+            xpAwarded = awardedXp,
+            primaryAttribute = primary,
+            primaryAttrXpAwarded = finalPrimaryAttrXp,
+            secondaryAttribute = secondary,
+            secondaryAttrXpAwarded = finalSecondaryAttrXp,
+            wasCapped = wasCapped,
+            validationNote = "$provenanceNote$capNote".trim()
+        )
     }
 }

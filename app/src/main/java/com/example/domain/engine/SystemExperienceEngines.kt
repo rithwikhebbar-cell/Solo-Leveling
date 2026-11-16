@@ -233,6 +233,45 @@ object SystemAnnouncementEngine {
                 priority = TtsSpeechPriority.NORMAL,
                 createdAtEpochMs = event.timestampEpochMs
             )
+            SystemEventType.SHADOW_EXTRACTED -> SystemAnnouncementRecord(
+                announcementKey = "EVENT|${event.eventId}",
+                eventId = event.eventId,
+                category = SystemAnnouncementCategory.DUNGEON,
+                channelSpec = SystemNotificationChannelSpec.DUNGEON_AVAILABLE,
+                title = "Shadow Soldier Extracted",
+                message = "The shadow has accepted your authority. Arise.",
+                voiceSummary = "Target identified. The shadow has accepted your authority. Arise.",
+                deepLinkRoute = "shadow_roster",
+                actionLabel = "View Shadow",
+                priority = TtsSpeechPriority.HIGH,
+                createdAtEpochMs = event.timestampEpochMs
+            )
+            SystemEventType.SHADOW_EVOLVED -> SystemAnnouncementRecord(
+                announcementKey = "EVENT|${event.eventId}",
+                eventId = event.eventId,
+                category = SystemAnnouncementCategory.LEVEL_UP,
+                channelSpec = SystemNotificationChannelSpec.LEVEL_UP,
+                title = "Shadow Evolution Complete",
+                message = "A shadow soldier has evolved to a higher rank through verified effort.",
+                voiceSummary = "Shadow soldier evolution complete.",
+                deepLinkRoute = "shadow_roster",
+                actionLabel = "View Army",
+                priority = TtsSpeechPriority.HIGH,
+                createdAtEpochMs = event.timestampEpochMs
+            )
+            SystemEventType.MONARCH_LEVEL_UP -> SystemAnnouncementRecord(
+                announcementKey = "EVENT|${event.eventId}",
+                eventId = event.eventId,
+                category = SystemAnnouncementCategory.LEVEL_UP,
+                channelSpec = SystemNotificationChannelSpec.LEVEL_UP,
+                title = "Shadow Monarch Level Up",
+                message = "Your Monarch Authority and shadow army capacity have expanded.",
+                voiceSummary = "Shadow Monarch Level Up confirmed.",
+                deepLinkRoute = "shadow_realm",
+                actionLabel = "View Monarch",
+                priority = TtsSpeechPriority.CRITICAL,
+                createdAtEpochMs = event.timestampEpochMs
+            )
             else -> null
         }
     }

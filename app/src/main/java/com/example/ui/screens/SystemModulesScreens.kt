@@ -78,9 +78,13 @@ fun ModulesHubScreen(
     onOpenVoiceConsole: () -> Unit = {},
     onOpenSystemVoiceSettings: () -> Unit = {},
     onOpenWidgetHub: () -> Unit = {},
-    onOpenCelebrationVault: () -> Unit = {}
+    onOpenCelebrationVault: () -> Unit = {},
+    onOpenShadowRealm: () -> Unit = {},
+    onOpenSocialMastery: () -> Unit = {}
 ) {
     val modules = listOf(
+        ModuleEntry("Social Mastery", "8 development modules, speech rehearsal, scenarios & interpersonal progression", Icons.Rounded.RecordVoiceOver, SystemColors.ElectricCyan, onOpenSocialMastery),
+        ModuleEntry("The Shadow Realm", "Shadow Monarch progression, Shadow Extraction, army deployment & formations", Icons.Rounded.Bolt, SystemColors.ArcaneViolet, onOpenShadowRealm),
         ModuleEntry("AI System Companion", "Holographic interactive guidance, voice output & privacy-safe Q&A", Icons.Rounded.AutoAwesome, SystemColors.ElectricCyan, onOpenAiCompanion),
         ModuleEntry("Voice Command Console", "Tap-to-speak allowlisted System navigation & confirmation", Icons.Rounded.Bolt, SystemColors.ElectricCyan, onOpenVoiceConsole),
         ModuleEntry("System Voice & Announcements", "Native Android TTS engine, priority alerts & speech controls", Icons.Rounded.Psychology, SystemColors.ArcaneViolet, onOpenSystemVoiceSettings),

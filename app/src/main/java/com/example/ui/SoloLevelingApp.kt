@@ -153,6 +153,35 @@ import com.example.ui.navigation.WeeklyIntelligenceReportRoute
 import com.example.ui.navigation.WeeklyReviewRoute
 import com.example.ui.navigation.WidgetHubRoute
 import com.example.ui.navigation.WorkloadBalanceRoute
+import com.example.ui.navigation.ShadowRealmDashboardRoute
+import com.example.ui.navigation.MonarchStatusRoute
+import com.example.ui.navigation.ShadowExtractionRoute
+import com.example.ui.navigation.ShadowCollectionListRoute
+import com.example.ui.navigation.ShadowDetailRoute
+import com.example.ui.navigation.ShadowEvolutionRoute
+import com.example.ui.navigation.ShadowSkillTreeRoute
+import com.example.ui.navigation.ShadowDeploymentRoute
+import com.example.ui.navigation.ArmyFormationManagerRoute
+import com.example.ui.navigation.MonarchSkillTreeRoute
+import com.example.ui.navigation.ShadowQuestBoardRoute
+import com.example.ui.navigation.ShadowArmyAnalyticsRoute
+import com.example.ui.navigation.ShadowArchiveRoute
+import com.example.ui.navigation.ShadowSettingsRoute
+import com.example.ui.viewmodel.ShadowRealmViewModel
+import com.example.ui.screens.shadow.ShadowRealmDashboardScreen
+import com.example.ui.screens.shadow.MonarchStatusScreen
+import com.example.ui.screens.shadow.ShadowExtractionScreen
+import com.example.ui.screens.shadow.ShadowArmyAnalyticsScreen
+import com.example.ui.screens.shadow.ShadowArchiveScreen
+import com.example.ui.screens.shadow.ShadowSettingsScreen
+import com.example.ui.screens.shadow.ShadowCollectionScreen
+import com.example.ui.screens.shadow.ShadowDetailScreen
+import com.example.ui.screens.shadow.ShadowEvolutionScreen
+import com.example.ui.screens.shadow.ShadowSkillTreeScreen
+import com.example.ui.screens.shadow.ShadowDeploymentScreen
+import com.example.ui.screens.shadow.ArmyFormationManagerScreen
+import com.example.ui.screens.shadow.MonarchSkillTreeScreen
+import com.example.ui.screens.shadow.ShadowQuestBoardScreen
 import com.example.ui.screens.HistoryScreen
 import com.example.ui.screens.HomeScreen
 import com.example.ui.screens.ModulesHubScreen
@@ -300,6 +329,7 @@ fun SoloLevelingApp(
     intelligenceViewModel: IntelligenceViewModel,
     systemControlViewModel: SystemControlViewModel,
     systemExperienceViewModel: SystemExperienceViewModel,
+    shadowRealmViewModel: ShadowRealmViewModel,
     deepLinkRoute: String? = null,
     onDeepLinkConsumed: () -> Unit = {}
 ) {
@@ -423,6 +453,20 @@ fun SoloLevelingApp(
             currentDestination?.hasRoute<SystemVoiceSettingsRoute>() == true -> "SYSTEM VOICE"
             currentDestination?.hasRoute<WidgetHubRoute>() == true -> "HOME WIDGETS"
             currentDestination?.hasRoute<CelebrationHistoryRoute>() == true -> "CELEBRATION VAULT"
+            currentDestination?.hasRoute<ShadowRealmDashboardRoute>() == true -> "THE SHADOW REALM"
+            currentDestination?.hasRoute<MonarchStatusRoute>() == true -> "MONARCH STATUS"
+            currentDestination?.hasRoute<ShadowExtractionRoute>() == true -> "SHADOW EXTRACTION"
+            currentDestination?.hasRoute<ShadowCollectionListRoute>() == true -> "SHADOW ROSTER"
+            currentDestination?.hasRoute<ShadowDetailRoute>() == true -> "SHADOW PROFILE"
+            currentDestination?.hasRoute<ShadowEvolutionRoute>() == true -> "SHADOW EVOLUTION"
+            currentDestination?.hasRoute<ShadowSkillTreeRoute>() == true -> "SHADOW SKILL TREE"
+            currentDestination?.hasRoute<ShadowDeploymentRoute>() == true -> "SHADOW DEPLOYMENT"
+            currentDestination?.hasRoute<ArmyFormationManagerRoute>() == true -> "ARMY FORMATIONS"
+            currentDestination?.hasRoute<MonarchSkillTreeRoute>() == true -> "MONARCH SKILLS"
+            currentDestination?.hasRoute<ShadowQuestBoardRoute>() == true -> "MONARCH QUESTS"
+            currentDestination?.hasRoute<ShadowArmyAnalyticsRoute>() == true -> "ARMY ANALYTICS"
+            currentDestination?.hasRoute<ShadowArchiveRoute>() == true -> "SHADOW ARCHIVE"
+            currentDestination?.hasRoute<ShadowSettingsRoute>() == true -> "SHADOW SETTINGS"
             else -> null
         }
 
@@ -785,7 +829,9 @@ private fun RealityOsNavHost(
                 onOpenVoiceConsole = { navController.navigate(VoiceCommandRoute) },
                 onOpenSystemVoiceSettings = { navController.navigate(SystemVoiceSettingsRoute) },
                 onOpenWidgetHub = { navController.navigate(WidgetHubRoute) },
-                onOpenCelebrationVault = { navController.navigate(CelebrationHistoryRoute) }
+                onOpenCelebrationVault = { navController.navigate(CelebrationHistoryRoute) },
+                onOpenShadowRealm = { navController.navigate(ShadowRealmDashboardRoute) },
+                onOpenSocialMastery = { navController.navigate(com.example.ui.navigation.SocialMasteryDashboardRoute) }
             )
         }
         // Milestone 6: Dungeons, Boss Battles, Skills & RPG Systems (17 Screens)
@@ -1563,7 +1609,9 @@ private fun RealityOsNavHost(
                 onOpenVoiceConsole = { navController.navigate(VoiceCommandRoute) },
                 onOpenSystemVoiceSettings = { navController.navigate(SystemVoiceSettingsRoute) },
                 onOpenWidgetHub = { navController.navigate(WidgetHubRoute) },
-                onOpenCelebrationVault = { navController.navigate(CelebrationHistoryRoute) }
+                onOpenCelebrationVault = { navController.navigate(CelebrationHistoryRoute) },
+                onOpenShadowRealm = { navController.navigate(ShadowRealmDashboardRoute) },
+                onOpenSocialMastery = { navController.navigate(com.example.ui.navigation.SocialMasteryDashboardRoute) }
             )
         }
         composable<ModuleIntegrationStatusRoute> {
@@ -1677,7 +1725,9 @@ private fun RealityOsNavHost(
                 onOpenSystemVoiceSettings = { navController.navigate(SystemVoiceSettingsRoute) },
                 onOpenVoiceConsole = { navController.navigate(VoiceCommandRoute) },
                 onOpenWidgetHub = { navController.navigate(WidgetHubRoute) },
-                onOpenCelebrationVault = { navController.navigate(CelebrationHistoryRoute) }
+                onOpenCelebrationVault = { navController.navigate(CelebrationHistoryRoute) },
+                onOpenShadowRealm = { navController.navigate(ShadowRealmDashboardRoute) },
+                onOpenSocialMastery = { navController.navigate(com.example.ui.navigation.SocialMasteryDashboardRoute) }
             )
         }
 
@@ -1738,6 +1788,244 @@ private fun RealityOsNavHost(
                 onReplayCelebration = systemExperienceViewModel::replayCelebration
             )
         }
+
+        // Milestone 11: The Shadow Monarch — Shadow Army System (14 Screens)
+        composable<ShadowRealmDashboardRoute> {
+            ShadowRealmDashboardScreen(
+                viewModel = shadowRealmViewModel,
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToMonarchStatus = { navController.navigate(MonarchStatusRoute) },
+                onNavigateToExtraction = { navController.navigate(ShadowExtractionRoute) },
+                onNavigateToCollection = { navController.navigate(ShadowCollectionListRoute) },
+                onNavigateToDeployment = { navController.navigate(ShadowDeploymentRoute) },
+                onNavigateToFormations = { navController.navigate(ArmyFormationManagerRoute) },
+                onNavigateToMonarchSkills = { navController.navigate(MonarchSkillTreeRoute) },
+                onNavigateToQuests = { navController.navigate(ShadowQuestBoardRoute) },
+                onNavigateToAnalytics = { navController.navigate(ShadowArmyAnalyticsRoute) },
+                onNavigateToArchive = { navController.navigate(ShadowArchiveRoute) },
+                onNavigateToSettings = { navController.navigate(ShadowSettingsRoute) }
+            )
+        }
+        composable<MonarchStatusRoute> {
+            MonarchStatusScreen(
+                viewModel = shadowRealmViewModel,
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+        composable<ShadowExtractionRoute> {
+            ShadowExtractionScreen(
+                viewModel = shadowRealmViewModel,
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+        composable<ShadowCollectionListRoute> {
+            ShadowCollectionScreen(
+                viewModel = shadowRealmViewModel,
+                onNavigateBack = { navController.popBackStack() },
+                onSelectShadow = { shadowId -> navController.navigate(ShadowDetailRoute(shadowId)) }
+            )
+        }
+        composable<ShadowDetailRoute> { backStackEntry ->
+            val args = backStackEntry.toRoute<ShadowDetailRoute>()
+            ShadowDetailScreen(
+                shadowId = args.shadowId,
+                viewModel = shadowRealmViewModel,
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToEvolution = { sId -> navController.navigate(ShadowEvolutionRoute(sId)) },
+                onNavigateToSkillTree = { sId -> navController.navigate(ShadowSkillTreeRoute(sId)) }
+            )
+        }
+        composable<ShadowEvolutionRoute> { backStackEntry ->
+            val args = backStackEntry.toRoute<ShadowEvolutionRoute>()
+            ShadowEvolutionScreen(
+                shadowId = args.shadowId,
+                viewModel = shadowRealmViewModel,
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+        composable<ShadowSkillTreeRoute> { backStackEntry ->
+            val args = backStackEntry.toRoute<ShadowSkillTreeRoute>()
+            ShadowSkillTreeScreen(
+                shadowId = args.shadowId,
+                viewModel = shadowRealmViewModel,
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+        composable<ShadowDeploymentRoute> {
+            ShadowDeploymentScreen(
+                viewModel = shadowRealmViewModel,
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+        composable<ArmyFormationManagerRoute> {
+            ArmyFormationManagerScreen(
+                viewModel = shadowRealmViewModel,
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+        composable<MonarchSkillTreeRoute> {
+            MonarchSkillTreeScreen(
+                viewModel = shadowRealmViewModel,
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+        composable<ShadowQuestBoardRoute> {
+            ShadowQuestBoardScreen(
+                viewModel = shadowRealmViewModel,
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+        composable<ShadowArmyAnalyticsRoute> {
+            ShadowArmyAnalyticsScreen(
+                viewModel = shadowRealmViewModel,
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+        composable<ShadowArchiveRoute> {
+            ShadowArchiveScreen(
+                viewModel = shadowRealmViewModel,
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+        composable<ShadowSettingsRoute> {
+            ShadowSettingsScreen(
+                viewModel = shadowRealmViewModel,
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+        composable<com.example.ui.navigation.SocialMasteryDashboardRoute> {
+            val app = LocalContext.current.applicationContext as com.example.SoloLevelingApplication
+            val socialViewModel = androidx.lifecycle.viewmodel.compose.viewModel {
+                com.example.ui.viewmodel.SocialMasteryViewModel(
+                    socialRepository = app.container.socialRepository,
+                    analyticsEngine = app.container.socialAnalyticsEngine,
+                    aiCoach = app.container.socialAiCoach,
+                    voiceCoachController = app.container.socialVoiceCoachController
+                )
+            }
+            com.example.ui.screens.social.SocialMasteryDashboardScreen(
+                viewModel = socialViewModel,
+                onNavigateBack = { navController.popBackStack() },
+                onOpenPracticeArena = { navController.navigate(com.example.ui.navigation.SocialPracticeArenaRoute) },
+                onOpenCoach = { navController.navigate(com.example.ui.navigation.SocialCoachRoute) },
+                onOpenAnalytics = { navController.navigate(com.example.ui.navigation.SocialAnalyticsRoute) },
+                onOpenMissions = { navController.navigate(com.example.ui.navigation.SocialMissionsRoute) },
+                onOpenAssessment = { navController.navigate(com.example.ui.navigation.SocialSkillAssessmentRoute) }
+            )
+        }
+        composable<com.example.ui.navigation.SocialPracticeArenaRoute> {
+            val app = LocalContext.current.applicationContext as com.example.SoloLevelingApplication
+            val socialViewModel = androidx.lifecycle.viewmodel.compose.viewModel {
+                com.example.ui.viewmodel.SocialMasteryViewModel(
+                    socialRepository = app.container.socialRepository,
+                    analyticsEngine = app.container.socialAnalyticsEngine,
+                    aiCoach = app.container.socialAiCoach,
+                    voiceCoachController = app.container.socialVoiceCoachController
+                )
+            }
+            com.example.ui.screens.social.SocialPracticeArenaScreen(
+                viewModel = socialViewModel,
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+        composable<com.example.ui.navigation.SocialCoachRoute> {
+            val app = LocalContext.current.applicationContext as com.example.SoloLevelingApplication
+            val socialViewModel = androidx.lifecycle.viewmodel.compose.viewModel {
+                com.example.ui.viewmodel.SocialMasteryViewModel(
+                    socialRepository = app.container.socialRepository,
+                    analyticsEngine = app.container.socialAnalyticsEngine,
+                    aiCoach = app.container.socialAiCoach,
+                    voiceCoachController = app.container.socialVoiceCoachController
+                )
+            }
+            com.example.ui.screens.social.SocialCoachScreen(
+                viewModel = socialViewModel,
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+        composable<com.example.ui.navigation.SocialAnalyticsRoute> {
+            val app = LocalContext.current.applicationContext as com.example.SoloLevelingApplication
+            val socialViewModel = androidx.lifecycle.viewmodel.compose.viewModel {
+                com.example.ui.viewmodel.SocialMasteryViewModel(
+                    socialRepository = app.container.socialRepository,
+                    analyticsEngine = app.container.socialAnalyticsEngine,
+                    aiCoach = app.container.socialAiCoach,
+                    voiceCoachController = app.container.socialVoiceCoachController
+                )
+            }
+            com.example.ui.screens.social.SocialAnalyticsScreen(
+                viewModel = socialViewModel,
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+        composable<com.example.ui.navigation.SocialMissionsRoute> {
+            val app = LocalContext.current.applicationContext as com.example.SoloLevelingApplication
+            val socialViewModel = androidx.lifecycle.viewmodel.compose.viewModel {
+                com.example.ui.viewmodel.SocialMasteryViewModel(
+                    socialRepository = app.container.socialRepository,
+                    analyticsEngine = app.container.socialAnalyticsEngine,
+                    aiCoach = app.container.socialAiCoach,
+                    voiceCoachController = app.container.socialVoiceCoachController
+                )
+            }
+            com.example.ui.screens.social.SocialMissionsScreen(
+                viewModel = socialViewModel,
+                onNavigateBack = { navController.popBackStack() },
+                onOpenMissionDetail = { mId -> navController.navigate(com.example.ui.navigation.SocialMissionDetailRoute(mId)) },
+                onOpenSubmission = { mId -> navController.navigate(com.example.ui.navigation.SocialMissionSubmissionRoute(mId)) }
+            )
+        }
+        composable<com.example.ui.navigation.SocialMissionDetailRoute> { backStackEntry ->
+            val route = backStackEntry.toRoute<com.example.ui.navigation.SocialMissionDetailRoute>()
+            val app = LocalContext.current.applicationContext as com.example.SoloLevelingApplication
+            val socialViewModel = androidx.lifecycle.viewmodel.compose.viewModel {
+                com.example.ui.viewmodel.SocialMasteryViewModel(
+                    socialRepository = app.container.socialRepository,
+                    analyticsEngine = app.container.socialAnalyticsEngine,
+                    aiCoach = app.container.socialAiCoach,
+                    voiceCoachController = app.container.socialVoiceCoachController
+                )
+            }
+            com.example.ui.screens.social.SocialMissionDetailScreen(
+                missionId = route.missionId,
+                viewModel = socialViewModel,
+                onNavigateBack = { navController.popBackStack() },
+                onOpenSubmission = { mId -> navController.navigate(com.example.ui.navigation.SocialMissionSubmissionRoute(mId)) }
+            )
+        }
+        composable<com.example.ui.navigation.SocialMissionSubmissionRoute> { backStackEntry ->
+            val route = backStackEntry.toRoute<com.example.ui.navigation.SocialMissionSubmissionRoute>()
+            val app = LocalContext.current.applicationContext as com.example.SoloLevelingApplication
+            val socialViewModel = androidx.lifecycle.viewmodel.compose.viewModel {
+                com.example.ui.viewmodel.SocialMasteryViewModel(
+                    socialRepository = app.container.socialRepository,
+                    analyticsEngine = app.container.socialAnalyticsEngine,
+                    aiCoach = app.container.socialAiCoach,
+                    voiceCoachController = app.container.socialVoiceCoachController
+                )
+            }
+            com.example.ui.screens.social.SocialMissionSubmissionScreen(
+                missionId = route.missionId,
+                viewModel = socialViewModel,
+                onNavigateBack = { navController.popBackStack() },
+                onSubmissionSuccess = { navController.popBackStack() }
+            )
+        }
+        composable<com.example.ui.navigation.SocialSkillAssessmentRoute> {
+            val app = LocalContext.current.applicationContext as com.example.SoloLevelingApplication
+            val socialViewModel = androidx.lifecycle.viewmodel.compose.viewModel {
+                com.example.ui.viewmodel.SocialMasteryViewModel(
+                    socialRepository = app.container.socialRepository,
+                    analyticsEngine = app.container.socialAnalyticsEngine,
+                    aiCoach = app.container.socialAiCoach,
+                    voiceCoachController = app.container.socialVoiceCoachController
+                )
+            }
+            com.example.ui.screens.social.SocialSkillAssessmentScreen(
+                viewModel = socialViewModel,
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
     }
 }
 
@@ -1778,6 +2066,12 @@ private fun handleDeepLinkRoute(
         "weekly_intelligence" -> navController.navigate(WeeklyIntelligenceReportRoute)
         "system_control" -> navController.navigate(SystemOverviewRoute)
         "automation_dashboard" -> navController.navigate(AutomationDashboardRoute)
+        "shadow_realm" -> navController.navigate(ShadowRealmDashboardRoute)
+        "shadow_extraction" -> navController.navigate(ShadowExtractionRoute)
+        "shadow_roster" -> navController.navigate(ShadowCollectionListRoute)
+        "social_mastery" -> navController.navigate(com.example.ui.navigation.SocialMasteryDashboardRoute)
+        "social_missions" -> navController.navigate(com.example.ui.navigation.SocialMissionsRoute)
+        "social_assessment" -> navController.navigate(com.example.ui.navigation.SocialSkillAssessmentRoute)
         "awakening" -> experienceViewModel.replayAwakening()
         else -> Unit
     }

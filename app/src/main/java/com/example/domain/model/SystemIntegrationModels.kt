@@ -27,7 +27,18 @@ enum class SystemEventType(val label: String, val defaultModule: String) {
     INTELLIGENCE_REFRESHED("Intelligence Refreshed", "INTELLIGENCE"),
     DAILY_EXECUTION_UPDATED("Daily Execution Updated", "EXECUTION"),
     AUTOMATION_FAILED("Automation Failed", "AUTOMATION"),
-    SYSTEM_RECOVERY_EXECUTED("System Recovery Executed", "SYSTEM")
+    SYSTEM_RECOVERY_EXECUTED("System Recovery Executed", "SYSTEM"),
+    // Milestone 11 — Shadow Monarch Events
+    SHADOW_EXTRACTION_AVAILABLE("Shadow Extraction Available", "SHADOW"),
+    SHADOW_RECRUITED("New Shadow Recruited", "SHADOW"),
+    SHADOW_LEVEL_UP("Shadow Level Up", "SHADOW"),
+    SHADOW_EVOLUTION_AVAILABLE("Shadow Evolution Available", "SHADOW"),
+    SHADOW_RANK_INCREASED("Shadow Rank Increased", "SHADOW"),
+    MONARCH_LEVEL_UP("Monarch Level Up", "SHADOW"),
+    MONARCH_SKILL_UNLOCKED("New Monarch Skill Unlocked", "SHADOW"),
+    SHADOW_ARMY_CAPACITY_REACHED("Army Capacity Reached", "SHADOW"),
+    SHADOW_FORMATION_UPDATED("Formation Updated", "SHADOW"),
+    SHADOW_QUEST_COMPLETED("Shadow Quest Completed", "SHADOW")
 }
 
 enum class EventProcessingStatus(val label: String) {

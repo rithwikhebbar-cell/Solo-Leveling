@@ -41,7 +41,12 @@ enum class SyncEntityType(val wireTable: String, val label: String) {
     PERSONAL_TASK("personal_tasks", "Personal Task"),
     LIFE_GOAL("life_goals", "Life Goal"),
     RPG_PROGRESS("rpg_progress_records", "RPG Progress"),
-    PROGRESSION_EVENT("progression_events", "Progression Event")
+    PROGRESSION_EVENT("progression_events", "Progression Event"),
+    SHADOW_MONARCH_PROFILE("shadow_monarch_profiles", "Shadow Monarch Profile"),
+    SHADOW("shadows", "Recruited Shadow"),
+    SHADOW_EXTRACTION("shadow_extractions", "Shadow Extraction Event"),
+    SHADOW_DEPLOYMENT("shadow_deployments", "Shadow Deployment"),
+    SHADOW_FORMATION("shadow_formations", "Shadow Formation")
 }
 
 enum class SyncOperationType {

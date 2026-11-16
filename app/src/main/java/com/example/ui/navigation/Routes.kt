@@ -303,3 +303,77 @@ data object WidgetHubRoute
 
 @Serializable
 data object CelebrationHistoryRoute
+
+// ============================================================================
+// Milestone 11: THE SHADOW MONARCH — Shadow Army System (14 screens)
+// ============================================================================
+
+@Serializable
+data object ShadowRealmDashboardRoute
+
+@Serializable
+data object MonarchStatusRoute
+
+@Serializable
+data object ShadowExtractionRoute
+
+@Serializable
+data object ShadowCollectionListRoute
+
+@Serializable
+data class ShadowDetailRoute(val shadowId: String)
+
+@Serializable
+data class ShadowEvolutionRoute(val shadowId: String)
+
+@Serializable
+data class ShadowSkillTreeRoute(val shadowId: String)
+
+@Serializable
+data object ShadowDeploymentRoute
+
+@Serializable
+data object ArmyFormationManagerRoute
+
+@Serializable
+data object MonarchSkillTreeRoute
+
+@Serializable
+data object ShadowQuestBoardRoute
+
+@Serializable
+data object ShadowArmyAnalyticsRoute
+
+@Serializable
+data object ShadowArchiveRoute
+
+@Serializable
+data object ShadowSettingsRoute
+
+// ============================================================================
+// Milestone 12: SOCIAL MASTERY — Social Development Engine
+// ============================================================================
+
+@Serializable
+data object SocialMasteryDashboardRoute
+
+@Serializable
+data object SocialPracticeArenaRoute
+
+@Serializable
+data object SocialCoachRoute
+
+@Serializable
+data object SocialAnalyticsRoute
+
+@Serializable
+data object SocialMissionsRoute
+
+@Serializable
+data class SocialMissionDetailRoute(val missionId: String)
+
+@Serializable
+data class SocialMissionSubmissionRoute(val missionId: String)
+
+@Serializable
+data object SocialSkillAssessmentRoute

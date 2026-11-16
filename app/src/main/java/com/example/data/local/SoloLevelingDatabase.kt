@@ -6,6 +6,20 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.example.data.local.dao.SocialAssessmentDao
+import com.example.data.local.dao.SocialMissionDao
+import com.example.data.local.dao.SocialModuleProgressDao
+import com.example.data.local.dao.SocialPracticeSessionDao
+import com.example.data.local.dao.SocialProfileDao
+import com.example.data.local.dao.SocialScenarioAttemptDao
+import com.example.data.local.dao.SocialScenarioDao
+import com.example.data.local.entity.SocialAssessmentEntity
+import com.example.data.local.entity.SocialMissionRecordEntity
+import com.example.data.local.entity.SocialModuleProgressEntity
+import com.example.data.local.entity.SocialPracticeSessionEntity
+import com.example.data.local.entity.SocialProfileEntity
+import com.example.data.local.entity.SocialScenarioAttemptEntity
+import com.example.data.local.entity.SocialScenarioEntity
 import com.example.data.local.dao.AcademicAssessmentDao
 import com.example.data.local.dao.AcademicProgressionDao
 import com.example.data.local.dao.AcademicQuestDao
@@ -32,6 +46,7 @@ import com.example.data.local.dao.IntelligenceReportDao
 import com.example.data.local.dao.InventoryShadowDao
 import com.example.data.local.dao.JoggingSessionDao
 import com.example.data.local.dao.LifeProgressionDao
+import com.example.data.local.dao.MonarchSkillUnlockDao
 import com.example.data.local.dao.PersonalTaskDao
 import com.example.data.local.dao.PhysicalAuditDao
 import com.example.data.local.dao.PhysicalStateDao
@@ -45,6 +60,14 @@ import com.example.data.local.dao.RoadmapDao
 import com.example.data.local.dao.RoutineDao
 import com.example.data.local.dao.RpgAuditDao
 import com.example.data.local.dao.ScheduleDao
+import com.example.data.local.dao.ShadowDao
+import com.example.data.local.dao.ShadowDeploymentDao
+import com.example.data.local.dao.ShadowExtractionDao
+import com.example.data.local.dao.ShadowFormationDao
+import com.example.data.local.dao.ShadowMonarchProfileDao
+import com.example.data.local.dao.ShadowQuestProgressDao
+import com.example.data.local.dao.ShadowResourceDao
+import com.example.data.local.dao.ShadowSkillUnlockDao
 import com.example.data.local.dao.SkillDao
 import com.example.data.local.dao.StudySessionDao
 import com.example.data.local.dao.SyncConflictDao
@@ -60,6 +83,15 @@ import com.example.data.local.entity.AdaptiveDailyPlanEntity
 import com.example.data.local.entity.AdaptivePlanBlockEntity
 import com.example.data.local.entity.AdvisorConsultationEntity
 import com.example.data.local.entity.AcademicAssessmentEntity
+import com.example.data.local.entity.MonarchSkillUnlockEntity
+import com.example.data.local.entity.ShadowDeploymentEntity
+import com.example.data.local.entity.ShadowEntity
+import com.example.data.local.entity.ShadowExtractionEntity
+import com.example.data.local.entity.ShadowFormationEntity
+import com.example.data.local.entity.ShadowMonarchProfileEntity
+import com.example.data.local.entity.ShadowQuestProgressEntity
+import com.example.data.local.entity.ShadowResourceTransactionEntity
+import com.example.data.local.entity.ShadowSkillUnlockEntity
 import com.example.data.local.entity.AcademicChapterEntity
 import com.example.data.local.entity.AcademicExamEntity
 import com.example.data.local.entity.AcademicModuleEntity
@@ -262,9 +294,27 @@ import com.example.domain.model.VerificationStatus
         SystemExperiencePreferenceEntity::class,
         SystemAnnouncementEntity::class,
         SystemCelebrationEntity::class,
-        VoiceCommandHistoryEntity::class
+        VoiceCommandHistoryEntity::class,
+        // Milestone 11 — Shadow Monarch
+        ShadowMonarchProfileEntity::class,
+        ShadowEntity::class,
+        ShadowExtractionEntity::class,
+        ShadowSkillUnlockEntity::class,
+        ShadowDeploymentEntity::class,
+        ShadowFormationEntity::class,
+        MonarchSkillUnlockEntity::class,
+        ShadowQuestProgressEntity::class,
+        ShadowResourceTransactionEntity::class,
+        // Milestone 12 — Social Mastery
+        SocialProfileEntity::class,
+        SocialModuleProgressEntity::class,
+        SocialScenarioEntity::class,
+        SocialPracticeSessionEntity::class,
+        SocialScenarioAttemptEntity::class,
+        SocialAssessmentEntity::class,
+        SocialMissionRecordEntity::class
     ],
-    version = 10,
+    version = 13,
     exportSchema = false
 )
 abstract class SoloLevelingDatabase : RoomDatabase() {
@@ -318,6 +368,26 @@ abstract class SoloLevelingDatabase : RoomDatabase() {
     abstract fun dailyCycleDao(): DailyCycleDao
     abstract fun systemIntegrityHealthDao(): SystemIntegrityHealthDao
     abstract fun systemExperienceDao(): SystemExperienceDao
+
+    // Milestone 11 — Shadow Monarch DAOs
+    abstract fun shadowMonarchProfileDao(): ShadowMonarchProfileDao
+    abstract fun shadowDao(): ShadowDao
+    abstract fun shadowExtractionDao(): ShadowExtractionDao
+    abstract fun shadowSkillUnlockDao(): ShadowSkillUnlockDao
+    abstract fun shadowDeploymentDao(): ShadowDeploymentDao
+    abstract fun shadowFormationDao(): ShadowFormationDao
+    abstract fun monarchSkillUnlockDao(): MonarchSkillUnlockDao
+    abstract fun shadowQuestProgressDao(): ShadowQuestProgressDao
+    abstract fun shadowResourceDao(): ShadowResourceDao
+
+    // Milestone 12 — Social Mastery DAOs
+    abstract fun socialProfileDao(): SocialProfileDao
+    abstract fun socialModuleProgressDao(): SocialModuleProgressDao
+    abstract fun socialScenarioDao(): SocialScenarioDao
+    abstract fun socialPracticeSessionDao(): SocialPracticeSessionDao
+    abstract fun socialScenarioAttemptDao(): SocialScenarioAttemptDao
+    abstract fun socialAssessmentDao(): SocialAssessmentDao
+    abstract fun socialMissionDao(): SocialMissionDao
 
     companion object {
         @Volatile
@@ -2276,6 +2346,421 @@ abstract class SoloLevelingDatabase : RoomDatabase() {
             }
         }
 
+        // =====================================================================
+        // MIGRATION 10 → 11: Shadow Monarch System
+        // =====================================================================
+        val MIGRATION_10_11: Migration = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // 1. Shadow Monarch Profile (singleton, id = 1)
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `shadow_monarch_profile` (
+                        `id` INTEGER NOT NULL,
+                        `monarchLevel` INTEGER NOT NULL,
+                        `monarchXp` INTEGER NOT NULL,
+                        `monarchRankName` TEXT NOT NULL,
+                        `monarchAuthority` INTEGER NOT NULL,
+                        `armyCapacity` INTEGER NOT NULL,
+                        `activeShadowCount` INTEGER NOT NULL,
+                        `totalShadowsRecruited` INTEGER NOT NULL,
+                        `highestShadowRankName` TEXT NOT NULL,
+                        `totalEvolutions` INTEGER NOT NULL,
+                        `shadowArmyPowerRating` INTEGER NOT NULL,
+                        `unlockedMonarchSkillIdsJson` TEXT NOT NULL,
+                        `updatedAtEpochMs` INTEGER NOT NULL,
+                        PRIMARY KEY(`id`)
+                    )
+                    """.trimIndent()
+                )
+                // Seed default profile
+                db.execSQL(
+                    """
+                    INSERT OR IGNORE INTO `shadow_monarch_profile` VALUES (
+                        1, 1, 0, 'AWAKENING', 0, 10, 0, 0, 'E_RANK', 0, 0, '["monarch_shadow_extraction"]', 0
+                    )
+                    """.trimIndent()
+                )
+
+                // 2. Shadows (recruited shadow army members)
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `shadows` (
+                        `shadowId` TEXT NOT NULL,
+                        `name` TEXT NOT NULL,
+                        `shadowClassName` TEXT NOT NULL,
+                        `rarityName` TEXT NOT NULL,
+                        `currentRankName` TEXT NOT NULL,
+                        `level` INTEGER NOT NULL,
+                        `shadowXp` INTEGER NOT NULL,
+                        `statPower` INTEGER NOT NULL,
+                        `statEndurance` INTEGER NOT NULL,
+                        `statFocus` INTEGER NOT NULL,
+                        `statDiscipline` INTEGER NOT NULL,
+                        `statWisdom` INTEGER NOT NULL,
+                        `statAdaptability` INTEGER NOT NULL,
+                        `evolutionStageName` TEXT NOT NULL,
+                        `passiveAbility` TEXT NOT NULL,
+                        `activeSkillIdsJson` TEXT NOT NULL,
+                        `recruitmentSource` TEXT NOT NULL,
+                        `extractionEventId` TEXT NOT NULL,
+                        `extractedAtEpochMs` INTEGER NOT NULL,
+                        `evolutionHistoryJson` TEXT NOT NULL,
+                        `deploymentStatusName` TEXT NOT NULL,
+                        `equippedFormationId` TEXT,
+                        `isRetired` INTEGER NOT NULL,
+                        `notes` TEXT NOT NULL,
+                        PRIMARY KEY(`shadowId`)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_shadows_shadowClassName` ON `shadows` (`shadowClassName`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_shadows_currentRankName` ON `shadows` (`currentRankName`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_shadows_rarityName` ON `shadows` (`rarityName`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_shadows_deploymentStatusName` ON `shadows` (`deploymentStatusName`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_shadows_isRetired` ON `shadows` (`isRetired`)")
+
+                // 3. Shadow Extractions (audit log, idempotency guard)
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `shadow_extractions` (
+                        `extractionId` TEXT NOT NULL,
+                        `sourceTypeName` TEXT NOT NULL,
+                        `sourceEventId` TEXT NOT NULL,
+                        `outcomeName` TEXT NOT NULL,
+                        `extractedShadowId` TEXT,
+                        `shadowName` TEXT,
+                        `shadowClassName` TEXT,
+                        `shadowRarityName` TEXT,
+                        `determinismSeed` INTEGER NOT NULL,
+                        `evidenceSummary` TEXT NOT NULL,
+                        `timestampEpochMs` INTEGER NOT NULL,
+                        `isConfirmed` INTEGER NOT NULL,
+                        `monarchXpAwarded` INTEGER NOT NULL,
+                        PRIMARY KEY(`extractionId`)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_shadow_extractions_extractionId` ON `shadow_extractions` (`extractionId`)")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_shadow_extractions_sourceTypeName_sourceEventId` ON `shadow_extractions` (`sourceTypeName`, `sourceEventId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_shadow_extractions_timestampEpochMs` ON `shadow_extractions` (`timestampEpochMs`)")
+
+                // 4. Shadow Skill Unlocks (per-shadow)
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `shadow_skill_unlocks` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `shadowId` TEXT NOT NULL,
+                        `skillId` TEXT NOT NULL,
+                        `unlockedAtEpochMs` INTEGER NOT NULL,
+                        `evidenceNote` TEXT NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_shadow_skill_unlocks_shadowId_skillId` ON `shadow_skill_unlocks` (`shadowId`, `skillId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_shadow_skill_unlocks_shadowId` ON `shadow_skill_unlocks` (`shadowId`)")
+
+                // 5. Shadow Deployments
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `shadow_deployments` (
+                        `deploymentId` TEXT NOT NULL,
+                        `shadowId` TEXT NOT NULL,
+                        `shadowName` TEXT NOT NULL,
+                        `categoryName` TEXT NOT NULL,
+                        `role` TEXT NOT NULL,
+                        `assignedAtEpochMs` INTEGER NOT NULL,
+                        `recalledAtEpochMs` INTEGER,
+                        `statusName` TEXT NOT NULL,
+                        `notes` TEXT NOT NULL,
+                        PRIMARY KEY(`deploymentId`)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_shadow_deployments_deploymentId` ON `shadow_deployments` (`deploymentId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_shadow_deployments_shadowId` ON `shadow_deployments` (`shadowId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_shadow_deployments_categoryName` ON `shadow_deployments` (`categoryName`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_shadow_deployments_statusName` ON `shadow_deployments` (`statusName`)")
+
+                // 6. Shadow Formations
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `shadow_formations` (
+                        `formationId` TEXT NOT NULL,
+                        `name` TEXT NOT NULL,
+                        `formationTypeName` TEXT NOT NULL,
+                        `description` TEXT NOT NULL,
+                        `maxSlots` INTEGER NOT NULL,
+                        `memberShadowIdsJson` TEXT NOT NULL,
+                        `isActive` INTEGER NOT NULL,
+                        `createdAtEpochMs` INTEGER NOT NULL,
+                        `updatedAtEpochMs` INTEGER NOT NULL,
+                        PRIMARY KEY(`formationId`)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_shadow_formations_formationId` ON `shadow_formations` (`formationId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_shadow_formations_isActive` ON `shadow_formations` (`isActive`)")
+
+                // 7. Monarch Skill Unlocks
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `monarch_skill_unlocks` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `skillId` TEXT NOT NULL,
+                        `unlockedAtEpochMs` INTEGER NOT NULL,
+                        `evidenceNote` TEXT NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_monarch_skill_unlocks_skillId` ON `monarch_skill_unlocks` (`skillId`)")
+                // Auto-seed Shadow Extraction skill as unlocked (always available from level 1)
+                db.execSQL(
+                    """
+                    INSERT OR IGNORE INTO `monarch_skill_unlocks` (`skillId`, `unlockedAtEpochMs`, `evidenceNote`)
+                    VALUES ('monarch_shadow_extraction', ${System.currentTimeMillis()}, 'Shadow Extraction unlocked at Monarch Level 1')
+                    """.trimIndent()
+                )
+
+                // 8. Shadow Quest Progress
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `shadow_quest_progress` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `questId` TEXT NOT NULL,
+                        `currentValue` INTEGER NOT NULL,
+                        `isCompleted` INTEGER NOT NULL,
+                        `rewardClaimedAtEpochMs` INTEGER,
+                        `completedAtEpochMs` INTEGER
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_shadow_quest_progress_questId` ON `shadow_quest_progress` (`questId`)")
+
+                // 9. Shadow Resource Transactions (ledger)
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `shadow_resource_transactions` (
+                        `transactionId` TEXT NOT NULL,
+                        `resourceTypeName` TEXT NOT NULL,
+                        `amount` INTEGER NOT NULL,
+                        `transactionTypeName` TEXT NOT NULL,
+                        `sourceEventId` TEXT NOT NULL,
+                        `sourceDescription` TEXT NOT NULL,
+                        `balanceAfter` INTEGER NOT NULL,
+                        `timestampEpochMs` INTEGER NOT NULL,
+                        PRIMARY KEY(`transactionId`)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_shadow_resource_transactions_transactionId` ON `shadow_resource_transactions` (`transactionId`)")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_shadow_resource_transactions_sourceEventId_resourceTypeName_transactionTypeName` ON `shadow_resource_transactions` (`sourceEventId`, `resourceTypeName`, `transactionTypeName`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_shadow_resource_transactions_resourceTypeName` ON `shadow_resource_transactions` (`resourceTypeName`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_shadow_resource_transactions_timestampEpochMs` ON `shadow_resource_transactions` (`timestampEpochMs`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_shadow_resource_transactions_sourceEventId` ON `shadow_resource_transactions` (`sourceEventId`)")
+            }
+        }
+
+        val MIGRATION_11_12: Migration = object : Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // 1. Social Profiles
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `social_profiles` (
+                        `accountOwnerId` TEXT NOT NULL,
+                        `overallSocialMasteryStage` TEXT NOT NULL,
+                        `totalPracticeMinutes` INTEGER NOT NULL DEFAULT 0,
+                        `totalScenariosCleared` INTEGER NOT NULL DEFAULT 0,
+                        `totalAssessmentsCompleted` INTEGER NOT NULL DEFAULT 0,
+                        `averageRubricScore` REAL NOT NULL DEFAULT 0.0,
+                        `lastActiveEpochMs` INTEGER NOT NULL,
+                        `createdAtEpochMs` INTEGER NOT NULL,
+                        `updatedAtEpochMs` INTEGER NOT NULL,
+                        `syncStatus` TEXT NOT NULL DEFAULT 'SYNCED',
+                        `lastSyncedEpochMs` INTEGER,
+                        PRIMARY KEY(`accountOwnerId`)
+                    )
+                    """.trimIndent()
+                )
+
+                // 2. Social Module Progress
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `social_module_progress` (
+                        `accountOwnerId` TEXT NOT NULL,
+                        `moduleName` TEXT NOT NULL,
+                        `masteryStage` TEXT NOT NULL,
+                        `masteryStageOrdinal` INTEGER NOT NULL DEFAULT 0,
+                        `practiceSeconds` INTEGER NOT NULL DEFAULT 0,
+                        `assessmentsCompleted` INTEGER NOT NULL DEFAULT 0,
+                        `rollingAverageScore` REAL NOT NULL DEFAULT 0.0,
+                        `lastScoreStandardDeviation` REAL NOT NULL DEFAULT 0.0,
+                        `consecutivePassingScores` INTEGER NOT NULL DEFAULT 0,
+                        `isStale` INTEGER NOT NULL DEFAULT 0,
+                        `decayedFromStage` TEXT,
+                        `consecutiveRestorationPassingScores` INTEGER NOT NULL DEFAULT 0,
+                        `lastAssessedEpochMs` INTEGER NOT NULL,
+                        `lastDecayEpochMs` INTEGER,
+                        `nextDecayEligibleEpochMs` INTEGER,
+                        `updatedAtEpochMs` INTEGER NOT NULL,
+                        PRIMARY KEY(`accountOwnerId`, `moduleName`),
+                        FOREIGN KEY(`accountOwnerId`) REFERENCES `social_profiles`(`accountOwnerId`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_social_module_progress_accountOwnerId` ON `social_module_progress` (`accountOwnerId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_social_module_progress_moduleName` ON `social_module_progress` (`moduleName`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_social_module_progress_masteryStageOrdinal` ON `social_module_progress` (`masteryStageOrdinal`)")
+
+                // 3. Social Scenarios (Static Catalogue)
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `social_scenarios` (
+                        `scenarioId` TEXT NOT NULL,
+                        `moduleName` TEXT NOT NULL,
+                        `title` TEXT NOT NULL,
+                        `description` TEXT NOT NULL,
+                        `difficultyTier` TEXT NOT NULL,
+                        `contextPrompt` TEXT NOT NULL,
+                        `npcRole` TEXT NOT NULL,
+                        `targetLearningObjective` TEXT NOT NULL,
+                        `minPassingScore` INTEGER NOT NULL DEFAULT 70,
+                        `isDeprecated` INTEGER NOT NULL DEFAULT 0,
+                        `version` INTEGER NOT NULL DEFAULT 1,
+                        PRIMARY KEY(`scenarioId`)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_social_scenarios_moduleName` ON `social_scenarios` (`moduleName`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_social_scenarios_difficultyTier` ON `social_scenarios` (`difficultyTier`)")
+
+                // 4. Social Practice Sessions
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `social_practice_sessions` (
+                        `sessionId` TEXT NOT NULL,
+                        `accountOwnerId` TEXT NOT NULL,
+                        `moduleName` TEXT NOT NULL,
+                        `activityKind` TEXT NOT NULL,
+                        `sessionStatus` TEXT NOT NULL,
+                        `durationSeconds` INTEGER NOT NULL,
+                        `startedEpochMs` INTEGER NOT NULL,
+                        `completedEpochMs` INTEGER,
+                        `transcriptText` TEXT,
+                        `hasAudioRecording` INTEGER NOT NULL DEFAULT 0,
+                        `audioFileName` TEXT,
+                        `isCloudTranscriptSyncAllowed` INTEGER NOT NULL DEFAULT 0,
+                        `evidenceSourceType` TEXT NOT NULL,
+                        `verificationStatus` TEXT NOT NULL,
+                        `idempotencyKey` TEXT NOT NULL,
+                        `createdAtEpochMs` INTEGER NOT NULL,
+                        `updatedAtEpochMs` INTEGER NOT NULL,
+                        PRIMARY KEY(`sessionId`),
+                        FOREIGN KEY(`accountOwnerId`) REFERENCES `social_profiles`(`accountOwnerId`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_social_practice_sessions_accountOwnerId` ON `social_practice_sessions` (`accountOwnerId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_social_practice_sessions_moduleName` ON `social_practice_sessions` (`moduleName`)")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_social_practice_sessions_idempotencyKey` ON `social_practice_sessions` (`idempotencyKey`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_social_practice_sessions_startedEpochMs` ON `social_practice_sessions` (`startedEpochMs`)")
+
+                // 5. Social Scenario Attempts
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `social_scenario_attempts` (
+                        `attemptId` TEXT NOT NULL,
+                        `accountOwnerId` TEXT NOT NULL,
+                        `scenarioId` TEXT NOT NULL,
+                        `scenarioTitle` TEXT NOT NULL,
+                        `moduleName` TEXT NOT NULL,
+                        `userResponseText` TEXT NOT NULL,
+                        `evaluationScore` INTEGER NOT NULL,
+                        `isPassed` INTEGER NOT NULL,
+                        `strengthsFeedbackJson` TEXT NOT NULL,
+                        `improvementAreasJson` TEXT NOT NULL,
+                        `evidenceSourceType` TEXT NOT NULL,
+                        `verificationStatus` TEXT NOT NULL,
+                        `idempotencyKey` TEXT NOT NULL,
+                        `completedEpochMs` INTEGER NOT NULL,
+                        PRIMARY KEY(`attemptId`),
+                        FOREIGN KEY(`accountOwnerId`) REFERENCES `social_profiles`(`accountOwnerId`) ON UPDATE NO ACTION ON DELETE CASCADE,
+                        FOREIGN KEY(`scenarioId`) REFERENCES `social_scenarios`(`scenarioId`) ON UPDATE NO ACTION ON DELETE RESTRICT
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_social_scenario_attempts_accountOwnerId` ON `social_scenario_attempts` (`accountOwnerId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_social_scenario_attempts_scenarioId` ON `social_scenario_attempts` (`scenarioId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_social_scenario_attempts_moduleName` ON `social_scenario_attempts` (`moduleName`)")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_social_scenario_attempts_idempotencyKey` ON `social_scenario_attempts` (`idempotencyKey`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_social_scenario_attempts_completedEpochMs` ON `social_scenario_attempts` (`completedEpochMs`)")
+
+                // 6. Social Assessments
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `social_assessments` (
+                        `assessmentId` TEXT NOT NULL,
+                        `accountOwnerId` TEXT NOT NULL,
+                        `moduleName` TEXT NOT NULL,
+                        `assessmentType` TEXT NOT NULL,
+                        `overallScore` INTEGER NOT NULL,
+                        `clarityScore` INTEGER NOT NULL,
+                        `empathyScore` INTEGER NOT NULL,
+                        `assertivenessScore` INTEGER NOT NULL,
+                        `coherenceScore` INTEGER NOT NULL,
+                        `qualitativeAnalysis` TEXT NOT NULL,
+                        `actionableRecommendationsJson` TEXT NOT NULL,
+                        `assessedEpochMs` INTEGER NOT NULL,
+                        PRIMARY KEY(`assessmentId`),
+                        FOREIGN KEY(`accountOwnerId`) REFERENCES `social_profiles`(`accountOwnerId`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_social_assessments_accountOwnerId` ON `social_assessments` (`accountOwnerId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_social_assessments_moduleName` ON `social_assessments` (`moduleName`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_social_assessments_assessedEpochMs` ON `social_assessments` (`assessedEpochMs`)")
+            }
+        }
+
+        val MIGRATION_12_13: Migration = object : Migration(12, 13) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Real-World Social Mission Records (Milestone 12 - Phase 4)
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `social_mission_records` (
+                        `recordId` TEXT NOT NULL,
+                        `accountOwnerId` TEXT NOT NULL,
+                        `missionId` TEXT NOT NULL,
+                        `moduleName` TEXT NOT NULL,
+                        `title` TEXT NOT NULL,
+                        `difficultyRank` TEXT NOT NULL,
+                        `lifecycleStatus` TEXT NOT NULL,
+                        `startedEpochMs` INTEGER NOT NULL,
+                        `submittedEpochMs` INTEGER,
+                        `completedEpochMs` INTEGER,
+                        `evidenceType` TEXT NOT NULL,
+                        `reflectionText` TEXT,
+                        `humanConfirmingRole` TEXT,
+                        `artifactNote` TEXT,
+                        `aiFeedbackNotes` TEXT,
+                        `evaluationRubricScore` INTEGER,
+                        `xpAwarded` INTEGER NOT NULL DEFAULT 0,
+                        `verificationStatus` TEXT NOT NULL,
+                        `idempotencyKey` TEXT NOT NULL,
+                        `updatedAtEpochMs` INTEGER NOT NULL,
+                        PRIMARY KEY(`recordId`),
+                        FOREIGN KEY(`accountOwnerId`) REFERENCES `social_profiles`(`accountOwnerId`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_social_mission_records_accountOwnerId` ON `social_mission_records` (`accountOwnerId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_social_mission_records_missionId` ON `social_mission_records` (`missionId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_social_mission_records_moduleName` ON `social_mission_records` (`moduleName`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_social_mission_records_lifecycleStatus` ON `social_mission_records` (`lifecycleStatus`)")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_social_mission_records_idempotencyKey` ON `social_mission_records` (`idempotencyKey`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_social_mission_records_startedEpochMs` ON `social_mission_records` (`startedEpochMs`)")
+            }
+        }
+
         fun getInstance(context: Context): SoloLevelingDatabase {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
@@ -2292,7 +2777,10 @@ abstract class SoloLevelingDatabase : RoomDatabase() {
                         MIGRATION_6_7,
                         MIGRATION_7_8,
                         MIGRATION_8_9,
-                        MIGRATION_9_10
+                        MIGRATION_9_10,
+                        MIGRATION_10_11,
+                        MIGRATION_11_12,
+                        MIGRATION_12_13
                     )
                     .build()
                     .also { INSTANCE = it }
@@ -2448,6 +2936,52 @@ object DatabaseInitializer {
                     timestampEpochMs = now - 500
                 ).toEntity()
             )
+
+            // Milestone 11: Ensure Shadow Monarch profile is seeded on fresh install
+            if (db.shadowMonarchProfileDao().getProfileOnce() == null) {
+                db.shadowMonarchProfileDao().insertProfile(
+                    ShadowMonarchProfileEntity(
+                        id = 1,
+                        monarchLevel = 1,
+                        monarchXp = 0L,
+                        monarchRankName = "AWAKENING",
+                        monarchAuthority = 10,
+                        armyCapacity = 5,
+                        activeShadowCount = 0,
+                        totalShadowsRecruited = 0,
+                        highestShadowRankName = "E_RANK",
+                        totalEvolutions = 0,
+                        shadowArmyPowerRating = 0L,
+                        unlockedMonarchSkillIdsJson = "[]",
+                        updatedAtEpochMs = now
+                    )
+                )
+            }
+
+            // Milestone 12: Ensure default local social profile and 8 modules exist on fresh install
+            val defaultOwner = "local_vault_player_1"
+            if (db.socialProfileDao().getProfile(defaultOwner) == null) {
+                db.socialProfileDao().insertOrUpdateProfile(
+                    SocialProfileEntity(
+                        accountOwnerId = defaultOwner,
+                        overallSocialMasteryStage = "NOVICE",
+                        lastActiveEpochMs = now,
+                        createdAtEpochMs = now,
+                        updatedAtEpochMs = now
+                    )
+                )
+                val allModules = com.example.domain.model.SocialModuleIdentifier.entries.map { mod ->
+                    SocialModuleProgressEntity(
+                        accountOwnerId = defaultOwner,
+                        moduleName = mod.code,
+                        masteryStage = "NOVICE",
+                        masteryStageOrdinal = 0,
+                        lastAssessedEpochMs = now,
+                        updatedAtEpochMs = now
+                    )
+                }
+                db.socialModuleProgressDao().insertAllIgnore(allModules)
+            }
         }
     }
 }

@@ -1,5 +1,6 @@
 package com.example.domain.engine
 
+import com.example.domain.model.SkillAssessmentClassification
 import com.example.domain.model.SkillAssessmentEvaluationResult
 import com.example.domain.model.SkillAssessmentRubric
 import com.example.domain.model.SkillAssessmentSubmission
@@ -9,10 +10,10 @@ import com.example.domain.model.VerificationStatus
 import kotlin.math.roundToInt
 
 /**
- * Milestone 12 - Phase 4: Social Skill Assessment Engine.
+ * Milestone 12 - Phase 4.1: Social Skill Assessment Engine.
  * Evaluates observable, task-specific skill criteria across all 8 Social Mastery modules.
- * Distinguishes observable behavioral criteria from subjective assumptions.
- * Non-punitive, explainable, and supports longitudinal reassessment.
+ * Strictly separates player self-assessments (which carry zero XP) from demonstrated competence.
+ * Non-punitive, explainable, and includes explicit scientific limitations disclosures.
  */
 object SocialSkillAssessmentEngine {
 
@@ -179,22 +180,46 @@ object SocialSkillAssessmentEngine {
             recommendations.add("Complete foundational D-Rank real-world missions to reinforce consistency.")
         }
 
-        val summary = "Assessment completed for ${submission.module.displayName}. Overall score: $overallScore% (${stage.label}). " +
-                "Evaluated across 5 observable dimensions without speculative psychological assumptions."
+        // Summary and qualitative reflection
+        val summary = if (submission.classification == SkillAssessmentClassification.SELF_ASSESSMENT) {
+            "Self-assessment completed for ${submission.module.displayName}. Subjective perceived rating: $overallScore% (${stage.label}). " +
+            "Subjective self-ratings carry 0 XP and reflect perceived confidence, not verified mastery."
+        } else {
+            "Assessment completed for ${submission.module.displayName}. Overall score: $overallScore% (${stage.label}). " +
+            "Evaluated across 5 observable dimensions without speculative psychological assumptions."
+        }
 
-        // Progression rules: Skill assessment submission awards baseline XP (30 XP), capped if daily cap reached
-        val xp = if (overallScore >= 70) 35 else 20
+        // Progression rules: Self-assessment sliders carry 0 XP to prevent progression inflation.
+        // Demonstrated simulation rubrics or evidence-supported evaluations carry standard social XP.
+        val xp = when (submission.classification) {
+            SkillAssessmentClassification.SELF_ASSESSMENT -> 0
+            SkillAssessmentClassification.SIMULATION_EVALUATED -> if (overallScore >= 70) 35 else 20
+            SkillAssessmentClassification.EVIDENCE_SUPPORTED -> if (overallScore >= 70) 30 else 15
+            SkillAssessmentClassification.INDEPENDENTLY_CONFIRMED -> 0
+        }
+
+        val verification = when (submission.classification) {
+            SkillAssessmentClassification.SELF_ASSESSMENT -> VerificationStatus.SELF_REPORTED
+            SkillAssessmentClassification.SIMULATION_EVALUATED -> VerificationStatus.VERIFIED_AI_RUBRIC
+            SkillAssessmentClassification.EVIDENCE_SUPPORTED -> VerificationStatus.SELF_REPORTED
+            SkillAssessmentClassification.INDEPENDENTLY_CONFIRMED -> VerificationStatus.PENDING_REVIEW
+        }
 
         return SkillAssessmentEvaluationResult(
             assessmentId = submission.assessmentId,
             module = submission.module,
+            classification = submission.classification,
             overallScore = overallScore,
             dimensionScores = dimMap,
             masteryStage = stage,
             qualitativeSummary = summary,
             actionableRecommendations = recommendations,
             xpAwarded = xp,
-            verificationStatus = if (submission.isSelfAssessment) VerificationStatus.SELF_REPORTED else VerificationStatus.VERIFIED_AI_RUBRIC
+            verificationStatus = verification,
+            assessmentDateEpochMs = submission.assessedEpochMs,
+            scoringMethod = submission.classification.scoringMethod,
+            evidenceBasis = submission.classification.evidenceBasis,
+            limitationsDisclaimer = submission.classification.limitationsDisclaimer
         )
     }
 }

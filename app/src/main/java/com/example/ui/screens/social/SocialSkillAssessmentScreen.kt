@@ -3,6 +3,7 @@ package com.example.ui.screens.social
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -56,6 +57,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.domain.engine.SocialSkillAssessmentEngine
+import com.example.domain.model.SkillAssessmentClassification
 import com.example.domain.model.SocialMasteryStage
 import com.example.domain.model.SocialModuleIdentifier
 import com.example.ui.viewmodel.SocialMasteryViewModel
@@ -212,6 +214,37 @@ fun SocialSkillAssessmentScreen(
                 }
             }
 
+            // Scientific Disclosures & Limitations Banner
+            Card(
+                colors = CardDefaults.cardColors(containerColor = DeepNavy),
+                border = CardDefaults.outlinedCardBorder().copy(brush = Brush.horizontalGradient(listOf(GoldHighlight, ArcaneViolet))),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Info, contentDescription = null, tint = GoldHighlight, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "SUBJECTIVE SELF-ASSESSMENT (0 XP)",
+                            color = GoldHighlight,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "• Classification: ${SkillAssessmentClassification.SELF_ASSESSMENT.label}\n" +
+                               "• Scoring Method: ${SkillAssessmentClassification.SELF_ASSESSMENT.scoringMethod}\n" +
+                               "• Evidence Basis: ${SkillAssessmentClassification.SELF_ASSESSMENT.evidenceBasis}\n" +
+                               "• Scientific Limitation: ${SkillAssessmentClassification.SELF_ASSESSMENT.limitationsDisclaimer}",
+                        color = TextMuted,
+                        fontSize = 10.sp,
+                        lineHeight = 14.sp
+                    )
+                }
+            }
+
             // Dimension 1
             AssessmentSliderItem(
                 name = rubric.dimension1Name,
@@ -293,12 +326,25 @@ fun SocialSkillAssessmentScreen(
                     border = CardDefaults.outlinedCardBorder().copy(brush = Brush.horizontalGradient(listOf(GoldHighlight, ArcaneViolet)))
                 ) {
                     Column(modifier = Modifier.padding(14.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.CheckCircle, contentDescription = null, tint = GoldHighlight, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.CheckCircle, contentDescription = null, tint = GoldHighlight, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "ASSESSMENT RECORDED",
+                                    color = GoldHighlight,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                            }
                             Text(
-                                text = "ASSESSMENT RESULT RECORDED",
-                                color = GoldHighlight,
+                                text = "+${res.xpAwarded} XP",
+                                color = if (res.xpAwarded > 0) ElectricCyan else TextMuted,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
                                 fontFamily = FontFamily.Monospace
@@ -306,6 +352,12 @@ fun SocialSkillAssessmentScreen(
                         }
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(res.qualitativeSummary, color = TextWhite, fontSize = 12.sp)
+
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("• Method: ${res.scoringMethod}", color = TextMuted, fontSize = 10.sp)
+                        Text("• Evidence: ${res.evidenceBasis}", color = TextMuted, fontSize = 10.sp)
+                        Text("• Limitations: ${res.limitationsDisclaimer}", color = TextMuted, fontSize = 10.sp)
+
                         Spacer(modifier = Modifier.height(8.dp))
                         res.actionableRecommendations.forEach { rec ->
                             Text("• $rec", color = ElectricCyan, fontSize = 11.sp)

@@ -458,6 +458,22 @@ class SocialMasteryViewModel(
         }
     }
 
+    fun retryMission(recordId: String) {
+        viewModelScope.launch {
+            socialRepository.retryMission(recordId, accountOwnerId)
+                .onSuccess { record ->
+                    _uiState.value = _uiState.value.copy(
+                        selectedMissionRecord = record,
+                        missionSubmissionMessage = "Mission ready for retry. You can execute and submit an updated reflection."
+                    )
+                }.onFailure { err ->
+                    _uiState.value = _uiState.value.copy(
+                        missionSubmissionMessage = "Retry failed: ${err.localizedMessage}"
+                    )
+                }
+        }
+    }
+
     fun submitMissionReflection(
         recordId: String,
         evidenceType: SocialMissionEvidenceType,

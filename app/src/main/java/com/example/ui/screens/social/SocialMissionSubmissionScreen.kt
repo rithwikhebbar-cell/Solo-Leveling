@@ -79,7 +79,7 @@ fun SocialMissionSubmissionScreen(
 
     val activeRecord = uiState.activeMissionRecords.find { it.missionId == missionId }
 
-    var selectedEvidenceType by remember { mutableStateOf(SocialMissionEvidenceType.SELF_REFLECTION) }
+    var selectedEvidenceType by remember { mutableStateOf(SocialMissionEvidenceType.SELF_REPORTED) }
     var reflectionText by remember { mutableStateOf("") }
     var humanConfirmingRole by remember { mutableStateOf("") }
     var artifactNote by remember { mutableStateOf("") }
@@ -199,17 +199,26 @@ fun SocialMissionSubmissionScreen(
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold
                             )
+                            Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "Verification Tier: ${type.verificationTier.name.replace("_", " ")}",
+                                text = type.description,
                                 color = TextMuted,
                                 fontSize = 11.sp
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "Verification Tier: ${type.verificationTier.name.replace("_", " ")}",
+                                color = if (type.isIndependentlyVerified) ElectricCyan else GoldHighlight,
+                                fontSize = 10.sp,
+                                fontFamily = FontFamily.Monospace
                             )
                         }
                     }
                 }
 
                 // Conditional inputs based on evidence type
-                if (selectedEvidenceType == SocialMissionEvidenceType.HUMAN_CONFIRMED) {
+                if (selectedEvidenceType == SocialMissionEvidenceType.HUMAN_CONFIRMATION_REPORTED ||
+                    selectedEvidenceType == SocialMissionEvidenceType.HUMAN_CONFIRMED) {
                     OutlinedTextField(
                         value = humanConfirmingRole,
                         onValueChange = { humanConfirmingRole = it },
@@ -224,7 +233,7 @@ fun SocialMissionSubmissionScreen(
                     )
                 }
 
-                if (selectedEvidenceType == SocialMissionEvidenceType.OPTIONAL_ARTIFACT) {
+                if (selectedEvidenceType == SocialMissionEvidenceType.ARTIFACT_ATTACHED) {
                     OutlinedTextField(
                         value = artifactNote,
                         onValueChange = { artifactNote = it },
@@ -273,10 +282,13 @@ fun SocialMissionSubmissionScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
+                    val charCount = reflectionText.trim().length
+                    val meetsRequirement = charCount >= 20
                     Text(
-                        text = "Words: ${reflectionText.trim().split(Regex("\\s+")).filter { it.isNotBlank() }.size}",
-                        color = TextMuted,
-                        fontSize = 11.sp
+                        text = "Chars: $charCount / 20 min ${if (meetsRequirement) "✓" else "(Needs 20+ chars)"}",
+                        color = if (meetsRequirement) ElectricCyan else GoldHighlight,
+                        fontSize = 11.sp,
+                        fontFamily = FontFamily.Monospace
                     )
                     OutlinedButton(
                         onClick = { viewModel.requestAiReflectionReview(mission, reflectionText) },

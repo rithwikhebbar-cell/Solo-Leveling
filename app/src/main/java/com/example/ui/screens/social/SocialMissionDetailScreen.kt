@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.domain.engine.SocialMissionCatalog
 import com.example.domain.model.RealWorldSocialMission
+import com.example.domain.model.SocialMissionLifecycleStatus
 import com.example.ui.viewmodel.SocialMasteryViewModel
 
 private val ObsidianBlack = Color(0xFF070A13)
@@ -281,6 +282,30 @@ fun SocialMissionDetailScreen(
                             colors = ButtonDefaults.outlinedButtonColors(contentColor = ElectricCyan)
                         ) {
                             Text("ASK AI COACH FOR PREP TIPS", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+
+                // Status alert if needs improvement
+                if (activeRecord?.lifecycleStatus == SocialMissionLifecycleStatus.NEEDS_IMPROVEMENT) {
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = DeepNavy),
+                        border = CardDefaults.outlinedCardBorder().copy(brush = Brush.horizontalGradient(listOf(Color(0xFFEF4444), GoldHighlight))),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text("STATUS: NEEDS IMPROVEMENT", color = Color(0xFFEF4444), fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(activeRecord.aiFeedbackNotes ?: "Reflection was too brief or rejected. Please retry and submit a detailed reflection.", color = TextWhite, fontSize = 12.sp)
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Button(
+                                onClick = { viewModel.retryMission(activeRecord.recordId) },
+                                colors = ButtonDefaults.buttonColors(containerColor = GoldHighlight, contentColor = ObsidianBlack),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("RETRY MISSION", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
                         }
                     }
                 }

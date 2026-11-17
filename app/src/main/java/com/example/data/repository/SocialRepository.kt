@@ -75,6 +75,7 @@ interface SocialRepository {
     suspend fun startMission(accountOwnerId: String, missionId: String): Result<SocialMissionRecord>
     suspend fun postponeMission(recordId: String, accountOwnerId: String): Result<SocialMissionRecord>
     suspend fun cancelMission(recordId: String, accountOwnerId: String): Result<SocialMissionRecord>
+    suspend fun retryMission(recordId: String, accountOwnerId: String): Result<SocialMissionRecord>
     suspend fun submitMissionReflection(
         recordId: String,
         accountOwnerId: String,
@@ -491,6 +492,10 @@ class SocialRepositoryImpl(
         return runCatching {
             val entity = missionDao.getRecordById(recordId, accountOwnerId)
                 ?: throw IllegalArgumentException("Mission record not found: $recordId")
+            val currentStatus = SocialMissionLifecycleStatus.fromString(entity.lifecycleStatus)
+            if (!currentStatus.canTransitionTo(SocialMissionLifecycleStatus.POSTPONED)) {
+                throw IllegalStateException("Invalid mission transition: cannot move from $currentStatus to POSTPONED")
+            }
             val updated = entity.copy(
                 lifecycleStatus = SocialMissionLifecycleStatus.POSTPONED.name,
                 updatedAtEpochMs = now
@@ -505,8 +510,31 @@ class SocialRepositoryImpl(
         return runCatching {
             val entity = missionDao.getRecordById(recordId, accountOwnerId)
                 ?: throw IllegalArgumentException("Mission record not found: $recordId")
+            val currentStatus = SocialMissionLifecycleStatus.fromString(entity.lifecycleStatus)
+            if (!currentStatus.canTransitionTo(SocialMissionLifecycleStatus.CANCELLED)) {
+                throw IllegalStateException("Invalid mission transition: cannot move from $currentStatus to CANCELLED")
+            }
             val updated = entity.copy(
                 lifecycleStatus = SocialMissionLifecycleStatus.CANCELLED.name,
+                updatedAtEpochMs = now
+            )
+            missionDao.updateRecord(updated)
+            updated.toDomain()
+        }
+    }
+
+    override suspend fun retryMission(recordId: String, accountOwnerId: String): Result<SocialMissionRecord> {
+        val now = System.currentTimeMillis()
+        return runCatching {
+            val entity = missionDao.getRecordById(recordId, accountOwnerId)
+                ?: throw IllegalArgumentException("Mission record not found: $recordId")
+            val currentStatus = SocialMissionLifecycleStatus.fromString(entity.lifecycleStatus)
+            if (!currentStatus.canTransitionTo(SocialMissionLifecycleStatus.RETRY)) {
+                throw IllegalStateException("Invalid mission transition: cannot retry mission from status $currentStatus")
+            }
+            val updated = entity.copy(
+                lifecycleStatus = SocialMissionLifecycleStatus.IN_PROGRESS.name,
+                aiFeedbackNotes = "Mission retry initiated. Ready for revised execution and reflection.",
                 updatedAtEpochMs = now
             )
             missionDao.updateRecord(updated)
@@ -533,10 +561,10 @@ class SocialRepositoryImpl(
                 val mission = SocialMissionCatalog.getMissionById(entity.missionId)
                     ?: throw IllegalArgumentException("Mission definition not found: ${entity.missionId}")
 
-                val verificationStatus = evidenceType.verificationTier
+                val currentStatus = SocialMissionLifecycleStatus.fromString(entity.lifecycleStatus)
 
                 // Idempotency: if already completed and awarded, return existing
-                if (entity.lifecycleStatus == SocialMissionLifecycleStatus.COMPLETED.name && entity.xpAwarded > 0) {
+                if (currentStatus == SocialMissionLifecycleStatus.COMPLETED && entity.xpAwarded > 0) {
                     return@withTransaction entity.toDomain() to ActivityRewardCalculation(
                         xpAwarded = 0,
                         primaryAttribute = mission.module.primaryAttribute,
@@ -548,9 +576,67 @@ class SocialRepositoryImpl(
                     )
                 }
 
-                // 1. Authoritative Progression calculation
+                // Validate state machine transition to SUBMITTED
+                if (!currentStatus.canTransitionTo(SocialMissionLifecycleStatus.SUBMITTED)) {
+                    throw IllegalStateException("Invalid mission lifecycle transition: cannot submit reflection from status $currentStatus")
+                }
+
+                // Validate reflection text brevity (minimum 20 characters required)
+                if (reflectionText.trim().length < 20) {
+                    val needsImprovementRecord = entity.copy(
+                        lifecycleStatus = SocialMissionLifecycleStatus.NEEDS_IMPROVEMENT.name,
+                        reflectionText = reflectionText,
+                        evidenceType = evidenceType.name,
+                        humanConfirmingRole = humanConfirmingRole,
+                        artifactNote = artifactNote,
+                        aiFeedbackNotes = "Reflection rejected: minimum 20 characters required for meaningful social reflection.",
+                        xpAwarded = 0,
+                        updatedAtEpochMs = now
+                    )
+                    missionDao.updateRecord(needsImprovementRecord)
+                    return@withTransaction needsImprovementRecord.toDomain() to ActivityRewardCalculation(
+                        xpAwarded = 0,
+                        primaryAttribute = mission.module.primaryAttribute,
+                        primaryAttrXpAwarded = 0,
+                        secondaryAttribute = mission.module.secondaryAttribute,
+                        secondaryAttrXpAwarded = 0,
+                        wasCapped = false,
+                        validationNote = "Reflection text too brief (minimum 20 characters required). Mission marked as NEEDS_IMPROVEMENT."
+                    )
+                }
+
+                val verificationStatus = evidenceType.verificationTier
+
+                // Check if mission requires review (e.g. HUMAN_CONFIRMED with PENDING_REVIEW tier)
+                if (verificationStatus == VerificationStatus.PENDING_REVIEW) {
+                    val underReviewRecord = entity.copy(
+                        lifecycleStatus = SocialMissionLifecycleStatus.UNDER_REVIEW.name,
+                        submittedEpochMs = now,
+                        evidenceType = evidenceType.name,
+                        reflectionText = reflectionText,
+                        humanConfirmingRole = humanConfirmingRole,
+                        artifactNote = artifactNote,
+                        aiFeedbackNotes = "Mission submitted and pending review. Independent confirmation is unsupported in offline local vault.",
+                        xpAwarded = 0,
+                        verificationStatus = verificationStatus.name,
+                        updatedAtEpochMs = now
+                    )
+                    missionDao.updateRecord(underReviewRecord)
+                    return@withTransaction underReviewRecord.toDomain() to ActivityRewardCalculation(
+                        xpAwarded = 0,
+                        primaryAttribute = mission.module.primaryAttribute,
+                        primaryAttrXpAwarded = 0,
+                        secondaryAttribute = mission.module.secondaryAttribute,
+                        secondaryAttrXpAwarded = 0,
+                        wasCapped = false,
+                        validationNote = "Mission submitted and under review. XP pending verification."
+                    )
+                }
+
+                // 1. Authoritative Progression calculation with daily caps
                 val dayStart = startOfDayEpochMs(now)
-                val completedTodayCount = missionDao.countCompletedToday(accountOwnerId, dayStart)
+                val xpEarnedToday = missionDao.getSocialXpEarnedToday(accountOwnerId, dayStart)
+                val selfReportedCountToday = missionDao.countSelfReportedCompletedToday(accountOwnerId, dayStart)
                 val durationMinutes = mission.estimatedDurationMinutes.coerceIn(5, 120)
 
                 val rewardCalc = ProgressionEngine.calculateSocialReward(
@@ -558,15 +644,16 @@ class SocialRepositoryImpl(
                     activityKind = com.example.domain.model.SocialActivityKind.REAL_WORLD_ACTIVITY,
                     durationMinutes = durationMinutes,
                     verificationStatus = verificationStatus,
-                    socialXpAlreadyEarnedToday = 0,
-                    selfReportedSocialCountToday = completedTodayCount,
+                    socialXpAlreadyEarnedToday = xpEarnedToday,
+                    selfReportedSocialCountToday = selfReportedCountToday,
                     rubricScorePercent = rubricScore ?: 80
                 )
 
-                // 2. Apply validated reward through ProgressionOrchestrator
+                // 2. Stable reward event idempotency key (no timestamp leak)
+                val stableRewardKey = "msn_reward_${entity.recordId}"
                 val currentProfile = playerDao.getPlayerOnce()?.toDomain() ?: PlayerProfile()
                 val progressionCmd = ProgressionCommand.fromSocialReward(
-                    idempotencyKey = "eval_${entity.recordId}_$now",
+                    idempotencyKey = stableRewardKey,
                     sourceRecordId = entity.recordId,
                     title = "Real-World Mission: ${mission.title}",
                     calculation = rewardCalc,
@@ -595,6 +682,7 @@ class SocialRepositoryImpl(
                     evaluationRubricScore = rubricScore ?: 80,
                     xpAwarded = rewardCalc.xpAwarded,
                     verificationStatus = verificationStatus.name,
+                    idempotencyKey = stableRewardKey,
                     updatedAtEpochMs = now
                 )
                 missionDao.updateRecord(completedRecord)
@@ -660,49 +748,76 @@ class SocialRepositoryImpl(
                 // 1. Persist Assessment
                 assessmentDao.insertAssessment(domainAssessment.toEntity())
 
-                // 2. Progression Reward
-                val dayStart = startOfDayEpochMs(now)
-                val completedTodayCount = missionDao.countCompletedToday(submission.accountOwnerId, dayStart)
+                // 2. Progression Reward (Strict Guard: Self-assessment sliders carry 0 XP)
+                val isSelfAssessment = submission.classification == com.example.domain.model.SkillAssessmentClassification.SELF_ASSESSMENT
+                val rewardCalc: ActivityRewardCalculation
 
-                val rewardCalc = ProgressionEngine.calculateSocialReward(
-                    module = submission.module,
-                    activityKind = com.example.domain.model.SocialActivityKind.PRACTICE,
-                    durationMinutes = 15,
-                    verificationStatus = eval.verificationStatus,
-                    socialXpAlreadyEarnedToday = 0,
-                    selfReportedSocialCountToday = completedTodayCount,
-                    rubricScorePercent = eval.overallScore
-                )
+                if (isSelfAssessment) {
+                    rewardCalc = ActivityRewardCalculation(
+                        xpAwarded = 0,
+                        primaryAttribute = submission.module.primaryAttribute,
+                        primaryAttrXpAwarded = 0,
+                        secondaryAttribute = submission.module.secondaryAttribute,
+                        secondaryAttrXpAwarded = 0,
+                        wasCapped = false,
+                        validationNote = "Subjective self-assessment: 0 XP awarded. Perceived confidence rating only."
+                    )
+                } else {
+                    val dayStart = startOfDayEpochMs(now)
+                    val xpEarnedToday = missionDao.getSocialXpEarnedToday(submission.accountOwnerId, dayStart)
+                    val selfReportedCountToday = missionDao.countSelfReportedCompletedToday(submission.accountOwnerId, dayStart)
 
-                val currentProfile = playerDao.getPlayerOnce()?.toDomain() ?: PlayerProfile()
-                val progressionCmd = ProgressionCommand.fromSocialReward(
-                    idempotencyKey = "assess_${submission.assessmentId}_$now",
-                    sourceRecordId = submission.assessmentId,
-                    title = "Skill Assessment: ${submission.module.displayName}",
-                    calculation = rewardCalc,
-                    verificationStatus = eval.verificationStatus
-                )
+                    val calc = ProgressionEngine.calculateSocialReward(
+                        module = submission.module,
+                        activityKind = com.example.domain.model.SocialActivityKind.PRACTICE,
+                        durationMinutes = 15,
+                        verificationStatus = eval.verificationStatus,
+                        socialXpAlreadyEarnedToday = xpEarnedToday,
+                        selfReportedSocialCountToday = selfReportedCountToday,
+                        rubricScorePercent = eval.overallScore
+                    )
 
-                val outcome = ProgressionOrchestrator.applyValidatedReward(
-                    currentProfile = currentProfile,
-                    command = progressionCmd,
-                    alreadyProcessedKeys = emptySet(),
-                    nowEpochMs = now
-                ).getOrThrow()
+                    val stableRewardKey = "assess_reward_${submission.assessmentId}"
+                    val currentProfile = playerDao.getPlayerOnce()?.toDomain() ?: PlayerProfile()
+                    val progressionCmd = ProgressionCommand.fromSocialReward(
+                        idempotencyKey = stableRewardKey,
+                        sourceRecordId = submission.assessmentId,
+                        title = "Skill Assessment: ${submission.module.displayName}",
+                        calculation = calc,
+                        verificationStatus = eval.verificationStatus
+                    )
 
-                playerDao.upsertPlayer(outcome.updatedProfile.toEntity())
+                    val outcome = ProgressionOrchestrator.applyValidatedReward(
+                        currentProfile = currentProfile,
+                        command = progressionCmd,
+                        alreadyProcessedKeys = emptySet(),
+                        nowEpochMs = now
+                    ).getOrThrow()
 
-                // 3. Update Module Progress
+                    playerDao.upsertPlayer(outcome.updatedProfile.toEntity())
+                    rewardCalc = calc
+                }
+
+                // 3. Update Module Progress (Mastery Progression Guard: Self-assessment cannot elevate stage to MASTER or ADVANCED)
                 val progress = progressDao.getProgress(submission.accountOwnerId, submission.module.code)
                 if (progress != null) {
                     val updatedCount = progress.assessmentsCompleted + 1
                     val newAvg = ((progress.rollingAverageScore * progress.assessmentsCompleted) + eval.overallScore) / updatedCount
+                    val currentStage = SocialMasteryStage.fromString(progress.masteryStage)
+
+                    // Self-assessment cannot advance verified stage to MASTER or beyond COMPETENT
+                    val updatedStage = if (isSelfAssessment) {
+                        currentStage // Preserve existing verified mastery stage; do not elevate
+                    } else {
+                        eval.masteryStage
+                    }
+
                     progressDao.insertOrUpdateProgress(
                         progress.copy(
                             assessmentsCompleted = updatedCount,
                             rollingAverageScore = newAvg,
-                            masteryStage = eval.masteryStage.name,
-                            masteryStageOrdinal = eval.masteryStage.ordinalValue,
+                            masteryStage = updatedStage.name,
+                            masteryStageOrdinal = updatedStage.ordinalValue,
                             lastAssessedEpochMs = now,
                             updatedAtEpochMs = now
                         )

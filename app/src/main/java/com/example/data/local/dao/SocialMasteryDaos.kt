@@ -241,6 +241,12 @@ interface SocialMissionDao {
     @Query("SELECT COUNT(*) FROM social_mission_records WHERE accountOwnerId = :accountOwnerId AND lifecycleStatus = 'COMPLETED' AND completedEpochMs >= :dayStartEpochMs")
     suspend fun countCompletedToday(accountOwnerId: String, dayStartEpochMs: Long): Int
 
+    @Query("SELECT COALESCE(SUM(xpAwarded), 0) FROM social_mission_records WHERE accountOwnerId = :accountOwnerId AND completedEpochMs >= :dayStartEpochMs")
+    suspend fun getSocialXpEarnedToday(accountOwnerId: String, dayStartEpochMs: Long): Int
+
+    @Query("SELECT COUNT(*) FROM social_mission_records WHERE accountOwnerId = :accountOwnerId AND completedEpochMs >= :dayStartEpochMs AND verificationStatus = 'SELF_REPORTED'")
+    suspend fun countSelfReportedCompletedToday(accountOwnerId: String, dayStartEpochMs: Long): Int
+
     @Query("SELECT COUNT(*) FROM social_mission_records WHERE accountOwnerId = :accountOwnerId AND lifecycleStatus = 'COMPLETED'")
     suspend fun countCompletedMissions(accountOwnerId: String): Int
 }

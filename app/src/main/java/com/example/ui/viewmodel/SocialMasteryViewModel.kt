@@ -39,6 +39,14 @@ import com.example.domain.model.SkillAssessmentSubmission
 import com.example.domain.model.SocialMissionEvidenceType
 import com.example.domain.model.SocialMissionLifecycleStatus
 import com.example.domain.model.SocialMissionRecord
+import com.example.domain.model.AdaptiveDifficulty
+import com.example.domain.model.PersonalizedSocialRecommendation
+import com.example.domain.model.PersonalizedWeeklyTrainingPlan
+import com.example.domain.model.RecommendationStatus
+import com.example.domain.model.ScheduledTrainingActivity
+import com.example.domain.model.SocialCompetencyProgress
+import com.example.domain.model.SocialMasteryPathway
+import com.example.domain.model.SocialWeeklyDevelopmentReport
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -68,7 +76,14 @@ data class SocialDashboardUiState(
     val isLoading: Boolean = true,
     val isSubmittingMission: Boolean = false,
     val missionSubmissionMessage: String? = null,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    // Milestone 12 — Phase 5: Adaptive Mastery Pathways & Weekly Planner
+    val activeRecommendations: List<PersonalizedSocialRecommendation> = emptyList(),
+    val currentTrainingPlan: PersonalizedWeeklyTrainingPlan? = null,
+    val masteryPathways: List<SocialMasteryPathway> = emptyList(),
+    val weeklyDevelopmentReport: SocialWeeklyDevelopmentReport? = null,
+    val selectedCompetency: SocialCompetencyProgress? = null,
+    val isGeneratingPlan: Boolean = false
 )
 
 data class PracticeActiveSessionUiState(
@@ -212,6 +227,25 @@ class SocialMasteryViewModel(
                 }
                 .launchIn(viewModelScope)
         }
+
+        // Milestone 12 — Phase 5: Observers for Recommendations, Training Plan & Pathways
+        socialRepository.observeAdaptiveRecommendations(accountOwnerId)
+            .onEach { recs ->
+                _uiState.value = _uiState.value.copy(activeRecommendations = recs)
+            }
+            .launchIn(viewModelScope)
+
+        socialRepository.observeWeeklyTrainingPlan(accountOwnerId)
+            .onEach { plan ->
+                _uiState.value = _uiState.value.copy(currentTrainingPlan = plan)
+            }
+            .launchIn(viewModelScope)
+
+        socialRepository.observeAllPathways(accountOwnerId)
+            .onEach { pathways ->
+                _uiState.value = _uiState.value.copy(masteryPathways = pathways)
+            }
+            .launchIn(viewModelScope)
     }
 
     // AI Coaching Actions
@@ -565,6 +599,123 @@ class SocialMasteryViewModel(
 
     fun clearMissionMessage() {
         _uiState.value = _uiState.value.copy(missionSubmissionMessage = null)
+    }
+
+    // =========================================================================
+    // PHASE 5: ADAPTIVE RECOMMENDATIONS & TRAINING PLAN ACTIONS
+    // =========================================================================
+
+    fun refreshRecommendations() {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoading = true)
+            socialRepository.generateAndSaveRecommendations(accountOwnerId)
+                .onSuccess { recs ->
+                    _uiState.value = _uiState.value.copy(
+                        activeRecommendations = recs,
+                        isLoading = false,
+                        missionSubmissionMessage = "Generated ${recs.size} personalized recommendations."
+                    )
+                }
+                .onFailure { err ->
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        errorMessage = "Recommendation error: ${err.localizedMessage}"
+                    )
+                }
+        }
+    }
+
+    fun acceptRecommendation(recommendationId: String) {
+        viewModelScope.launch {
+            socialRepository.updateRecommendationStatus(recommendationId, accountOwnerId, RecommendationStatus.ACCEPTED)
+        }
+    }
+
+    fun dismissRecommendation(recommendationId: String) {
+        viewModelScope.launch {
+            socialRepository.updateRecommendationStatus(recommendationId, accountOwnerId, RecommendationStatus.DISMISSED)
+        }
+    }
+
+    fun generateWeeklyPlan(targetDays: Int = 5, targetMinutes: Int = 15) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isGeneratingPlan = true)
+            socialRepository.generateWeeklyTrainingPlan(accountOwnerId, targetDays, targetMinutes)
+                .onSuccess { plan ->
+                    _uiState.value = _uiState.value.copy(
+                        currentTrainingPlan = plan,
+                        isGeneratingPlan = false,
+                        missionSubmissionMessage = "Personalized weekly training plan created (${plan.targetDaysPerWeek} days, ${plan.targetMinutesPerDay}m/day)."
+                    )
+                }
+                .onFailure { err ->
+                    _uiState.value = _uiState.value.copy(
+                        isGeneratingPlan = false,
+                        errorMessage = "Plan generation failed: ${err.localizedMessage}"
+                    )
+                }
+        }
+    }
+
+    fun completePlannedActivity(activityId: String) {
+        viewModelScope.launch {
+            socialRepository.updateActivityStatus(activityId, accountOwnerId, isCompleted = true, isSkipped = false)
+        }
+    }
+
+    fun skipPlannedActivity(activityId: String) {
+        viewModelScope.launch {
+            socialRepository.updateActivityStatus(activityId, accountOwnerId, isCompleted = false, isSkipped = true)
+        }
+    }
+
+    fun reschedulePlannedActivity(activityId: String, newDateEpochMs: Long, newDayOfWeek: Int) {
+        viewModelScope.launch {
+            socialRepository.rescheduleActivity(activityId, accountOwnerId, newDateEpochMs, newDayOfWeek)
+        }
+    }
+
+    fun togglePauseTrainingPlan(planId: String, isPaused: Boolean) {
+        viewModelScope.launch {
+            socialRepository.pauseOrResumeTrainingPlan(planId, accountOwnerId, isPaused)
+        }
+    }
+
+    fun setCompetencyDifficultyOverride(competencyId: String, difficulty: AdaptiveDifficulty) {
+        viewModelScope.launch {
+            socialRepository.updateCompetencyDifficultyOverride(competencyId, accountOwnerId, difficulty)
+        }
+    }
+
+    fun loadWeeklyReport() {
+        viewModelScope.launch {
+            socialRepository.generateWeeklyReport(accountOwnerId)
+                .onSuccess { report ->
+                    _uiState.value = _uiState.value.copy(weeklyDevelopmentReport = report)
+                }
+        }
+    }
+
+    // AI Coach Advisory Actions (0 XP)
+    fun requestAiRecommendationExplanation(rec: PersonalizedSocialRecommendation) {
+        val coach = aiCoach ?: return
+        viewModelScope.launch {
+            coach.explainRecommendation(rec, _uiState.value.profile)
+        }
+    }
+
+    fun requestAiPlanExplanation(plan: PersonalizedWeeklyTrainingPlan) {
+        val coach = aiCoach ?: return
+        viewModelScope.launch {
+            coach.explainWeeklyTrainingPlan(plan, _uiState.value.profile)
+        }
+    }
+
+    fun requestAiWeeklyReview(report: SocialWeeklyDevelopmentReport) {
+        val coach = aiCoach ?: return
+        viewModelScope.launch {
+            coach.provideWeeklyReviewSummary(report, _uiState.value.profile)
+        }
     }
 
     override fun onCleared() {

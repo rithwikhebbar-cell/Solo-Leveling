@@ -13,6 +13,9 @@ import com.example.data.local.dao.SocialPracticeSessionDao
 import com.example.data.local.dao.SocialProfileDao
 import com.example.data.local.dao.SocialScenarioAttemptDao
 import com.example.data.local.dao.SocialScenarioDao
+import com.example.data.local.dao.SocialRecommendationDao
+import com.example.data.local.dao.SocialTrainingPlanDao
+import com.example.data.local.dao.SocialCompetencyProgressDao
 import com.example.data.local.entity.SocialAssessmentEntity
 import com.example.data.local.entity.SocialMissionRecordEntity
 import com.example.data.local.entity.SocialModuleProgressEntity
@@ -20,6 +23,10 @@ import com.example.data.local.entity.SocialPracticeSessionEntity
 import com.example.data.local.entity.SocialProfileEntity
 import com.example.data.local.entity.SocialScenarioAttemptEntity
 import com.example.data.local.entity.SocialScenarioEntity
+import com.example.data.local.entity.SocialAdaptiveRecommendationEntity
+import com.example.data.local.entity.SocialWeeklyTrainingPlanEntity
+import com.example.data.local.entity.SocialPlannedActivityEntity
+import com.example.data.local.entity.SocialCompetencyProgressEntity
 import com.example.data.local.dao.AcademicAssessmentDao
 import com.example.data.local.dao.AcademicProgressionDao
 import com.example.data.local.dao.AcademicQuestDao
@@ -312,9 +319,13 @@ import com.example.domain.model.VerificationStatus
         SocialPracticeSessionEntity::class,
         SocialScenarioAttemptEntity::class,
         SocialAssessmentEntity::class,
-        SocialMissionRecordEntity::class
+        SocialMissionRecordEntity::class,
+        SocialAdaptiveRecommendationEntity::class,
+        SocialWeeklyTrainingPlanEntity::class,
+        SocialPlannedActivityEntity::class,
+        SocialCompetencyProgressEntity::class
     ],
-    version = 13,
+    version = 14,
     exportSchema = false
 )
 abstract class SoloLevelingDatabase : RoomDatabase() {
@@ -388,6 +399,9 @@ abstract class SoloLevelingDatabase : RoomDatabase() {
     abstract fun socialScenarioAttemptDao(): SocialScenarioAttemptDao
     abstract fun socialAssessmentDao(): SocialAssessmentDao
     abstract fun socialMissionDao(): SocialMissionDao
+    abstract fun socialRecommendationDao(): SocialRecommendationDao
+    abstract fun socialTrainingPlanDao(): SocialTrainingPlanDao
+    abstract fun socialCompetencyProgressDao(): SocialCompetencyProgressDao
 
     companion object {
         @Volatile
@@ -2761,6 +2775,119 @@ abstract class SoloLevelingDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_13_14: Migration = object : Migration(13, 14) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Adaptive Recommendations (Milestone 12 - Phase 5)
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `social_adaptive_recommendations` (
+                        `recommendationId` TEXT NOT NULL,
+                        `accountOwnerId` TEXT NOT NULL,
+                        `title` TEXT NOT NULL,
+                        `targetModule` TEXT NOT NULL,
+                        `targetCompetency` TEXT NOT NULL,
+                        `category` TEXT NOT NULL,
+                        `explanation` TEXT NOT NULL,
+                        `supportingEvidenceJson` TEXT NOT NULL,
+                        `recommendedActivityId` TEXT NOT NULL,
+                        `recommendedActivityType` TEXT NOT NULL,
+                        `estimatedDurationMinutes` INTEGER NOT NULL,
+                        `difficulty` TEXT NOT NULL,
+                        `expectedLearningOutcome` TEXT NOT NULL,
+                        `status` TEXT NOT NULL,
+                        `createdAtEpochMs` INTEGER NOT NULL,
+                        `updatedAtEpochMs` INTEGER NOT NULL,
+                        PRIMARY KEY(`recommendationId`),
+                        FOREIGN KEY(`accountOwnerId`) REFERENCES `social_profiles`(`accountOwnerId`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_social_adaptive_recommendations_accountOwnerId` ON `social_adaptive_recommendations` (`accountOwnerId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_social_adaptive_recommendations_targetModule` ON `social_adaptive_recommendations` (`targetModule`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_social_adaptive_recommendations_category` ON `social_adaptive_recommendations` (`category`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_social_adaptive_recommendations_status` ON `social_adaptive_recommendations` (`status`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_social_adaptive_recommendations_createdAtEpochMs` ON `social_adaptive_recommendations` (`createdAtEpochMs`)")
+
+                // Weekly Training Plans (Milestone 12 - Phase 5)
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `social_weekly_training_plans` (
+                        `planId` TEXT NOT NULL,
+                        `accountOwnerId` TEXT NOT NULL,
+                        `weeklyDevelopmentObjective` TEXT NOT NULL,
+                        `targetMinutesPerDay` INTEGER NOT NULL,
+                        `targetDaysPerWeek` INTEGER NOT NULL,
+                        `startDateEpochMs` INTEGER NOT NULL,
+                        `endDateEpochMs` INTEGER NOT NULL,
+                        `isPaused` INTEGER NOT NULL,
+                        `createdAtEpochMs` INTEGER NOT NULL,
+                        `updatedAtEpochMs` INTEGER NOT NULL,
+                        PRIMARY KEY(`planId`),
+                        FOREIGN KEY(`accountOwnerId`) REFERENCES `social_profiles`(`accountOwnerId`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_social_weekly_training_plans_accountOwnerId` ON `social_weekly_training_plans` (`accountOwnerId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_social_weekly_training_plans_startDateEpochMs` ON `social_weekly_training_plans` (`startDateEpochMs`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_social_weekly_training_plans_isPaused` ON `social_weekly_training_plans` (`isPaused`)")
+
+                // Planned Activities (Milestone 12 - Phase 5)
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `social_planned_activities` (
+                        `activityId` TEXT NOT NULL,
+                        `planId` TEXT NOT NULL,
+                        `accountOwnerId` TEXT NOT NULL,
+                        `dayOfWeek` INTEGER NOT NULL,
+                        `scheduledDateEpochMs` INTEGER NOT NULL,
+                        `moduleName` TEXT NOT NULL,
+                        `competencyName` TEXT NOT NULL,
+                        `activityType` TEXT NOT NULL,
+                        `title` TEXT NOT NULL,
+                        `referenceId` TEXT NOT NULL,
+                        `durationMinutes` INTEGER NOT NULL,
+                        `difficulty` TEXT NOT NULL,
+                        `isCompleted` INTEGER NOT NULL,
+                        `isSkipped` INTEGER NOT NULL,
+                        `notes` TEXT,
+                        `completedEpochMs` INTEGER,
+                        PRIMARY KEY(`activityId`),
+                        FOREIGN KEY(`planId`) REFERENCES `social_weekly_training_plans`(`planId`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_social_planned_activities_planId` ON `social_planned_activities` (`planId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_social_planned_activities_accountOwnerId` ON `social_planned_activities` (`accountOwnerId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_social_planned_activities_scheduledDateEpochMs` ON `social_planned_activities` (`scheduledDateEpochMs`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_social_planned_activities_isCompleted` ON `social_planned_activities` (`isCompleted`)")
+
+                // Competency Progress (Milestone 12 - Phase 5)
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `social_competency_progress` (
+                        `competencyId` TEXT NOT NULL,
+                        `accountOwnerId` TEXT NOT NULL,
+                        `moduleName` TEXT NOT NULL,
+                        `competencyName` TEXT NOT NULL,
+                        `masteryStage` TEXT NOT NULL,
+                        `recommendedDifficulty` TEXT NOT NULL,
+                        `practiceCount` INTEGER NOT NULL,
+                        `lastPracticedEpochMs` INTEGER,
+                        `lastEvaluatedScore` INTEGER,
+                        `evidenceClassification` TEXT NOT NULL,
+                        `updatedAtEpochMs` INTEGER NOT NULL,
+                        PRIMARY KEY(`competencyId`),
+                        FOREIGN KEY(`accountOwnerId`) REFERENCES `social_profiles`(`accountOwnerId`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_social_competency_progress_accountOwnerId` ON `social_competency_progress` (`accountOwnerId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_social_competency_progress_moduleName` ON `social_competency_progress` (`moduleName`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_social_competency_progress_competencyName` ON `social_competency_progress` (`competencyName`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_social_competency_progress_masteryStage` ON `social_competency_progress` (`masteryStage`)")
+            }
+        }
+
         fun getInstance(context: Context): SoloLevelingDatabase {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
@@ -2780,7 +2907,8 @@ abstract class SoloLevelingDatabase : RoomDatabase() {
                         MIGRATION_9_10,
                         MIGRATION_10_11,
                         MIGRATION_11_12,
-                        MIGRATION_12_13
+                        MIGRATION_12_13,
+                        MIGRATION_13_14
                     )
                     .build()
                     .also { INSTANCE = it }

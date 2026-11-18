@@ -17,6 +17,15 @@ import com.example.domain.engine.ProgressionOrchestrator
 import com.example.domain.engine.SocialMissionCatalog
 import com.example.domain.engine.SocialSkillAssessmentEngine
 import com.example.domain.model.AttributeType
+import com.example.domain.engine.AdaptiveSocialMasteryEngine
+import com.example.domain.model.AdaptiveDifficulty
+import com.example.domain.model.PersonalizedSocialRecommendation
+import com.example.domain.model.PersonalizedWeeklyTrainingPlan
+import com.example.domain.model.RecommendationStatus
+import com.example.domain.model.ScheduledTrainingActivity
+import com.example.domain.model.SocialCompetencyProgress
+import com.example.domain.model.SocialMasteryPathway
+import com.example.domain.model.SocialWeeklyDevelopmentReport
 import com.example.domain.model.NotificationCategory
 import com.example.domain.model.PlayerProfile
 import com.example.domain.model.RealWorldSocialMission
@@ -38,6 +47,7 @@ import com.example.domain.model.SystemNotification
 import com.example.domain.model.VerificationStatus
 import com.example.service.AudioLifecycleManager
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.map
 import java.time.Instant
 import java.time.LocalDate
@@ -89,6 +99,20 @@ interface SocialRepository {
     fun observeMissionRecords(accountOwnerId: String): Flow<List<SocialMissionRecord>>
     suspend fun getMissionRecord(recordId: String, accountOwnerId: String): SocialMissionRecord?
     suspend fun recordSkillAssessment(submission: SkillAssessmentSubmission): Result<Pair<SocialAssessment, ActivityRewardCalculation>>
+
+    // Phase 5: Adaptive Mastery Pathways & Personalized Development Engine
+    fun observeAdaptiveRecommendations(accountOwnerId: String): Flow<List<PersonalizedSocialRecommendation>>
+    suspend fun generateAndSaveRecommendations(accountOwnerId: String): Result<List<PersonalizedSocialRecommendation>>
+    suspend fun updateRecommendationStatus(recommendationId: String, accountOwnerId: String, status: RecommendationStatus): Result<Unit>
+    fun observeWeeklyTrainingPlan(accountOwnerId: String): Flow<PersonalizedWeeklyTrainingPlan?>
+    suspend fun generateWeeklyTrainingPlan(accountOwnerId: String, targetDaysPerWeek: Int, targetMinutesPerDay: Int): Result<PersonalizedWeeklyTrainingPlan>
+    suspend fun updateActivityStatus(activityId: String, accountOwnerId: String, isCompleted: Boolean, isSkipped: Boolean): Result<Unit>
+    suspend fun rescheduleActivity(activityId: String, accountOwnerId: String, newScheduledDateEpochMs: Long, newDayOfWeek: Int): Result<Unit>
+    suspend fun pauseOrResumeTrainingPlan(planId: String, accountOwnerId: String, isPaused: Boolean): Result<Unit>
+    fun observeAllPathways(accountOwnerId: String): Flow<List<SocialMasteryPathway>>
+    suspend fun getCompetencyProgressList(accountOwnerId: String, module: SocialModuleIdentifier): List<SocialCompetencyProgress>
+    suspend fun updateCompetencyDifficultyOverride(competencyId: String, accountOwnerId: String, difficulty: AdaptiveDifficulty): Result<Unit>
+    suspend fun generateWeeklyReport(accountOwnerId: String): Result<SocialWeeklyDevelopmentReport>
 }
 
 class SocialRepositoryImpl(
@@ -105,6 +129,9 @@ class SocialRepositoryImpl(
     private val missionDao = database.socialMissionDao()
     private val playerDao = database.playerDao()
     private val notificationDao = database.systemNotificationDao()
+    private val recommendationDao = database.socialRecommendationDao()
+    private val trainingPlanDao = database.socialTrainingPlanDao()
+    private val competencyProgressDao = database.socialCompetencyProgressDao()
 
     override suspend fun getOrCreateProfile(accountOwnerId: String): SocialProfile {
         val existing = profileDao.getProfile(accountOwnerId)
@@ -344,15 +371,21 @@ class SocialRepositoryImpl(
                 // 1. Persist Attempt
                 attemptDao.insertAttempt(attempt.toEntity())
 
-                // 2. If passed, apply small scenario progression reward
+                // 2. If passed, apply small scenario progression reward with daily cap tracking
                 if (attempt.isPassed) {
+                    val dayStart = startOfDayEpochMs(now)
+                    val missionXpToday = missionDao.getSocialXpEarnedToday(attempt.accountOwnerId, dayStart)
+                    val scenarioCountToday = attemptDao.countPassedToday(attempt.accountOwnerId, dayStart)
+                    val totalSocialXpToday = missionXpToday + (scenarioCountToday * 30)
+                    val selfReportedCountToday = missionDao.countSelfReportedCompletedToday(attempt.accountOwnerId, dayStart)
+
                     val rewardCalc = ProgressionEngine.calculateSocialReward(
                         module = attempt.module,
                         activityKind = com.example.domain.model.SocialActivityKind.SCENARIO,
                         durationMinutes = 15,
                         verificationStatus = attempt.verificationStatus,
-                        socialXpAlreadyEarnedToday = 0,
-                        selfReportedSocialCountToday = 0,
+                        socialXpAlreadyEarnedToday = totalSocialXpToday,
+                        selfReportedSocialCountToday = selfReportedCountToday,
                         rubricScorePercent = attempt.evaluationScore
                     )
 
@@ -563,8 +596,12 @@ class SocialRepositoryImpl(
 
                 val currentStatus = SocialMissionLifecycleStatus.fromString(entity.lifecycleStatus)
 
-                // Idempotency: if already completed and awarded, return existing
-                if (currentStatus == SocialMissionLifecycleStatus.COMPLETED && entity.xpAwarded > 0) {
+                val stableRewardKey = "msn_reward_${entity.recordId}"
+
+                // Idempotency: if already completed and awarded, or key exists in DB, return existing
+                if ((currentStatus == SocialMissionLifecycleStatus.COMPLETED && entity.xpAwarded > 0) ||
+                    missionDao.countByIdempotencyKey(stableRewardKey) > 0
+                ) {
                     return@withTransaction entity.toDomain() to ActivityRewardCalculation(
                         xpAwarded = 0,
                         primaryAttribute = mission.module.primaryAttribute,
@@ -635,7 +672,9 @@ class SocialRepositoryImpl(
 
                 // 1. Authoritative Progression calculation with daily caps
                 val dayStart = startOfDayEpochMs(now)
-                val xpEarnedToday = missionDao.getSocialXpEarnedToday(accountOwnerId, dayStart)
+                val missionXpToday = missionDao.getSocialXpEarnedToday(accountOwnerId, dayStart)
+                val scenarioCountToday = attemptDao.countPassedToday(accountOwnerId, dayStart)
+                val totalSocialXpToday = missionXpToday + (scenarioCountToday * 30)
                 val selfReportedCountToday = missionDao.countSelfReportedCompletedToday(accountOwnerId, dayStart)
                 val durationMinutes = mission.estimatedDurationMinutes.coerceIn(5, 120)
 
@@ -644,13 +683,12 @@ class SocialRepositoryImpl(
                     activityKind = com.example.domain.model.SocialActivityKind.REAL_WORLD_ACTIVITY,
                     durationMinutes = durationMinutes,
                     verificationStatus = verificationStatus,
-                    socialXpAlreadyEarnedToday = xpEarnedToday,
+                    socialXpAlreadyEarnedToday = totalSocialXpToday,
                     selfReportedSocialCountToday = selfReportedCountToday,
                     rubricScorePercent = rubricScore ?: 80
                 )
 
                 // 2. Stable reward event idempotency key (no timestamp leak)
-                val stableRewardKey = "msn_reward_${entity.recordId}"
                 val currentProfile = playerDao.getPlayerOnce()?.toDomain() ?: PlayerProfile()
                 val progressionCmd = ProgressionCommand.fromSocialReward(
                     idempotencyKey = stableRewardKey,
@@ -745,6 +783,20 @@ class SocialRepositoryImpl(
                     assessedEpochMs = now
                 )
 
+                // 0. Idempotency Check: if assessmentId already recorded in DB, return existing
+                val existingAssessment = assessmentDao.getAssessmentById(submission.assessmentId)
+                if (existingAssessment != null) {
+                    return@withTransaction existingAssessment.toDomain() to ActivityRewardCalculation(
+                        xpAwarded = 0,
+                        primaryAttribute = submission.module.primaryAttribute,
+                        primaryAttrXpAwarded = 0,
+                        secondaryAttribute = submission.module.secondaryAttribute,
+                        secondaryAttrXpAwarded = 0,
+                        wasCapped = true,
+                        validationNote = "Idempotent replay: skill assessment already recorded."
+                    )
+                }
+
                 // 1. Persist Assessment
                 assessmentDao.insertAssessment(domainAssessment.toEntity())
 
@@ -764,7 +816,9 @@ class SocialRepositoryImpl(
                     )
                 } else {
                     val dayStart = startOfDayEpochMs(now)
-                    val xpEarnedToday = missionDao.getSocialXpEarnedToday(submission.accountOwnerId, dayStart)
+                    val missionXpToday = missionDao.getSocialXpEarnedToday(submission.accountOwnerId, dayStart)
+                    val scenarioCountToday = attemptDao.countPassedToday(submission.accountOwnerId, dayStart)
+                    val totalSocialXpToday = missionXpToday + (scenarioCountToday * 30)
                     val selfReportedCountToday = missionDao.countSelfReportedCompletedToday(submission.accountOwnerId, dayStart)
 
                     val calc = ProgressionEngine.calculateSocialReward(
@@ -772,7 +826,7 @@ class SocialRepositoryImpl(
                         activityKind = com.example.domain.model.SocialActivityKind.PRACTICE,
                         durationMinutes = 15,
                         verificationStatus = eval.verificationStatus,
-                        socialXpAlreadyEarnedToday = xpEarnedToday,
+                        socialXpAlreadyEarnedToday = totalSocialXpToday,
                         selfReportedSocialCountToday = selfReportedCountToday,
                         rubricScorePercent = eval.overallScore
                     )
@@ -828,6 +882,184 @@ class SocialRepositoryImpl(
 
                 domainAssessment to rewardCalc
             }
+        }
+    }
+
+    // =========================================================================
+    // PHASE 5: ADAPTIVE MASTERY PATHWAYS & PERSONALIZED DEVELOPMENT ENGINE
+    // =========================================================================
+
+    override fun observeAdaptiveRecommendations(accountOwnerId: String): Flow<List<PersonalizedSocialRecommendation>> {
+        return recommendationDao.observeActiveRecommendations(accountOwnerId).map { list ->
+            list.map { it.toDomain() }
+        }
+    }
+
+    override suspend fun generateAndSaveRecommendations(accountOwnerId: String): Result<List<PersonalizedSocialRecommendation>> {
+        val now = System.currentTimeMillis()
+        return runCatching {
+            val sessions = sessionDao.observeRecentSessions(accountOwnerId, 50).firstOrNull()?.map { it.toDomain() } ?: emptyList()
+            val attempts = attemptDao.observeAttemptsByAccount(accountOwnerId).firstOrNull()?.map { it.toDomain() } ?: emptyList()
+            val missions = missionDao.observeRecords(accountOwnerId).firstOrNull()?.map { it.toDomain() } ?: emptyList()
+            val assessments = assessmentDao.getAssessmentHistory(accountOwnerId).map { it.toDomain() }
+
+            val evaluatedCompetencies = AdaptiveSocialMasteryEngine.evaluateCompetencies(
+                accountOwnerId = accountOwnerId,
+                sessions = sessions,
+                attempts = attempts,
+                missions = missions,
+                assessments = assessments,
+                nowEpochMs = now
+            )
+
+            competencyProgressDao.insertOrUpdateAll(evaluatedCompetencies.map { it.toEntity() })
+
+            val recommendations = AdaptiveSocialMasteryEngine.generateRecommendations(
+                accountOwnerId = accountOwnerId,
+                competencies = evaluatedCompetencies,
+                missions = missions,
+                nowEpochMs = now
+            )
+
+            recommendationDao.insertRecommendations(recommendations.map { it.toEntity() })
+            recommendations
+        }
+    }
+
+    override suspend fun updateRecommendationStatus(
+        recommendationId: String,
+        accountOwnerId: String,
+        status: RecommendationStatus
+    ): Result<Unit> {
+        return runCatching {
+            recommendationDao.updateStatus(recommendationId, accountOwnerId, status.name, System.currentTimeMillis())
+        }
+    }
+
+    override fun observeWeeklyTrainingPlan(accountOwnerId: String): Flow<PersonalizedWeeklyTrainingPlan?> {
+        return trainingPlanDao.observeLatestPlan(accountOwnerId).map { planEntity ->
+            if (planEntity == null) null
+            else {
+                val activities = trainingPlanDao.getActivitiesForPlan(planEntity.planId).map { it.toDomain() }
+                planEntity.toDomain(activities)
+            }
+        }
+    }
+
+    override suspend fun generateWeeklyTrainingPlan(
+        accountOwnerId: String,
+        targetDaysPerWeek: Int,
+        targetMinutesPerDay: Int
+    ): Result<PersonalizedWeeklyTrainingPlan> {
+        val now = System.currentTimeMillis()
+        return runCatching {
+            var comps = competencyProgressDao.getAllProgress(accountOwnerId).map { it.toDomain() }
+            if (comps.isEmpty()) {
+                val sessions = sessionDao.observeRecentSessions(accountOwnerId, 50).firstOrNull()?.map { it.toDomain() } ?: emptyList()
+                val attempts = attemptDao.observeAttemptsByAccount(accountOwnerId).firstOrNull()?.map { it.toDomain() } ?: emptyList()
+                val missions = missionDao.observeRecords(accountOwnerId).firstOrNull()?.map { it.toDomain() } ?: emptyList()
+                val assessments = assessmentDao.getAssessmentHistory(accountOwnerId).map { it.toDomain() }
+                comps = AdaptiveSocialMasteryEngine.evaluateCompetencies(
+                    accountOwnerId = accountOwnerId,
+                    sessions = sessions,
+                    attempts = attempts,
+                    missions = missions,
+                    assessments = assessments,
+                    nowEpochMs = now
+                )
+                competencyProgressDao.insertOrUpdateAll(comps.map { it.toEntity() })
+            }
+
+            val plan = AdaptiveSocialMasteryEngine.generateWeeklyTrainingPlan(
+                accountOwnerId = accountOwnerId,
+                targetDaysPerWeek = targetDaysPerWeek,
+                targetMinutesPerDay = targetMinutesPerDay,
+                competencies = comps,
+                nowEpochMs = now
+            )
+
+            database.withTransaction {
+                trainingPlanDao.insertPlan(plan.toEntity())
+                trainingPlanDao.insertActivities(plan.scheduledActivities.map { it.toEntity() })
+            }
+            plan
+        }
+    }
+
+    override suspend fun updateActivityStatus(
+        activityId: String,
+        accountOwnerId: String,
+        isCompleted: Boolean,
+        isSkipped: Boolean
+    ): Result<Unit> {
+        return runCatching {
+            // Note: marking activity complete or skipping carries 0 XP and causes no penalty.
+            val completedTime = if (isCompleted) System.currentTimeMillis() else null
+            trainingPlanDao.updateActivityCompletion(activityId, accountOwnerId, isCompleted, isSkipped, completedTime)
+        }
+    }
+
+    override suspend fun rescheduleActivity(
+        activityId: String,
+        accountOwnerId: String,
+        newScheduledDateEpochMs: Long,
+        newDayOfWeek: Int
+    ): Result<Unit> {
+        return runCatching {
+            trainingPlanDao.rescheduleActivity(activityId, accountOwnerId, newScheduledDateEpochMs, newDayOfWeek)
+        }
+    }
+
+    override suspend fun pauseOrResumeTrainingPlan(
+        planId: String,
+        accountOwnerId: String,
+        isPaused: Boolean
+    ): Result<Unit> {
+        return runCatching {
+            trainingPlanDao.setPlanPaused(planId, accountOwnerId, isPaused, System.currentTimeMillis())
+        }
+    }
+
+    override fun observeAllPathways(accountOwnerId: String): Flow<List<SocialMasteryPathway>> {
+        return competencyProgressDao.observeAllProgress(accountOwnerId).map { compEntities ->
+            val comps = compEntities.map { it.toDomain() }
+            val activeRecs = recommendationDao.observeActiveRecommendations(accountOwnerId).firstOrNull()?.map { it.toDomain() } ?: emptyList()
+            AdaptiveSocialMasteryEngine.buildMasteryPathways(comps, activeRecs)
+        }
+    }
+
+    override suspend fun getCompetencyProgressList(
+        accountOwnerId: String,
+        module: SocialModuleIdentifier
+    ): List<SocialCompetencyProgress> {
+        return competencyProgressDao.getProgressForModule(accountOwnerId, module.code).map { it.toDomain() }
+    }
+
+    override suspend fun updateCompetencyDifficultyOverride(
+        competencyId: String,
+        accountOwnerId: String,
+        difficulty: AdaptiveDifficulty
+    ): Result<Unit> {
+        return runCatching {
+            competencyProgressDao.updateDifficultyOverride(competencyId, accountOwnerId, difficulty.name, System.currentTimeMillis())
+        }
+    }
+
+    override suspend fun generateWeeklyReport(accountOwnerId: String): Result<SocialWeeklyDevelopmentReport> {
+        val now = System.currentTimeMillis()
+        return runCatching {
+            val planEntity = trainingPlanDao.getLatestPlan(accountOwnerId)
+            val activities = planEntity?.let { trainingPlanDao.getActivitiesForPlan(it.planId).map { a -> a.toDomain() } } ?: emptyList()
+            val plan = planEntity?.toDomain(activities)
+            val missions = missionDao.observeRecords(accountOwnerId).firstOrNull()?.map { it.toDomain() } ?: emptyList()
+            val sessions = sessionDao.observeRecentSessions(accountOwnerId, 50).firstOrNull()?.map { it.toDomain() } ?: emptyList()
+
+            AdaptiveSocialMasteryEngine.generateWeeklyDevelopmentReport(
+                plan = plan,
+                missions = missions,
+                sessions = sessions,
+                nowEpochMs = now
+            )
         }
     }
 }

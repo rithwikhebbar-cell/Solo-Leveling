@@ -192,12 +192,18 @@ interface SocialScenarioAttemptDao {
 
     @Query("SELECT COUNT(DISTINCT scenarioId) FROM social_scenario_attempts WHERE accountOwnerId = :accountOwnerId AND isPassed = 1")
     suspend fun getUniquePassedScenariosCount(accountOwnerId: String): Int
+
+    @Query("SELECT COUNT(*) FROM social_scenario_attempts WHERE accountOwnerId = :accountOwnerId AND isPassed = 1 AND completedEpochMs >= :dayStartEpochMs")
+    suspend fun countPassedToday(accountOwnerId: String, dayStartEpochMs: Long): Int
 }
 
 @Dao
 interface SocialAssessmentDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAssessment(assessment: SocialAssessmentEntity)
+
+    @Query("SELECT * FROM social_assessments WHERE assessmentId = :assessmentId LIMIT 1")
+    suspend fun getAssessmentById(assessmentId: String): SocialAssessmentEntity?
 
     @Query("SELECT * FROM social_assessments WHERE accountOwnerId = :accountOwnerId ORDER BY assessedEpochMs DESC")
     suspend fun getAssessmentHistory(accountOwnerId: String): List<SocialAssessmentEntity>

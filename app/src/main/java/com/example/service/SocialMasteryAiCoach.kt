@@ -5,7 +5,10 @@ import com.example.data.integration.BackendAiProxyRequest
 import com.example.domain.model.AiCoachingMessage
 import com.example.domain.model.AiCoachingMode
 import com.example.domain.model.OpenRouterMessage
+import com.example.domain.model.PersonalizedSocialRecommendation
+import com.example.domain.model.PersonalizedWeeklyTrainingPlan
 import com.example.domain.model.SocialProfile
+import com.example.domain.model.SocialWeeklyDevelopmentReport
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -97,6 +100,64 @@ class SocialMasteryAiCoach(
             _messages.value = (_messages.value + fallbackMsg).takeLast(MAX_STORED_MESSAGES)
             fallback
         }
+    }
+
+    // =========================================================================
+    // PHASE 5: ADAPTIVE COACHING EXTENSIONS
+    // =========================================================================
+
+    suspend fun explainRecommendation(
+        rec: PersonalizedSocialRecommendation,
+        profile: SocialProfile?,
+        backendBaseUrl: String = "https://default.supabase.co"
+    ): Result<String> {
+        val prompt = "Why was this recommendation generated for me?\n" +
+                "Title: ${rec.title}\n" +
+                "Module: ${rec.targetModule.displayName}\n" +
+                "Competency: ${rec.targetCompetency}\n" +
+                "Category: ${rec.category.label}\n" +
+                "Persisted Context: ${rec.explanation}\n" +
+                "Please explain the behavioral rationale and how this activity accelerates my interpersonal mastery."
+        return sendMessage(prompt, AiCoachingMode.PERSONAL_COACH, profile, backendBaseUrl = backendBaseUrl)
+    }
+
+    suspend fun explainWeeklyTrainingPlan(
+        plan: PersonalizedWeeklyTrainingPlan,
+        profile: SocialProfile?,
+        backendBaseUrl: String = "https://default.supabase.co"
+    ): Result<String> {
+        val activitySummary = plan.scheduledActivities.joinToString("; ") { "Day ${it.dayOfWeek}: ${it.title} (${it.durationMinutes}m)" }
+        val prompt = "Review my personalized weekly training plan:\n" +
+                "Objective: ${plan.weeklyDevelopmentObjective}\n" +
+                "Schedule (${plan.targetDaysPerWeek} days, ${plan.targetMinutesPerDay}m/day): $activitySummary\n" +
+                "Explain how this weekly progression balances skill acquisition, simulation, and real-world application."
+        return sendMessage(prompt, AiCoachingMode.PERSONAL_COACH, profile, backendBaseUrl = backendBaseUrl)
+    }
+
+    suspend fun provideWeeklyReviewSummary(
+        report: SocialWeeklyDevelopmentReport,
+        profile: SocialProfile?,
+        backendBaseUrl: String = "https://default.supabase.co"
+    ): Result<String> {
+        val prompt = "Provide an executive weekly debrief on my communication performance:\n" +
+                "Total Practice Minutes: ${report.totalMinutesPracticed}\n" +
+                "Exercises Completed: ${report.exercisesCompletedCount}\n" +
+                "Real-World Missions Cleared: ${report.missionsCompletedCount}\n" +
+                "Competencies Practiced: ${report.competenciesPracticed.joinToString(", ")}\n" +
+                "Observed Improvements: ${report.observedImprovements.joinToString("; ")}\n" +
+                "Areas to Watch: ${report.areasRequiringAttention.joinToString("; ")}\n" +
+                "What is my highest-leverage priority for next week?"
+        return sendMessage(prompt, AiCoachingMode.PROFESSIONAL_COACH, profile, backendBaseUrl = backendBaseUrl)
+    }
+
+    suspend fun provideCompetencyGuidance(
+        competencyName: String,
+        stage: String,
+        profile: SocialProfile?,
+        backendBaseUrl: String = "https://default.supabase.co"
+    ): Result<String> {
+        val prompt = "Give me tactical guidance on mastering competency '$competencyName'. My current developmental classification is $stage. What 2 micro-habits will advance my execution?"
+        return sendMessage(prompt, AiCoachingMode.PRACTICE_COACH, profile, backendBaseUrl = backendBaseUrl)
     }
 
     private fun buildSystemPrompt(mode: AiCoachingMode, profile: SocialProfile?): String {

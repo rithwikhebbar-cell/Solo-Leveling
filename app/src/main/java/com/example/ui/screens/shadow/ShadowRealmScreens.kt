@@ -1020,12 +1020,30 @@ fun ShadowArchiveScreen(
                                 color = ShadowColors.PureIce
                             )
                             Text(
-                                text = record.outcome.name,
+                                text = when (record.outcome) {
+                                    ShadowExtractionOutcome.SUCCESS -> "RECRUITED"
+                                    ShadowExtractionOutcome.DUPLICATE_RESOLVED -> "RESONANCE RESOLVED"
+                                    ShadowExtractionOutcome.REJECTED_CAPACITY -> "CAPACITY REACHED"
+                                    ShadowExtractionOutcome.REJECTED_ALREADY_EXTRACTED -> "ALREADY EXTRACTED"
+                                    else -> record.outcome.name
+                                },
                                 style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                color = if (record.outcome == ShadowExtractionOutcome.SUCCESS) ShadowColors.Emerald else ShadowColors.Crimson
+                                color = when (record.outcome) {
+                                    ShadowExtractionOutcome.SUCCESS -> ShadowColors.Emerald
+                                    ShadowExtractionOutcome.DUPLICATE_RESOLVED -> ShadowColors.Cyan
+                                    else -> ShadowColors.Crimson
+                                }
                             )
                         }
                         Spacer(modifier = Modifier.height(4.dp))
+                        if (record.outcome == ShadowExtractionOutcome.DUPLICATE_RESOLVED) {
+                            Text(
+                                text = "Duplicate Remnant Converted: +25 Resonance Shards bound to core.",
+                                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                                color = ShadowColors.Cyan
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                        }
                         Text(
                             text = "Source: ${record.sourceType.name} (${record.sourceEventId})",
                             style = MaterialTheme.typography.bodySmall,

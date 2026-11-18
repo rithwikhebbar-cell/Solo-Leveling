@@ -54,7 +54,7 @@ fun HunterHeroOverviewCard(
         modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onInspectStatus)
-            .testTag("hunter_hero_overview_card"),
+            .testTag("player_overview_card"),
         accentColor = rankAccent,
         secondaryColor = SystemColors.ElectricCyan,
         contentPadding = 0.dp,
@@ -203,7 +203,9 @@ fun HunterHeroOverviewCard(
                     // Right: Inspect Status Action
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(start = 4.dp)
+                        modifier = Modifier
+                            .padding(start = 4.dp)
+                            .testTag("inspect_attributes_button")
                     ) {
                         Text(
                             text = "STATUS",

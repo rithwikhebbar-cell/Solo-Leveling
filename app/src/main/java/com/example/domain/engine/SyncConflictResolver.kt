@@ -354,6 +354,34 @@ object SyncConflictResolver {
         return if (cloud.updatedAtEpochMs > local.updatedAtEpochMs) cloud else local
     }
 
+    fun resolveShadowEvidenceClaim(
+        local: com.example.domain.model.ShadowEvidenceClaim,
+        cloud: com.example.domain.model.ShadowEvidenceClaim
+    ): com.example.domain.model.ShadowEvidenceClaim {
+        require(local.accountOwnerId == cloud.accountOwnerId) {
+            "Cross-account ShadowEvidenceClaim reconciliation rejected"
+        }
+        // Immutable claim: earliest claim timestamp wins
+        return if (cloud.claimedAtEpochMs < local.claimedAtEpochMs) cloud else local
+    }
+
+    fun resolveShadowResonanceRecord(
+        local: com.example.domain.model.ShadowResonanceRecord,
+        cloud: com.example.domain.model.ShadowResonanceRecord
+    ): com.example.domain.model.ShadowResonanceRecord {
+        require(local.accountOwnerId == cloud.accountOwnerId) {
+            "Cross-account ShadowResonanceRecord reconciliation rejected"
+        }
+        val maxLevel = maxOf(local.resonanceLevel, cloud.resonanceLevel)
+        val maxShards = maxOf(local.resonanceShards, cloud.resonanceShards)
+        val latestEpoch = maxOf(local.lastResonanceEpochMs, cloud.lastResonanceEpochMs)
+        return local.copy(
+            resonanceLevel = maxLevel,
+            resonanceShards = maxShards,
+            lastResonanceEpochMs = latestEpoch
+        )
+    }
+
     fun computeSha256(content: String): String {
         val digest = MessageDigest.getInstance("SHA-256").digest(content.toByteArray(Charsets.UTF_8))
         return digest.joinToString("") { "%02x".format(it) }

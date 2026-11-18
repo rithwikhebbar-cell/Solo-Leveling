@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -127,7 +128,12 @@ fun SystemAnnouncementBanner(
                     if (activeAnnouncement.actionLabel.isNotBlank()) {
                         Spacer(modifier = Modifier.width(8.dp))
                         OutlinedButton(
-                            onClick = { onNavigateRoute(activeAnnouncement.deepLinkRoute) },
+                            onClick = {
+                                if (activeAnnouncement.deepLinkRoute.isNotBlank()) {
+                                    onNavigateRoute(activeAnnouncement.deepLinkRoute)
+                                }
+                            },
+                            modifier = Modifier.heightIn(min = 40.dp),
                             border = BorderStroke(1.dp, accent),
                             colors = ButtonDefaults.outlinedButtonColors(contentColor = accent),
                             shape = RoundedCornerShape(6.dp)

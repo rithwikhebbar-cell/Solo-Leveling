@@ -754,3 +754,46 @@ object ShadowQuestCatalog {
     fun findById(questId: String): ShadowQuestDefinition? = quests.firstOrNull { it.questId == questId }
 }
 
+// ----------------------------------------------------------------------------
+// PHASE 6.2 — SHADOW COLLECTION & RESONANCE MODELS
+// ----------------------------------------------------------------------------
+
+enum class ShadowSortOption(val label: String) {
+    RECENTLY_RECRUITED("Recently Recruited"),
+    RARITY("Rarity"),
+    LEVEL("Level"),
+    RANK("Rank"),
+    NAME("Name")
+}
+
+data class ShadowResonanceRecord(
+    val resonanceId: String,
+    val accountOwnerId: String,
+    val archetypeId: String,
+    val resonanceLevel: Int,
+    val resonanceShards: Int,
+    val lastResonanceEpochMs: Long
+)
+
+data class ShadowEvidenceClaim(
+    val claimId: String,
+    val accountOwnerId: String,
+    val sourceType: String,
+    val sourceRecordId: String,
+    val claimedAtEpochMs: Long
+)
+
+data class ShadowCollectionOverview(
+    val totalOwned: Int = 0,
+    val uniqueArchetypesCollected: Int = 0,
+    val totalArchetypesInCatalog: Int = 24,
+    val completionPercentage: Float = 0f,
+    val classDistribution: Map<ShadowClass, Int> = emptyMap(),
+    val rarityDistribution: Map<ShadowRarity, Int> = emptyMap(),
+    val rankDistribution: Map<ShadowRank, Int> = emptyMap(),
+    val recentRecruits: List<Shadow> = emptyList(),
+    val duplicateResonanceCount: Int = 0,
+    val resonanceRecords: List<ShadowResonanceRecord> = emptyList()
+)
+
+

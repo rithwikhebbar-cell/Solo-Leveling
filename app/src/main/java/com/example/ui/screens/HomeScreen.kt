@@ -231,7 +231,11 @@ fun HomeScreen(
                     onNavigateToAcademic = onNavigateToAcademic,
                     onNavigateToLife = onNavigateToLife,
                     onNavigateToIntelligence = onNavigateToIntelligence,
-                    onNavigateToSystemControl = onNavigateToSystemControl
+                    onNavigateToSystemControl = onNavigateToSystemControl,
+                    academicSummary = academicSummary,
+                    lifeSummary = lifeSummary,
+                    intelligenceHeadline = intelligenceHeadline,
+                    systemHealthStatusLabel = systemHealthStatusLabel
                 )
             }
 

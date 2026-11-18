@@ -294,10 +294,8 @@ private fun QuestBoardCard(
     val accent = if (quest.isCompleted) SystemColors.VerifiedEmerald else SystemColors.ElectricCyan
     val categoryColor = when (quest.category) {
         QuestCategory.PHYSICAL -> SystemColors.VerifiedEmerald
-        QuestCategory.ACADEMIC -> SystemColors.ArcaneViolet
+        QuestCategory.INTELLECT -> SystemColors.ArcaneViolet
         QuestCategory.DISCIPLINE -> SystemColors.SystemBlue
-        QuestCategory.CAREER -> SystemColors.MonarchGold
-        QuestCategory.CREATIVE -> Color(0xFFEC4899)
         QuestCategory.SOCIAL -> SystemColors.ElectricCyan
         QuestCategory.RECOVERY -> SystemColors.WarningAmber
     }

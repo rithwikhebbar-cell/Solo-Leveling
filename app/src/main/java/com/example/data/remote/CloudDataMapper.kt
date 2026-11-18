@@ -14,6 +14,8 @@ import com.example.data.local.entity.ShadowMonarchProfileEntity
 import com.example.data.local.entity.ShadowQuestProgressEntity
 import com.example.data.local.entity.ShadowResourceTransactionEntity
 import com.example.data.local.entity.ShadowSkillUnlockEntity
+import com.example.data.local.entity.ShadowEvidenceClaimEntity
+import com.example.data.local.entity.ShadowResonanceEntity
 import com.example.domain.model.CloudProgressionEventPayload
 import com.example.domain.model.CloudSettingsPayload
 import com.example.domain.model.CloudTaskPayload
@@ -201,6 +203,27 @@ data class CloudShadowResourceTransactionPayload(
     val sourceDescription: String,
     val balanceAfter: Int,
     val timestampEpochMs: Long
+)
+
+@Serializable
+data class CloudShadowEvidenceClaimPayload(
+    val cloudUuid: String,
+    val accountOwnerId: String,
+    val claimId: String,
+    val sourceType: String,
+    val sourceRecordId: String,
+    val claimedAtEpochMs: Long
+)
+
+@Serializable
+data class CloudShadowResonancePayload(
+    val cloudUuid: String,
+    val accountOwnerId: String,
+    val resonanceId: String,
+    val archetypeId: String,
+    val resonanceLevel: Int,
+    val resonanceShards: Int,
+    val lastResonanceEpochMs: Long
 )
 
 @Serializable
@@ -446,6 +469,31 @@ object CloudDataMapper {
         timestampEpochMs = entity.timestampEpochMs
     )
 
+    fun shadowEvidenceClaimToPayload(
+        entity: ShadowEvidenceClaimEntity,
+        cloudUuid: String
+    ): CloudShadowEvidenceClaimPayload = CloudShadowEvidenceClaimPayload(
+        cloudUuid = cloudUuid,
+        accountOwnerId = entity.accountOwnerId,
+        claimId = entity.claimId,
+        sourceType = entity.sourceType,
+        sourceRecordId = entity.sourceRecordId,
+        claimedAtEpochMs = entity.claimedAtEpochMs
+    )
+
+    fun shadowResonanceToPayload(
+        entity: ShadowResonanceEntity,
+        cloudUuid: String
+    ): CloudShadowResonancePayload = CloudShadowResonancePayload(
+        cloudUuid = cloudUuid,
+        accountOwnerId = entity.accountOwnerId,
+        resonanceId = entity.resonanceId,
+        archetypeId = entity.archetypeId,
+        resonanceLevel = entity.resonanceLevel,
+        resonanceShards = entity.resonanceShards,
+        lastResonanceEpochMs = entity.lastResonanceEpochMs
+    )
+
     fun taskPayloadToPostgrestRow(userId: String, payload: CloudTaskPayload): JsonObject = buildJsonObject {
         put("id", payload.cloudUuid)
         put("user_id", userId)
@@ -641,6 +689,31 @@ object CloudDataMapper {
         put("source_description", payload.sourceDescription)
         put("balance_after", payload.balanceAfter)
         put("timestamp_epoch_ms", payload.timestampEpochMs)
+    }
+
+    fun shadowEvidenceClaimToPostgrestRow(
+        userId: String,
+        payload: CloudShadowEvidenceClaimPayload
+    ): JsonObject = buildJsonObject {
+        put("id", payload.cloudUuid)
+        put("user_id", userId)
+        put("claim_id", payload.claimId)
+        put("source_type", payload.sourceType)
+        put("source_record_id", payload.sourceRecordId)
+        put("claimed_at_epoch_ms", payload.claimedAtEpochMs)
+    }
+
+    fun shadowResonanceToPostgrestRow(
+        userId: String,
+        payload: CloudShadowResonancePayload
+    ): JsonObject = buildJsonObject {
+        put("id", payload.cloudUuid)
+        put("user_id", userId)
+        put("resonance_id", payload.resonanceId)
+        put("archetype_id", payload.archetypeId)
+        put("resonance_level", payload.resonanceLevel)
+        put("resonance_shards", payload.resonanceShards)
+        put("last_resonance_epoch_ms", payload.lastResonanceEpochMs)
     }
 
     fun joggingToPostgrestRow(userId: String, entity: JoggingSessionEntity, cloudUuid: String): JsonObject =

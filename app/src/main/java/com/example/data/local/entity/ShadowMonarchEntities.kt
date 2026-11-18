@@ -630,3 +630,37 @@ data class ShadowResonanceEntity(
     val resonanceShards: Int,
     val lastResonanceEpochMs: Long
 )
+
+fun ShadowEvidenceClaimEntity.toDomain() = com.example.domain.model.ShadowEvidenceClaim(
+    claimId = claimId,
+    accountOwnerId = accountOwnerId,
+    sourceType = sourceType,
+    sourceRecordId = sourceRecordId,
+    claimedAtEpochMs = claimedAtEpochMs
+)
+
+fun com.example.domain.model.ShadowEvidenceClaim.toEntity() = ShadowEvidenceClaimEntity(
+    claimId = claimId,
+    accountOwnerId = accountOwnerId,
+    sourceType = sourceType,
+    sourceRecordId = sourceRecordId,
+    claimedAtEpochMs = claimedAtEpochMs
+)
+
+fun ShadowResonanceEntity.toDomain() = com.example.domain.model.ShadowResonanceRecord(
+    resonanceId = resonanceId,
+    accountOwnerId = accountOwnerId,
+    archetypeId = archetypeId,
+    resonanceLevel = resonanceLevel,
+    resonanceShards = resonanceShards,
+    lastResonanceEpochMs = lastResonanceEpochMs
+)
+
+fun com.example.domain.model.ShadowResonanceRecord.toEntity() = ShadowResonanceEntity(
+    resonanceId = resonanceId,
+    accountOwnerId = accountOwnerId,
+    archetypeId = archetypeId,
+    resonanceLevel = resonanceLevel,
+    resonanceShards = resonanceShards,
+    lastResonanceEpochMs = lastResonanceEpochMs
+)

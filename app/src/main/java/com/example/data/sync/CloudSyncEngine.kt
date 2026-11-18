@@ -523,6 +523,18 @@ class CloudSyncEngine(
                 if (dto.accountOwnerId != userId) return null
                 CloudDataMapper.shadowResourceTransactionToPostgrestRow(userId, dto)
             }
+            SyncEntityType.SHADOW_EVIDENCE_CLAIM -> {
+                val dto = runCatching { CloudDataMapper.json.decodeFromString<com.example.data.remote.CloudShadowEvidenceClaimPayload>(payloadJson) }.getOrNull()
+                    ?: return null
+                if (dto.accountOwnerId != userId) return null
+                CloudDataMapper.shadowEvidenceClaimToPostgrestRow(userId, dto)
+            }
+            SyncEntityType.SHADOW_RESONANCE_RECORD -> {
+                val dto = runCatching { CloudDataMapper.json.decodeFromString<com.example.data.remote.CloudShadowResonancePayload>(payloadJson) }.getOrNull()
+                    ?: return null
+                if (dto.accountOwnerId != userId) return null
+                CloudDataMapper.shadowResonanceToPostgrestRow(userId, dto)
+            }
             else -> runCatching { CloudDataMapper.json.decodeFromString<JsonObject>(payloadJson) }.getOrNull()
         }
     }

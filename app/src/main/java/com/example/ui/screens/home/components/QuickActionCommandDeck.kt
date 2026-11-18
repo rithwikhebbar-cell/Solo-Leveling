@@ -3,6 +3,7 @@ package com.example.ui.screens.home.components
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -36,6 +37,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import com.example.domain.model.AcademicDashboardSummary
+import com.example.domain.model.LifeDashboardSummary
 import com.example.ui.components.SystemSectionTitle
 import com.example.ui.theme.SystemColors
 
@@ -52,8 +55,26 @@ fun QuickActionCommandDeck(
     onNavigateToLife: () -> Unit,
     onNavigateToIntelligence: () -> Unit,
     onNavigateToSystemControl: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    academicSummary: AcademicDashboardSummary = AcademicDashboardSummary(),
+    lifeSummary: LifeDashboardSummary = LifeDashboardSummary(),
+    intelligenceHeadline: String = "Adaptive planning, predictions & personalized coaching ready",
+    systemHealthStatusLabel: String = "Healthy"
 ) {
+    val academicSubtitle = if (academicSummary.pendingRevisionsCount > 0) {
+        "${academicSummary.todayStudyMinutes}m today • ${academicSummary.pendingRevisionsCount} due"
+    } else {
+        "${academicSummary.todayStudyMinutes}m today • Focus & Revisions"
+    }
+
+    val lifeSubtitle = if (lifeSummary.activeHabitsCount > 0) {
+        "${lifeSummary.completedHabitsToday}/${lifeSummary.activeHabitsCount} habits • ${lifeSummary.pendingTasksCount} tasks"
+    } else {
+        "Habits & Routine OS"
+    }
+
+    val systemControlSubtitle = "Status: $systemHealthStatusLabel"
+
     Column(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -114,7 +135,7 @@ fun QuickActionCommandDeck(
                 subtitle = "System Advisor",
                 icon = Icons.Rounded.AutoAwesome,
                 accentColor = SystemColors.ElectricCyan,
-                testTag = "command_ai_companion",
+                testTag = "home_open_ai_companion",
                 onClick = onNavigateToAiCompanion,
                 modifier = Modifier.weight(1f)
             )
@@ -124,27 +145,27 @@ fun QuickActionCommandDeck(
                 subtitle = "Audio Directives",
                 icon = Icons.Rounded.Mic,
                 accentColor = SystemColors.ArcaneViolet,
-                testTag = "command_voice",
+                testTag = "home_open_voice_console",
                 onClick = onNavigateToVoiceConsole,
                 modifier = Modifier.weight(1f)
             )
 
             CommandTile(
                 title = "ACADEMIC ENGINE",
-                subtitle = "Focus & Revisions",
+                subtitle = academicSubtitle,
                 icon = Icons.Rounded.School,
                 accentColor = SystemColors.SystemBlue,
-                testTag = "command_academic",
+                testTag = "open_academic_engine_button",
                 onClick = onNavigateToAcademic,
                 modifier = Modifier.weight(1f)
             )
 
             CommandTile(
                 title = "LIFE & DISCIPLINE",
-                subtitle = "Habits & Routine OS",
+                subtitle = lifeSubtitle,
                 icon = Icons.Rounded.Today,
                 accentColor = SystemColors.VerifiedEmerald,
-                testTag = "command_life",
+                testTag = "open_life_engine_button",
                 onClick = onNavigateToLife,
                 modifier = Modifier.weight(1f)
             )
@@ -154,17 +175,17 @@ fun QuickActionCommandDeck(
                 subtitle = "Adaptive Roadmap",
                 icon = Icons.Rounded.Timeline,
                 accentColor = SystemColors.ElectricCyan,
-                testTag = "command_intelligence",
+                testTag = "open_intelligence_center_button",
                 onClick = onNavigateToIntelligence,
                 modifier = Modifier.weight(1f)
             )
 
             CommandTile(
                 title = "SYSTEM CONTROL",
-                subtitle = "Health & Diagnostics",
+                subtitle = systemControlSubtitle,
                 icon = Icons.Rounded.Settings,
                 accentColor = SystemColors.MetallicSilver,
-                testTag = "command_system_control",
+                testTag = "home_system_control_card",
                 onClick = onNavigateToSystemControl,
                 modifier = Modifier.weight(1f)
             )

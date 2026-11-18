@@ -23,6 +23,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -46,6 +50,14 @@ fun DailyQuestTacticalSection(
     onOpenQuestBoard: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var pendingQuestIds by remember { mutableStateOf(setOf<Long>()) }
+
+    // Clean up completed quests from pending set
+    val activePendingIds = remember(dailyQuests, pendingQuestIds) {
+        val activeIds = dailyQuests.filter { !it.isCompleted }.map { it.id }.toSet()
+        pendingQuestIds.intersect(activeIds)
+    }
+
     Column(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -108,7 +120,13 @@ fun DailyQuestTacticalSection(
                     dailyQuests.forEach { quest ->
                         TacticalQuestCard(
                             quest = quest,
-                            onComplete = { onCompleteQuest(quest.id) }
+                            isProcessing = quest.id in activePendingIds,
+                            onComplete = {
+                                if (quest.id !in activePendingIds && !quest.isCompleted) {
+                                    pendingQuestIds = pendingQuestIds + quest.id
+                                    onCompleteQuest(quest.id)
+                                }
+                            }
                         )
                     }
                 }
@@ -120,6 +138,7 @@ fun DailyQuestTacticalSection(
 @Composable
 private fun TacticalQuestCard(
     quest: Quest,
+    isProcessing: Boolean,
     onComplete: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -189,15 +208,20 @@ private fun TacticalQuestCard(
             if (!quest.isCompleted) {
                 OutlinedButton(
                     onClick = onComplete,
+                    enabled = !isProcessing,
                     modifier = Modifier.testTag("complete_quest_${quest.id}"),
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                    border = BorderStroke(1.dp, SystemColors.ElectricCyan),
+                    border = BorderStroke(
+                        1.dp,
+                        if (isProcessing) SystemColors.SubtleBorder else SystemColors.ElectricCyan
+                    ),
                     colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = SystemColors.ElectricCyan
+                        contentColor = SystemColors.ElectricCyan,
+                        disabledContentColor = SystemColors.MutedSilver
                     )
                 ) {
                     Text(
-                        text = "COMPLETE",
+                        text = if (isProcessing) "CLEARING..." else "COMPLETE",
                         style = MaterialTheme.typography.labelSmall
                     )
                 }

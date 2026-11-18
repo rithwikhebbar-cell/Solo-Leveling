@@ -16,6 +16,8 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.DirectionsRun
 import androidx.compose.material.icons.rounded.FitnessCenter
+import androidx.compose.material.icons.rounded.Shield
+import androidx.compose.material.icons.rounded.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -163,8 +165,42 @@ fun PhysicalTelemetrySection(
                     }
                 }
 
-                // AI Training Advisory Note
-                if (physical.aiTrainingNote.isNotBlank()) {
+                // Recovery Safety Directive (Rest Recommended) or AI Advisory Note
+                val isRestRecommended = physical.recoveryStatus == RecoveryStatus.RECOVERY_REQUIRED
+                if (isRestRecommended) {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = SystemColors.DangerCrimson.copy(alpha = 0.12f),
+                        shape = RoundedCornerShape(8.dp),
+                        border = BorderStroke(1.dp, SystemColors.DangerCrimson.copy(alpha = 0.6f))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Warning,
+                                contentDescription = "Rest Recommended",
+                                tint = SystemColors.DangerCrimson,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column {
+                                Text(
+                                    text = "SAFETY DIRECTIVE // REST RECOMMENDED",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = SystemColors.DangerCrimson
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = "High training load active. Intense workouts deferred. Focus on hydration, mobility, and deep rest.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = SystemColors.PureIce
+                                )
+                            }
+                        }
+                    }
+                } else if (physical.aiTrainingNote.isNotBlank()) {
                     Text(
                         text = physical.aiTrainingNote,
                         style = MaterialTheme.typography.bodySmall,
@@ -172,32 +208,57 @@ fun PhysicalTelemetrySection(
                     )
                 }
 
-                // Action Deck (Start Workout, Log Session, AI Coach)
+                // Action Deck (Start Workout / Recovery Hub, Log Session, AI Coach)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Button(
-                        onClick = onOpenPhysicalHub,
-                        modifier = Modifier
-                            .weight(1.2f)
-                            .testTag("start_workout_button"),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = SystemColors.ElectricCyan,
-                            contentColor = SystemColors.ObsidianBlack
-                        ),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.FitnessCenter,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = "START WORKOUT",
-                            style = MaterialTheme.typography.labelMedium
-                        )
+                    if (isRestRecommended) {
+                        OutlinedButton(
+                            onClick = onOpenPhysicalHub,
+                            modifier = Modifier
+                                .weight(1.2f)
+                                .testTag("start_workout_button"),
+                            border = BorderStroke(1.dp, SystemColors.DangerCrimson),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = SystemColors.DangerCrimson
+                            ),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Shield,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "RECOVERY HUB",
+                                style = MaterialTheme.typography.labelMedium
+                            )
+                        }
+                    } else {
+                        Button(
+                            onClick = onOpenPhysicalHub,
+                            modifier = Modifier
+                                .weight(1.2f)
+                                .testTag("start_workout_button"),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = SystemColors.ElectricCyan,
+                                contentColor = SystemColors.ObsidianBlack
+                            ),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.FitnessCenter,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "START WORKOUT",
+                                style = MaterialTheme.typography.labelMedium
+                            )
+                        }
                     }
 
                     OutlinedButton(

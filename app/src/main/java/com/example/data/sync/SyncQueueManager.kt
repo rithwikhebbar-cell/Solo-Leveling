@@ -29,7 +29,9 @@ class SyncQueueManager(private val database: SoloLevelingDatabase) {
             SyncEntityType.SHADOW_FORMATION,
             SyncEntityType.MONARCH_SKILL_UNLOCK,
             SyncEntityType.SHADOW_QUEST_PROGRESS,
-            SyncEntityType.SHADOW_RESOURCE_TRANSACTION
+            SyncEntityType.SHADOW_RESOURCE_TRANSACTION,
+            SyncEntityType.SHADOW_EVIDENCE_CLAIM,
+            SyncEntityType.SHADOW_RESONANCE_RECORD
         )
 
         fun isShadowEntityType(entityType: SyncEntityType): Boolean = entityType in SHADOW_SYNC_TYPES
@@ -340,6 +342,34 @@ class SyncQueueManager(private val database: SoloLevelingDatabase) {
             enqueueChange(
                 userId = userId,
                 entityType = SyncEntityType.SHADOW_RESOURCE_TRANSACTION,
+                localKey = key,
+                operation = SyncOperationType.UPSERT,
+                payloadJson = CloudDataMapper.json.encodeToString(payload),
+                nowEpochMs = nowEpochMs
+            )
+        }
+
+        database.shadowEvidenceClaimDao().getClaimsForOwnerOnce(userId).forEach { claim ->
+            val key = scopedShadowLocalKey(userId, claim.claimId)
+            val cloudUuid = resolveOrAssignUuid(userId, SyncEntityType.SHADOW_EVIDENCE_CLAIM, key)
+            val payload = CloudDataMapper.shadowEvidenceClaimToPayload(claim, cloudUuid)
+            enqueueChange(
+                userId = userId,
+                entityType = SyncEntityType.SHADOW_EVIDENCE_CLAIM,
+                localKey = key,
+                operation = SyncOperationType.UPSERT,
+                payloadJson = CloudDataMapper.json.encodeToString(payload),
+                nowEpochMs = nowEpochMs
+            )
+        }
+
+        database.shadowResonanceDao().getAllResonanceRecordsForOwnerOnce(userId).forEach { resonance ->
+            val key = scopedShadowLocalKey(userId, resonance.resonanceId)
+            val cloudUuid = resolveOrAssignUuid(userId, SyncEntityType.SHADOW_RESONANCE_RECORD, key)
+            val payload = CloudDataMapper.shadowResonanceToPayload(resonance, cloudUuid)
+            enqueueChange(
+                userId = userId,
+                entityType = SyncEntityType.SHADOW_RESONANCE_RECORD,
                 localKey = key,
                 operation = SyncOperationType.UPSERT,
                 payloadJson = CloudDataMapper.json.encodeToString(payload),

@@ -97,6 +97,15 @@ class ShadowRealmViewModel(
     private val _settingsState = MutableStateFlow(ShadowRealmSettings(DEFAULT_SHADOW_ACCOUNT_OWNER_ID))
     val settingsState: StateFlow<ShadowRealmSettings> = _settingsState.asStateFlow()
 
+    private val _collectionOverview = MutableStateFlow<com.example.domain.model.ShadowCollectionOverview?>(null)
+    val collectionOverview: StateFlow<com.example.domain.model.ShadowCollectionOverview?> = _collectionOverview.asStateFlow()
+
+    private val _sortOption = MutableStateFlow(com.example.domain.model.ShadowSortOption.RECENTLY_RECRUITED)
+    val sortOption: StateFlow<com.example.domain.model.ShadowSortOption> = _sortOption.asStateFlow()
+
+    private val _selectedEvidenceItem = MutableStateFlow<com.example.domain.model.ShadowExtractionEvidenceItem?>(null)
+    val selectedEvidenceItem: StateFlow<com.example.domain.model.ShadowExtractionEvidenceItem?> = _selectedEvidenceItem.asStateFlow()
+
     private var ownerScopeJob: Job? = null
 
     init {
@@ -127,6 +136,8 @@ class ShadowRealmViewModel(
                 runCatching {
                     monarchProgressionEngine.getOrCreateProfile(owner)
                     refreshResourceBalances(owner)
+                    loadCollectionOverview(owner)
+                    loadEligibleEvidence(owner)
                 }.onFailure { e ->
                     _uiState.value = _uiState.value.copy(error = e.message)
                 }
@@ -287,6 +298,8 @@ class ShadowRealmViewModel(
                     lastResult = event
                 )
                 refreshResourceBalances(owner)
+                loadCollectionOverview(owner)
+                loadEligibleEvidence(owner)
                 if (event.outcome == ShadowExtractionOutcome.SUCCESS) {
                     repository.awardResource(
                         resourceType = ShadowResourceType.SHADOW_ESSENCE,
@@ -453,14 +466,39 @@ class ShadowRealmViewModel(
 
     val eligibleEvidence = kotlinx.coroutines.flow.MutableStateFlow<List<com.example.domain.model.ShadowExtractionEvidenceItem>>(emptyList())
 
-    fun loadEligibleEvidence() {
-        val owner = _activeAccountOwnerId.value
+    fun loadEligibleEvidence(accountOwnerId: String = _activeAccountOwnerId.value) {
         val db = repository.database ?: return
         viewModelScope.launch {
             val provider = com.example.domain.engine.ShadowExtractionEvidenceProvider(db)
-            val items = provider.getEligibleEvidenceItems(owner)
+            val items = provider.getEligibleEvidenceItems(accountOwnerId)
             eligibleEvidence.value = items
         }
+    }
+
+    fun loadCollectionOverview(accountOwnerId: String = _activeAccountOwnerId.value) {
+        viewModelScope.launch {
+            _collectionOverview.value = repository.getCollectionOverview(accountOwnerId)
+        }
+    }
+
+    fun setSortOption(option: com.example.domain.model.ShadowSortOption) {
+        _sortOption.value = option
+    }
+
+    fun selectEvidenceItem(item: com.example.domain.model.ShadowExtractionEvidenceItem) {
+        _selectedEvidenceItem.value = item
+        if (item.eligibility == com.example.domain.model.ShadowEvidenceEligibility.ELIGIBLE) {
+            evaluateExtraction(
+                sourceType = item.sourceType,
+                sourceEventId = item.sourceRecordId,
+                evidenceSummary = item.title
+            )
+        }
+    }
+
+    fun clearSelectedEvidence() {
+        _selectedEvidenceItem.value = null
+        cancelExtraction()
     }
 
     fun clearError() {

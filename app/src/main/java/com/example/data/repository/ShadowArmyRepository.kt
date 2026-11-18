@@ -398,4 +398,94 @@ class ShadowArmyRepository(
             )
         }
     }
+
+    // -------------------------------------------------------------------------
+    // PHASE 6.2 — SHADOW RECRUITMENT & COLLECTION MANAGEMENT
+    // -------------------------------------------------------------------------
+
+    suspend fun getResonanceRecordsOnce(
+        accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID
+    ): List<com.example.domain.model.ShadowResonanceRecord> {
+        val db = database ?: return emptyList()
+        return db.shadowResonanceDao().getResonanceRecordsForOwnerOnce(accountOwnerId).map { it.toDomain() }
+    }
+
+    suspend fun getEvidenceClaimsOnce(
+        accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID
+    ): List<com.example.domain.model.ShadowEvidenceClaim> {
+        val db = database ?: return emptyList()
+        return db.shadowEvidenceClaimDao().getClaimsForOwnerOnce(accountOwnerId).map { it.toDomain() }
+    }
+
+    suspend fun getCollectionOverview(
+        accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID
+    ): com.example.domain.model.ShadowCollectionOverview {
+        val owner = accountOwnerId.trim()
+        val allShadows = shadowDao.getAllShadowsForOwnerOnce(owner).map { it.toDomain() }
+        val activeShadows = allShadows.filter { !it.isRetired }
+
+        val catalog = com.example.domain.model.ShadowArchetypeCatalog.archetypes
+        val totalCatalogCount = catalog.size
+
+        // Match owned shadows to archetypes in catalog by name
+        val collectedArchetypeIds = activeShadows.mapNotNull { shadow ->
+            com.example.domain.model.ShadowArchetypeCatalog.findByName(shadow.name)?.archetypeId
+        }.toSet()
+
+        val completionPct = if (totalCatalogCount > 0) {
+            (collectedArchetypeIds.size.toFloat() / totalCatalogCount.toFloat()) * 100f
+        } else 0f
+
+        val classDist = ShadowClass.entries.associateWith { cls ->
+            activeShadows.count { it.shadowClass == cls }
+        }
+        val rarityDist = ShadowRarity.entries.associateWith { r ->
+            activeShadows.count { it.rarity == r }
+        }
+        val rankDist = ShadowRank.entries.associateWith { rk ->
+            activeShadows.count { it.currentRank == rk }
+        }
+
+        val resonance = getResonanceRecordsOnce(owner)
+        val duplicateCount = extractionDao.getAllExtractionsForOwnerOnce(owner)
+            .count { it.outcomeName == ShadowExtractionOutcome.DUPLICATE_RESOLVED.name }
+
+        return com.example.domain.model.ShadowCollectionOverview(
+            totalOwned = activeShadows.size,
+            uniqueArchetypesCollected = collectedArchetypeIds.size,
+            totalArchetypesInCatalog = totalCatalogCount,
+            completionPercentage = completionPct,
+            classDistribution = classDist,
+            rarityDistribution = rarityDist,
+            rankDistribution = rankDist,
+            recentRecruits = activeShadows.sortedByDescending { it.extractedAtEpochMs }.take(5),
+            duplicateResonanceCount = duplicateCount,
+            resonanceRecords = resonance
+        )
+    }
+
+    fun filterAndSortShadows(
+        shadows: List<Shadow>,
+        classFilter: ShadowClass? = null,
+        rarityFilter: ShadowRarity? = null,
+        rankFilter: ShadowRank? = null,
+        stageFilter: ShadowEvolutionStage? = null,
+        deploymentFilter: com.example.domain.model.ShadowDeploymentStatus? = null,
+        sortOption: com.example.domain.model.ShadowSortOption = com.example.domain.model.ShadowSortOption.RECENTLY_RECRUITED
+    ): List<Shadow> {
+        var result = shadows
+        if (classFilter != null) result = result.filter { it.shadowClass == classFilter }
+        if (rarityFilter != null) result = result.filter { it.rarity == rarityFilter }
+        if (rankFilter != null) result = result.filter { it.currentRank == rankFilter }
+        if (stageFilter != null) result = result.filter { it.evolutionStage == stageFilter }
+        if (deploymentFilter != null) result = result.filter { it.deploymentStatus == deploymentFilter }
+
+        return when (sortOption) {
+            com.example.domain.model.ShadowSortOption.RECENTLY_RECRUITED -> result.sortedByDescending { it.extractedAtEpochMs }
+            com.example.domain.model.ShadowSortOption.RARITY -> result.sortedByDescending { it.rarity.order }
+            com.example.domain.model.ShadowSortOption.LEVEL -> result.sortedByDescending { it.level }
+            com.example.domain.model.ShadowSortOption.RANK -> result.sortedByDescending { it.currentRank.order }
+            com.example.domain.model.ShadowSortOption.NAME -> result.sortedBy { it.name }
+        }
+    }
 }

@@ -21,9 +21,15 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -31,13 +37,18 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -48,8 +59,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.domain.model.AdaptiveDifficulty
+import com.example.domain.model.MasteryDevelopmentStage
+import com.example.domain.model.PersonalizedSocialRecommendation
+import com.example.domain.model.PersonalizedWeeklyTrainingPlan
+import com.example.domain.model.RecommendationCategory
+import com.example.domain.model.ScheduledTrainingActivity
+import com.example.domain.model.SocialMasteryPathway
 import com.example.domain.model.SocialMasteryStage
 import com.example.domain.model.SocialModuleProgress
+import com.example.domain.model.SocialWeeklyDevelopmentReport
 import com.example.ui.viewmodel.SocialMasteryViewModel
 
 // Visual Design Tokens
@@ -75,6 +94,15 @@ fun SocialMasteryDashboardScreen(
     onOpenAssessment: () -> Unit = {}
 ) {
     val state by viewModel.uiState.collectAsState()
+    var showWeeklyReportDialog by remember { mutableStateOf(false) }
+
+    if (showWeeklyReportDialog) {
+        SocialWeeklyReportDialog(
+            report = state.weeklyDevelopmentReport,
+            onDismiss = { showWeeklyReportDialog = false },
+            onAskAi = { report -> viewModel.requestAiWeeklyReview(report) }
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -208,6 +236,44 @@ fun SocialMasteryDashboardScreen(
                         ) {
                             Text("ANALYTICS RADAR", color = ElectricCyan, fontWeight = FontWeight.Bold, fontSize = 11.sp)
                         }
+                    }
+                }
+
+                // Milestone 12 — Phase 5: Weekly Training Plan Section
+                item {
+                    WeeklyTrainingPlanDashboardCard(
+                        plan = state.currentTrainingPlan,
+                        onGeneratePlan = { viewModel.generateWeeklyPlan() },
+                        onCompleteActivity = { actId -> viewModel.completePlannedActivity(actId) },
+                        onSkipActivity = { actId -> viewModel.skipPlannedActivity(actId) },
+                        onTogglePause = { planId, isPaused -> viewModel.togglePauseTrainingPlan(planId, isPaused) }
+                    )
+                }
+
+                // Milestone 12 — Phase 5: Adaptive Recommendations Section
+                item {
+                    AdaptiveRecommendationsDashboardSection(
+                        recommendations = state.activeRecommendations,
+                        onRefresh = { viewModel.refreshRecommendations() },
+                        onAccept = { recId -> viewModel.acceptRecommendation(recId) },
+                        onDismiss = { recId -> viewModel.dismissRecommendation(recId) },
+                        onAskAi = { rec -> viewModel.requestAiRecommendationExplanation(rec) }
+                    )
+                }
+
+                // Milestone 12 — Phase 5: Weekly Development Report Action Button
+                item {
+                    Button(
+                        onClick = {
+                            viewModel.loadWeeklyReport()
+                            showWeeklyReportDialog = true
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = DeepNavy),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, ArcaneViolet),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Text("VIEW WEEKLY DEVELOPMENT REPORT", color = ArcaneViolet, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                     }
                 }
 
@@ -436,4 +502,370 @@ fun SocialModuleCard(moduleProgress: SocialModuleProgress) {
             }
         }
     }
+}
+
+// =========================================================================
+// PHASE 5: WEEKLY TRAINING PLAN DASHBOARD CARD
+// =========================================================================
+
+@Composable
+fun WeeklyTrainingPlanDashboardCard(
+    plan: PersonalizedWeeklyTrainingPlan?,
+    onGeneratePlan: () -> Unit,
+    onCompleteActivity: (String) -> Unit,
+    onSkipActivity: (String) -> Unit,
+    onTogglePause: (String, Boolean) -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, BorderCyan, RoundedCornerShape(14.dp)),
+        colors = CardDefaults.cardColors(containerColor = DeepNavy),
+        shape = RoundedCornerShape(14.dp)
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.PlayArrow, contentDescription = null, tint = ElectricCyan, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "WEEKLY TRAINING PLAN",
+                        style = MaterialTheme.typography.titleSmall.copy(
+                            color = TextWhite,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    )
+                }
+
+                if (plan != null) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(if (plan.isPaused) Color(0xFF64748B) else ElectricCyan.copy(alpha = 0.2f))
+                            .padding(horizontal = 8.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = if (plan.isPaused) "PAUSED" else "ACTIVE (${plan.targetDaysPerWeek}D / ${plan.targetMinutesPerDay}M)",
+                            color = if (plan.isPaused) TextWhite else ElectricCyan,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            if (plan == null) {
+                Text(
+                    text = "No active weekly training schedule. Generate an adaptive plan tailored to your skill progression.",
+                    color = TextMuted,
+                    fontSize = 12.sp
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+                Button(
+                    onClick = onGeneratePlan,
+                    colors = ButtonDefaults.buttonColors(containerColor = ElectricCyan, contentColor = ObsidianBlack),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("GENERATE ADAPTIVE PLAN (5 Days, 15m/day)", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+            } else {
+                Text(
+                    text = plan.weeklyDevelopmentObjective,
+                    color = TextWhite,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Find the next incomplete activity
+                val nextActivity = plan.scheduledActivities.firstOrNull { !it.isCompleted && !it.isSkipped }
+                if (nextActivity != null) {
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = SurfaceNavy),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "DAY ${nextActivity.dayOfWeek} • ${nextActivity.activityType.label.uppercase()}",
+                                    color = ArcaneViolet,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                                Text(
+                                    text = "${nextActivity.durationMinutes} MIN • ${nextActivity.difficulty.label}",
+                                    color = ElectricCyan,
+                                    fontSize = 10.sp,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(nextActivity.title, color = TextWhite, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Button(
+                                    onClick = { onCompleteActivity(nextActivity.activityId) },
+                                    colors = ButtonDefaults.buttonColors(containerColor = ElectricCyan, contentColor = ObsidianBlack),
+                                    shape = RoundedCornerShape(6.dp),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text("MARK COMPLETE", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                }
+                                OutlinedButton(
+                                    onClick = { onSkipActivity(nextActivity.activityId) },
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = TextMuted),
+                                    shape = RoundedCornerShape(6.dp),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text("SKIP (NO PENALTY)", fontSize = 10.sp)
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    Text(
+                        text = "All scheduled activities completed for this cycle. Outstanding consistency!",
+                        color = GoldHighlight,
+                        fontSize = 12.sp
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    TextButton(onClick = { onTogglePause(plan.planId, !plan.isPaused) }) {
+                        Text(if (plan.isPaused) "RESUME PLAN" else "PAUSE PLAN", color = TextMuted, fontSize = 11.sp)
+                    }
+                    TextButton(onClick = onGeneratePlan) {
+                        Text("REGENERATE SCHEDULE", color = ElectricCyan, fontSize = 11.sp)
+                    }
+                }
+            }
+        }
+    }
+}
+
+// =========================================================================
+// PHASE 5: ADAPTIVE RECOMMENDATIONS DASHBOARD SECTION
+// =========================================================================
+
+@Composable
+fun AdaptiveRecommendationsDashboardSection(
+    recommendations: List<PersonalizedSocialRecommendation>,
+    onRefresh: () -> Unit,
+    onAccept: (String) -> Unit,
+    onDismiss: (String) -> Unit,
+    onAskAi: (PersonalizedSocialRecommendation) -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, BorderCyan, RoundedCornerShape(14.dp)),
+        colors = CardDefaults.cardColors(containerColor = DeepNavy),
+        shape = RoundedCornerShape(14.dp)
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Info, contentDescription = null, tint = GoldHighlight, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "ADAPTIVE RECOMMENDATIONS (${recommendations.size})",
+                        style = MaterialTheme.typography.titleSmall.copy(
+                            color = TextWhite,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    )
+                }
+
+                IconButton(onClick = onRefresh, modifier = Modifier.size(28.dp)) {
+                    Icon(Icons.Default.Refresh, contentDescription = "Refresh", tint = ElectricCyan, modifier = Modifier.size(16.dp))
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            if (recommendations.isEmpty()) {
+                Text(
+                    text = "No active recommendations. Click refresh to evaluate historical sessions and generate targeted micro-drills.",
+                    color = TextMuted,
+                    fontSize = 12.sp
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = onRefresh,
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = ElectricCyan),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("EVALUATE & GENERATE RECOMMENDATIONS", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+            } else {
+                recommendations.take(3).forEach { rec ->
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = SurfaceNavy),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = rec.category.label.uppercase(),
+                                    color = when (rec.category) {
+                                        RecommendationCategory.IMPROVE_WEAKNESS -> GoldHighlight
+                                        RecommendationCategory.REAL_WORLD_APPLICATION -> ElectricCyan
+                                        RecommendationCategory.REVISIT_INACTIVE_SKILL -> ArcaneViolet
+                                        else -> TextWhite
+                                    },
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                                Text(
+                                    text = "${rec.estimatedDurationMinutes} MIN • ${rec.difficulty.label}",
+                                    color = TextMuted,
+                                    fontSize = 10.sp,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(rec.title, color = TextWhite, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(rec.explanation, color = TextMuted, fontSize = 11.sp)
+
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Button(
+                                    onClick = { onAccept(rec.recommendationId) },
+                                    colors = ButtonDefaults.buttonColors(containerColor = ElectricCyan, contentColor = ObsidianBlack),
+                                    shape = RoundedCornerShape(6.dp),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text("ACCEPT", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                }
+                                OutlinedButton(
+                                    onClick = { onAskAi(rec) },
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = ArcaneViolet),
+                                    shape = RoundedCornerShape(6.dp),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text("ASK AI WHY", fontSize = 10.sp)
+                                }
+                                TextButton(
+                                    onClick = { onDismiss(rec.recommendationId) },
+                                    modifier = Modifier.weight(0.7f)
+                                ) {
+                                    Text("DISMISS", color = TextMuted, fontSize = 10.sp)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// =========================================================================
+// PHASE 5: WEEKLY DEVELOPMENT REPORT DIALOG
+// =========================================================================
+
+@Composable
+fun SocialWeeklyReportDialog(
+    report: SocialWeeklyDevelopmentReport?,
+    onDismiss: () -> Unit,
+    onAskAi: (SocialWeeklyDevelopmentReport) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = "WEEKLY DEVELOPMENT REPORT",
+                color = ElectricCyan,
+                fontWeight = FontWeight.Bold,
+                fontSize = 15.sp,
+                fontFamily = FontFamily.Monospace
+            )
+        },
+        text = {
+            if (report == null) {
+                Text("Loading weekly metrics...", color = TextMuted, fontSize = 12.sp)
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("• Practice Time: ${report.totalMinutesPracticed} minutes logged", color = TextWhite, fontSize = 12.sp)
+                    Text("• Exercises Completed: ${report.exercisesCompletedCount}", color = TextWhite, fontSize = 12.sp)
+                    Text("• Missions Cleared: ${report.missionsCompletedCount}", color = TextWhite, fontSize = 12.sp)
+
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text("Observed Improvements:", color = GoldHighlight, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    report.observedImprovements.forEach { imp ->
+                        Text("  ✓ $imp", color = TextWhite, fontSize = 11.sp)
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text("Areas Requiring Attention:", color = ArcaneViolet, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    report.areasRequiringAttention.forEach { area ->
+                        Text("  ⚠ $area", color = TextMuted, fontSize = 11.sp)
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text("Next Week Priorities:", color = ElectricCyan, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    report.nextWeekPriorities.forEach { prio ->
+                        Text("  → $prio", color = TextWhite, fontSize = 11.sp)
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    report?.let { onAskAi(it) }
+                    onDismiss()
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = ElectricCyan, contentColor = ObsidianBlack)
+            ) {
+                Text("DISCUSS WITH AI COACH", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("CLOSE", color = TextMuted, fontSize = 11.sp)
+            }
+        },
+        containerColor = DeepNavy
+    )
 }

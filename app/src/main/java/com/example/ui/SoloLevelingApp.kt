@@ -637,10 +637,10 @@ private fun ColumnNavigationBar(
     currentDestination: androidx.navigation.NavDestination?
 ) {
     androidx.compose.foundation.layout.Column {
-        HorizontalDivider(thickness = 1.dp, color = SystemColors.PanelBorderCyan)
+        HorizontalDivider(thickness = 1.dp, color = SystemColors.SubtleBorder)
         NavigationBar(
             containerColor = SystemColors.DeepNavy,
-            tonalElevation = 0.dp
+            tonalElevation = 6.dp
         ) {
             TopLevelItems.forEach { item ->
                 val selected = isRouteSelected(currentDestination, item.route)
@@ -650,20 +650,22 @@ private fun ColumnNavigationBar(
                     icon = {
                         Icon(
                             imageVector = if (selected) item.selectedIcon else item.unselectedIcon,
-                            contentDescription = item.label
+                            contentDescription = item.label,
+                            modifier = Modifier.size(22.dp)
                         )
                     },
                     label = {
                         Text(
-                            text = item.label,
-                            style = MaterialTheme.typography.labelSmall,
+                            text = item.label.uppercase(),
+                            style = if (selected) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelSmall,
+                            fontWeight = if (selected) androidx.compose.ui.text.font.FontWeight.SemiBold else androidx.compose.ui.text.font.FontWeight.Normal,
                             maxLines = 1
                         )
                     },
                     colors = NavigationBarItemDefaults.colors(
                         selectedIconColor = SystemColors.ElectricCyan,
                         selectedTextColor = SystemColors.ElectricCyan,
-                        indicatorColor = SystemColors.ElectricCyan.copy(alpha = 0.16f),
+                        indicatorColor = SystemColors.ElectricCyan.copy(alpha = 0.18f),
                         unselectedIconColor = SystemColors.MutedSilver,
                         unselectedTextColor = SystemColors.MutedSilver
                     ),
@@ -698,6 +700,7 @@ private fun RealityOsNavHost(
     shadowRealmViewModel: ShadowRealmViewModel
 ) {
     val context = LocalContext.current
+    val shadowRealmUiState by shadowRealmViewModel.uiState.collectAsStateWithLifecycle()
     val academicSummary = (academicState as? AcademicUiState.Ready)?.summary ?: AcademicDashboardSummary()
     val lifeSummary = (lifeState as? LifeManagementUiState.Ready)?.dashboard ?: LifeDashboardSummary()
     val rpgReady = rpgState as? RpgUiState.Ready
@@ -734,7 +737,15 @@ private fun RealityOsNavHost(
                 systemHealthStatusLabel = systemHealthStatusLabel,
                 onNavigateToSystemControl = { navController.navigate(SystemOverviewRoute) },
                 onNavigateToAiCompanion = { navController.navigate(AiCompanionRoute) },
-                onNavigateToVoiceConsole = { navController.navigate(VoiceCommandRoute) }
+                onNavigateToVoiceConsole = { navController.navigate(VoiceCommandRoute) },
+                announcements = expReady?.announcements.orEmpty(),
+                onNavigateToShadowRealm = { navController.navigate(ShadowRealmDashboardRoute) },
+                monarchProfile = shadowRealmUiState.monarchProfile,
+                shadowEssenceBalance = shadowRealmUiState.shadowEssenceBalance,
+                onNavigateRoute = { routeKey ->
+                    handleDeepLinkRoute(routeKey, navController, systemExperienceViewModel)
+                },
+                reducedMotionEnabled = expReady?.preferences?.reducedMotionEnabled == true
             )
         }
         composable<StatusRoute> {

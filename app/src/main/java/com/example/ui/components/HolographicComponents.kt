@@ -17,6 +17,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -30,6 +33,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -44,10 +48,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.example.domain.model.AttributeBreakdown
@@ -65,13 +71,14 @@ fun HolographicPanel(
     modifier: Modifier = Modifier,
     accentColor: Color = SystemColors.ElectricCyan,
     secondaryColor: Color = SystemColors.ArcaneViolet,
-    cornerRadius: Dp = 12.dp,
+    cornerRadius: Dp = 14.dp,
     contentPadding: Dp = 16.dp,
+    isHero: Boolean = false,
     content: @Composable BoxScope.() -> Unit
 ) {
     val glowEnabled = LocalHudGlowEnabled.current
     val shape = RoundedCornerShape(cornerRadius)
-    val borderColor = if (glowEnabled) accentColor.copy(alpha = 0.45f) else accentColor.copy(alpha = 0.22f)
+    val borderColor = if (isHero && glowEnabled) accentColor.copy(alpha = 0.5f) else accentColor.copy(alpha = 0.22f)
 
     Box(
         modifier = modifier
@@ -86,18 +93,18 @@ fun HolographicPanel(
                 )
             )
             .border(
-                width = 1.dp,
+                width = if (isHero) 1.25.dp else 1.dp,
                 brush = Brush.linearGradient(
-                    colors = listOf(
-                        borderColor,
-                        secondaryColor.copy(alpha = if (glowEnabled) 0.35f else 0.16f),
-                        borderColor
-                    )
+                    colors = if (isHero) {
+                        listOf(borderColor, secondaryColor.copy(alpha = 0.35f), borderColor)
+                    } else {
+                        listOf(borderColor, borderColor.copy(alpha = 0.15f), borderColor)
+                    }
                 ),
                 shape = shape
             )
             .drawBehind {
-                if (glowEnabled) {
+                if (glowEnabled && isHero) {
                     val bracketLen = 14.dp.toPx()
                     val stroke = 2.dp.toPx()
                     val pad = 1.dp.toPx()
@@ -531,6 +538,254 @@ fun SystemErrorState(
             ) {
                 Text("RETRY SYNC", style = MaterialTheme.typography.labelLarge)
             }
+        }
+    }
+}
+
+@Composable
+fun PrimaryActionButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    icon: ImageVector? = null,
+    enabled: Boolean = true,
+    containerColor: Color = SystemColors.ElectricCyan,
+    contentColor: Color = SystemColors.ObsidianBlack
+) {
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier.heightIn(min = 48.dp),
+        shape = RoundedCornerShape(10.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = containerColor,
+            contentColor = contentColor,
+            disabledContainerColor = containerColor.copy(alpha = 0.3f),
+            disabledContentColor = contentColor.copy(alpha = 0.5f)
+        ),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)
+    ) {
+        if (icon != null) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+        }
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelLarge,
+            maxLines = 1
+        )
+    }
+}
+
+@Composable
+fun SecondaryActionButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    icon: ImageVector? = null,
+    enabled: Boolean = true,
+    borderColor: Color = SystemColors.ElectricCyan,
+    contentColor: Color = SystemColors.ElectricCyan
+) {
+    OutlinedButton(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier.heightIn(min = 48.dp),
+        shape = RoundedCornerShape(10.dp),
+        border = BorderStroke(1.dp, if (enabled) borderColor.copy(alpha = 0.65f) else borderColor.copy(alpha = 0.2f)),
+        colors = ButtonDefaults.outlinedButtonColors(
+            contentColor = contentColor,
+            disabledContentColor = contentColor.copy(alpha = 0.4f)
+        ),
+        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp)
+    ) {
+        if (icon != null) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = if (enabled) contentColor else contentColor.copy(alpha = 0.4f),
+                modifier = Modifier.size(16.dp)
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+        }
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelMedium,
+            color = if (enabled) contentColor else contentColor.copy(alpha = 0.4f),
+            maxLines = 1
+        )
+    }
+}
+
+@Composable
+fun AttributeMiniCard(
+    attribute: AttributeBreakdown,
+    onClick: (() -> Unit)? = null,
+    modifier: Modifier = Modifier
+) {
+    val accent = SystemColors.attributeAccent(attribute.type)
+    Surface(
+        modifier = modifier
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
+        color = SystemColors.SecondarySurface,
+        shape = RoundedCornerShape(10.dp),
+        border = BorderStroke(1.dp, accent.copy(alpha = 0.35f))
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(7.dp)
+                            .clip(RoundedCornerShape(50))
+                            .background(accent)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = attribute.type.code,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = accent
+                    )
+                }
+                Text(
+                    text = "${attribute.totalValue}",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = SystemColors.PureIce
+                )
+            }
+            Text(
+                text = attribute.type.displayName.uppercase(),
+                style = MaterialTheme.typography.labelSmall,
+                color = SystemColors.MutedSilver,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            GlowingProgressBar(
+                progress = attribute.progressFraction,
+                height = 4.dp,
+                startColor = accent,
+                endColor = SystemColors.ElectricCyan
+            )
+        }
+    }
+}
+
+@Composable
+fun AttributeOverviewGrid(
+    attributes: List<AttributeBreakdown>,
+    onInspectStatus: (() -> Unit)? = null,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        val chunked = attributes.chunked(2)
+        chunked.forEach { rowAttrs ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                rowAttrs.forEach { attr ->
+                    AttributeMiniCard(
+                        attribute = attr,
+                        onClick = onInspectStatus,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                if (rowAttrs.size == 1) {
+                    Spacer(modifier = Modifier.weight(1f))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun StatusStatPill(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier,
+    accentColor: Color = SystemColors.ElectricCyan
+) {
+    Surface(
+        modifier = modifier,
+        color = SystemColors.SecondarySurface,
+        shape = RoundedCornerShape(10.dp),
+        border = BorderStroke(1.dp, SystemColors.SubtleBorder)
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = SystemColors.MutedSilver,
+                maxLines = 1
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = value,
+                style = MaterialTheme.typography.titleLarge,
+                color = accentColor,
+                maxLines = 1
+            )
+        }
+    }
+}
+
+@Composable
+fun SystemPageHeader(
+    title: String,
+    subtitle: String? = null,
+    modifier: Modifier = Modifier,
+    tag: String? = null,
+    trailing: (@Composable () -> Unit)? = null
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            if (tag != null) {
+                Text(
+                    text = tag.uppercase(),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = SystemColors.ElectricCyan
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+            }
+            Text(
+                text = title.uppercase(),
+                style = MaterialTheme.typography.headlineLarge,
+                color = SystemColors.PureIce
+            )
+            if (!subtitle.isNullOrBlank()) {
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = SystemColors.MutedSilver
+                )
+            }
+        }
+        if (trailing != null) {
+            Spacer(modifier = Modifier.width(12.dp))
+            trailing()
         }
     }
 }

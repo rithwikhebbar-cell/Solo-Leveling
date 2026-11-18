@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Lock
@@ -26,13 +25,17 @@ import androidx.compose.material.icons.rounded.MilitaryTech
 import androidx.compose.material.icons.rounded.VerifiedUser
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.domain.model.AcademicDashboardSummary
 import com.example.domain.model.AchievementWithStatus
 import com.example.domain.model.AttributeBreakdown
@@ -44,6 +47,7 @@ import com.example.ui.components.AttributeRadarChart
 import com.example.ui.components.GlowingProgressBar
 import com.example.ui.components.HolographicPanel
 import com.example.ui.components.RankBadge
+import com.example.ui.components.StatusStatPill
 import com.example.ui.components.SystemSectionTitle
 import com.example.ui.theme.SystemColors
 import com.example.ui.viewmodel.RealityOsUiState
@@ -76,17 +80,19 @@ fun StatusScreen(
                 .fillMaxSize()
                 .widthIn(max = 760.dp)
                 .testTag("status_screen_list"),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
-            // Header & Level Summary
+            // 1. STATUS WINDOW HERO
             item {
                 HolographicPanel(
                     modifier = Modifier.fillMaxWidth(),
                     accentColor = SystemColors.rankAccent(player.rank),
-                    secondaryColor = SystemColors.ElectricCyan
+                    secondaryColor = SystemColors.ElectricCyan,
+                    isHero = true,
+                    contentPadding = 18.dp
                 ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -95,7 +101,7 @@ fun StatusScreen(
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     text = "STATUS WINDOW",
-                                    style = MaterialTheme.typography.labelLarge,
+                                    style = MaterialTheme.typography.labelMedium,
                                     color = SystemColors.ElectricCyan
                                 )
                                 Text(
@@ -106,21 +112,45 @@ fun StatusScreen(
                                 Text(
                                     text = "${player.rank.displayName} • $equippedTitle",
                                     style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Medium,
                                     color = SystemColors.rankAccent(player.rank)
                                 )
                             }
                             RankBadge(rank = player.rank)
                         }
 
+                        // Stat Pills
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            StatPill("LEVEL", "${player.level}", modifier = Modifier.weight(1f))
-                            StatPill("TOTAL XP", "${player.totalXp}", modifier = Modifier.weight(1f))
-                            StatPill("TOTAL ATTR", "${player.attributes.totalScore}", modifier = Modifier.weight(1f))
+                            StatusStatPill(
+                                label = "LEVEL",
+                                value = "${player.level}",
+                                modifier = Modifier.weight(1f),
+                                accentColor = SystemColors.ElectricCyan
+                            )
+                            StatusStatPill(
+                                label = "TOTAL XP",
+                                value = "${player.totalXp}",
+                                modifier = Modifier.weight(1f),
+                                accentColor = SystemColors.MonarchGold
+                            )
+                            StatusStatPill(
+                                label = "TOTAL ATTR",
+                                value = "${player.attributes.totalScore}",
+                                modifier = Modifier.weight(1f),
+                                accentColor = SystemColors.ArcaneViolet
+                            )
+                            StatusStatPill(
+                                label = "RECOVERY",
+                                value = "${player.recoveryScore}%",
+                                modifier = Modifier.weight(1f),
+                                accentColor = SystemColors.VerifiedEmerald
+                            )
                         }
 
+                        // Level XP Progress
                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -133,7 +163,7 @@ fun StatusScreen(
                                 )
                                 Text(
                                     text = "${player.currentLevelXp} / ${player.xpToNextLevel} XP",
-                                    style = MaterialTheme.typography.labelSmall,
+                                    style = MaterialTheme.typography.labelMedium,
                                     color = SystemColors.ElectricCyan
                                 )
                             }
@@ -143,7 +173,7 @@ fun StatusScreen(
                 }
             }
 
-            // 7-Attribute Radar Chart
+            // 2. SEVEN-ATTRIBUTE PROFILE HEADER & RADAR
             item {
                 SystemSectionTitle(
                     title = "Seven-Attribute Profile",
@@ -155,36 +185,69 @@ fun StatusScreen(
                 HolographicPanel(
                     modifier = Modifier.fillMaxWidth(),
                     accentColor = SystemColors.ElectricCyan,
-                    secondaryColor = SystemColors.ArcaneViolet
+                    secondaryColor = SystemColors.ArcaneViolet,
+                    contentPadding = 16.dp
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         AttributeRadarChart(attributes = attributes)
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(10.dp))
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceEvenly
                         ) {
-                            Text(
-                                text = "VERIFIED BONUS: +${player.attributes.totalVerifiedPoints}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = SystemColors.VerifiedEmerald
-                            )
-                            Text(
-                                text = "SELF-REPORTED: +${player.attributes.totalSelfReportedPoints}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = SystemColors.WarningAmber
-                            )
+                            Surface(
+                                color = SystemColors.VerifiedEmerald.copy(alpha = 0.12f),
+                                shape = RoundedCornerShape(8.dp),
+                                border = BorderStroke(1.dp, SystemColors.VerifiedEmerald.copy(alpha = 0.4f))
+                            ) {
+                                Text(
+                                    text = "VERIFIED BONUS: +${player.attributes.totalVerifiedPoints}",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = SystemColors.VerifiedEmerald,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                )
+                            }
+                            Surface(
+                                color = SystemColors.WarningAmber.copy(alpha = 0.12f),
+                                shape = RoundedCornerShape(8.dp),
+                                border = BorderStroke(1.dp, SystemColors.WarningAmber.copy(alpha = 0.4f))
+                            ) {
+                                Text(
+                                    text = "SELF-REPORTED: +${player.attributes.totalSelfReportedPoints}",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = SystemColors.WarningAmber,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                )
+                            }
                         }
                     }
                 }
             }
 
-            // Detailed Attribute Cards
-            items(attributes, key = { it.type.name }) { attr ->
-                AttributeDetailCard(attr = attr)
+            // 3. READABLE ATTRIBUTE GRID (2 Columns for balanced scannability)
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    val chunked = attributes.chunked(2)
+                    chunked.forEach { rowAttrs ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            rowAttrs.forEach { attr ->
+                                AttributeCard(
+                                    attr = attr,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                            if (rowAttrs.size == 1) {
+                                Spacer(modifier = Modifier.weight(1f))
+                            }
+                        }
+                    }
+                }
             }
 
-            // Rank Hierarchy & Promotion Thresholds
+            // 4. RANK HIERARCHY & PROMOTION THRESHOLDS
             item {
                 SystemSectionTitle(
                     title = "Rank Progression Hierarchy",
@@ -195,14 +258,15 @@ fun StatusScreen(
             item {
                 HolographicPanel(
                     modifier = Modifier.fillMaxWidth(),
-                    accentColor = SystemColors.ArcaneViolet
+                    accentColor = SystemColors.ArcaneViolet,
+                    contentPadding = 16.dp
                 ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                         val targetRank = nextRank.nextRank
                         if (targetRank != null) {
                             Text(
                                 text = "NEXT PROMOTION: ${targetRank.displayName.uppercase()} (${targetRank.title})",
-                                style = MaterialTheme.typography.titleMedium,
+                                style = MaterialTheme.typography.titleLarge,
                                 color = SystemColors.rankAccent(targetRank)
                             )
                             ThresholdRow(
@@ -226,7 +290,7 @@ fun StatusScreen(
                         } else {
                             Text(
                                 text = "NATIONAL LEVEL ACHIEVED — All System Rank thresholds surpassed.",
-                                style = MaterialTheme.typography.titleMedium,
+                                style = MaterialTheme.typography.titleLarge,
                                 color = SystemColors.MonarchGold
                             )
                         }
@@ -241,11 +305,11 @@ fun StatusScreen(
                                 val unlocked = player.rank.ordinal >= rank.ordinal
                                 val accent = SystemColors.rankAccent(rank)
                                 Surface(
-                                    color = if (unlocked) accent.copy(alpha = 0.16f) else SystemColors.ObsidianBlack.copy(alpha = 0.5f),
+                                    color = if (unlocked) accent.copy(alpha = 0.16f) else SystemColors.SecondarySurface,
                                     shape = RoundedCornerShape(8.dp),
                                     border = BorderStroke(
                                         1.dp,
-                                        if (rank == player.rank) accent else SystemColors.SubtleGridLine
+                                        if (rank == player.rank) accent else SystemColors.SubtleBorder
                                     )
                                 ) {
                                     Row(
@@ -256,7 +320,7 @@ fun StatusScreen(
                                             imageVector = if (unlocked) Icons.Rounded.MilitaryTech else Icons.Rounded.Lock,
                                             contentDescription = rank.displayName,
                                             tint = if (unlocked) accent else SystemColors.MutedSilver,
-                                            modifier = Modifier.size(14.dp)
+                                            modifier = Modifier.size(16.dp)
                                         )
                                         Spacer(modifier = Modifier.width(6.dp))
                                         Text(
@@ -272,7 +336,7 @@ fun StatusScreen(
                 }
             }
 
-            // Real-World Domain Overview & Recovery Readiness
+            // 5. REAL-WORLD DOMAIN TELEMETRY
             item {
                 SystemSectionTitle(
                     title = "Real-World Domain Telemetry",
@@ -287,48 +351,12 @@ fun StatusScreen(
                     RecoveryStatus.RECOVERY_REQUIRED -> SystemColors.DangerCrimson
                 }
                 HolographicPanel(
-                    modifier = Modifier.fillMaxWidth().testTag("status_domain_telemetry_card"),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("status_domain_telemetry_card"),
                     accentColor = recColor,
-                    secondaryColor = SystemColors.ElectricCyan
-                ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text("RECOVERY READINESS", style = MaterialTheme.typography.labelLarge, color = recColor)
-                            Text(
-                                text = "${state.physicalState.recoveryStatus.label} (${player.recoveryScore}/100)",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = SystemColors.PureIce
-                            )
-                        }
-                        Text(
-                            text = "Physical: ${state.physicalState.completedJoggingMinutesToday}/${state.physicalState.effectiveJoggingTarget}m jogging • ${state.physicalState.weeklySessionsCompleted} weekly sessions",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = SystemColors.MetallicSilver
-                        )
-                        Text(
-                            text = "Academic: ${academicSummary.todayStudyMinutes}/${academicSummary.dailyStudyGoalMinutes}m study • ${academicSummary.pendingRevisionsCount} revisions due",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = SystemColors.MetallicSilver
-                        )
-                        Text(
-                            text = "Discipline: Score ${lifeSummary.todayDisciplineScore}/100 • ${lifeSummary.completedHabitsToday}/${lifeSummary.activeHabitsCount} habits",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = SystemColors.MetallicSilver
-                        )
-                    }
-                }
-            }
-
-            // Titles & Achievements Highlights
-            item {
-                HolographicPanel(
-                    modifier = Modifier.fillMaxWidth(),
-                    accentColor = SystemColors.MonarchGold,
-                    secondaryColor = SystemColors.ArcaneViolet
+                    secondaryColor = SystemColors.ElectricCyan,
+                    contentPadding = 16.dp
                 ) {
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Row(
@@ -336,12 +364,87 @@ fun StatusScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("TITLES & ACHIEVEMENTS", style = MaterialTheme.typography.titleMedium, color = SystemColors.MonarchGold)
-                            Text("${unlockedTitles.size} Titles • ${unlockedAchievements.size} Unlocked", style = MaterialTheme.typography.labelSmall, color = SystemColors.ElectricCyan)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(10.dp)
+                                        .clip(RoundedCornerShape(50))
+                                        .background(recColor)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "RECOVERY READINESS: ${state.physicalState.recoveryStatus.label.uppercase()}",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = recColor
+                                )
+                            }
+                            Text(
+                                text = "${player.recoveryScore}/100",
+                                style = MaterialTheme.typography.titleLarge,
+                                color = SystemColors.PureIce
+                            )
+                        }
+
+                        Surface(
+                            color = SystemColors.SecondarySurface,
+                            shape = RoundedCornerShape(10.dp),
+                            border = BorderStroke(1.dp, SystemColors.SubtleBorder),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Text(
+                                    text = "• Physical: ${state.physicalState.completedJoggingMinutesToday}/${state.physicalState.effectiveJoggingTarget}m jogging • ${state.physicalState.weeklySessionsCompleted} weekly sessions",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = SystemColors.PureIce
+                                )
+                                Text(
+                                    text = "• Academic: ${academicSummary.todayStudyMinutes}/${academicSummary.dailyStudyGoalMinutes}m study • ${academicSummary.pendingRevisionsCount} revisions due",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = SystemColors.PureIce
+                                )
+                                Text(
+                                    text = "• Discipline: Score ${lifeSummary.todayDisciplineScore}/100 • ${lifeSummary.completedHabitsToday}/${lifeSummary.activeHabitsCount} habits completed",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = SystemColors.PureIce
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 6. TITLES & ACHIEVEMENTS HIGHLIGHTS
+            item {
+                HolographicPanel(
+                    modifier = Modifier.fillMaxWidth(),
+                    accentColor = SystemColors.MonarchGold,
+                    secondaryColor = SystemColors.ArcaneViolet,
+                    contentPadding = 16.dp
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "TITLES & ACHIEVEMENTS",
+                                style = MaterialTheme.typography.titleLarge,
+                                color = SystemColors.MonarchGold
+                            )
+                            Text(
+                                text = "${unlockedTitles.size} Titles • ${unlockedAchievements.size} Badges",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = SystemColors.ElectricCyan
+                            )
                         }
                         Text(
                             text = "Equipped Honorific: $equippedTitle",
-                            style = MaterialTheme.typography.bodyMedium,
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.Medium,
                             color = SystemColors.PureIce
                         )
                         if (unlockedAchievements.isNotEmpty()) {
@@ -351,40 +454,46 @@ fun StatusScreen(
                                         imageVector = Icons.Rounded.VerifiedUser,
                                         contentDescription = ach.definition.title,
                                         tint = SystemColors.MonarchGold,
-                                        modifier = Modifier.size(16.dp)
+                                        modifier = Modifier.size(18.dp)
                                     )
-                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
                                     Text(
                                         text = "${ach.definition.title} (${ach.definition.rarity.label})",
-                                        style = MaterialTheme.typography.bodySmall,
+                                        style = MaterialTheme.typography.bodyMedium,
                                         color = SystemColors.MetallicSilver
                                     )
                                 }
                             }
                         } else {
                             Text(
-                                text = "Complete verified sessions and quests to unlock titles and achievement badges.",
-                                style = MaterialTheme.typography.bodySmall,
+                                text = "Complete verified training and study quests to unlock honorific titles and system achievement badges.",
+                                style = MaterialTheme.typography.bodyMedium,
                                 color = SystemColors.MutedSilver
                             )
                         }
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            androidx.compose.material3.OutlinedButton(
+                            OutlinedButton(
                                 onClick = onOpenTitles,
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(48.dp),
+                                shape = RoundedCornerShape(10.dp),
                                 border = BorderStroke(1.dp, SystemColors.MonarchGold)
                             ) {
-                                Text("ALL TITLES", color = SystemColors.MonarchGold, style = MaterialTheme.typography.labelMedium)
+                                Text("ALL TITLES", color = SystemColors.MonarchGold, style = MaterialTheme.typography.labelLarge)
                             }
-                            androidx.compose.material3.OutlinedButton(
+                            OutlinedButton(
                                 onClick = onOpenAchievements,
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(48.dp),
+                                shape = RoundedCornerShape(10.dp),
                                 border = BorderStroke(1.dp, SystemColors.ElectricCyan)
                             ) {
-                                Text("ACHIEVEMENTS", color = SystemColors.ElectricCyan, style = MaterialTheme.typography.labelMedium)
+                                Text("ACHIEVEMENTS", color = SystemColors.ElectricCyan, style = MaterialTheme.typography.labelLarge)
                             }
                         }
                     }
@@ -392,99 +501,83 @@ fun StatusScreen(
             }
 
             item {
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(16.dp))
             }
         }
     }
 }
 
 @Composable
-private fun StatPill(
-    label: String,
-    value: String,
+private fun AttributeCard(
+    attr: AttributeBreakdown,
     modifier: Modifier = Modifier
 ) {
+    val accent = SystemColors.attributeAccent(attr.type)
     Surface(
         modifier = modifier,
-        color = SystemColors.ObsidianBlack.copy(alpha = 0.65f),
-        shape = RoundedCornerShape(8.dp),
-        border = BorderStroke(0.75.dp, SystemColors.SubtleGridLine)
+        color = SystemColors.SecondarySurface,
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(1.dp, accent.copy(alpha = 0.45f))
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelSmall,
-                color = SystemColors.MutedSilver
-            )
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = value,
-                style = MaterialTheme.typography.titleLarge,
-                color = SystemColors.PureIce
-            )
-        }
-    }
-}
-
-@Composable
-private fun AttributeDetailCard(attr: AttributeBreakdown) {
-    val accent = SystemColors.attributeAccent(attr.type)
-    HolographicPanel(
-        modifier = Modifier.fillMaxWidth(),
-        accentColor = accent,
-        contentPadding = 14.dp
-    ) {
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = attr.type.code,
-                            style = MaterialTheme.typography.titleLarge,
-                            color = accent
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = attr.type.displayName.uppercase(),
-                            style = MaterialTheme.typography.titleMedium,
-                            color = SystemColors.PureIce
-                        )
-                    }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(10.dp)
+                            .clip(RoundedCornerShape(50))
+                            .background(accent)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = attr.type.description,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = SystemColors.MutedSilver
+                        text = attr.type.code,
+                        style = MaterialTheme.typography.titleLarge,
+                        color = accent
                     )
                 }
                 Text(
                     text = "${attr.totalValue}",
-                    style = MaterialTheme.typography.displayLarge,
+                    style = MaterialTheme.typography.headlineLarge,
                     color = SystemColors.PureIce
                 )
             }
 
+            Text(
+                text = attr.type.displayName.uppercase(),
+                style = MaterialTheme.typography.labelMedium,
+                color = SystemColors.PureIce
+            )
+
+            Text(
+                text = attr.type.description,
+                style = MaterialTheme.typography.bodySmall,
+                color = SystemColors.MutedSilver,
+                maxLines = 2
+            )
+
             GlowingProgressBar(
                 progress = attr.progressFraction,
-                height = 6.dp,
+                height = 5.dp,
                 startColor = accent,
                 endColor = SystemColors.ElectricCyan
             )
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Base ${attr.baseValue} • Verified +${attr.verifiedPoints} • Self +${attr.selfReportedPoints}",
+                    text = "+${attr.verifiedPoints} ver / +${attr.selfReportedPoints} self",
                     style = MaterialTheme.typography.labelSmall,
-                    color = SystemColors.MetallicSilver
+                    color = SystemColors.MutedSilver
                 )
                 Text(
                     text = "${attr.progressXp}/${attr.progressXpRequired} XP",
@@ -510,15 +603,15 @@ private fun ThresholdRow(
         ) {
             Text(
                 text = label,
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodyMedium,
                 color = SystemColors.MetallicSilver
             )
             Text(
                 text = "$current / $target",
-                style = MaterialTheme.typography.labelMedium,
+                style = MaterialTheme.typography.labelLarge,
                 color = SystemColors.ElectricCyan
             )
         }
-        GlowingProgressBar(progress = progress, height = 5.dp)
+        GlowingProgressBar(progress = progress, height = 6.dp)
     }
 }

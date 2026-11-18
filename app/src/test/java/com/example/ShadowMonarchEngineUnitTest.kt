@@ -106,37 +106,41 @@ class ShadowMonarchEngineUnitTest {
 
     @Test
     fun monarchProgression_levelThresholdsAndRanks() {
-        assertEquals(MonarchRank.AWAKENING, MonarchProgressionEngine.calculateMonarchRank(1))
-        assertEquals(MonarchRank.AWAKENING, MonarchProgressionEngine.calculateMonarchRank(5))
-        assertEquals(MonarchRank.COMMANDER, MonarchProgressionEngine.calculateMonarchRank(6))
-        assertEquals(MonarchRank.COMMANDER, MonarchProgressionEngine.calculateMonarchRank(10))
-        assertEquals(MonarchRank.SOVEREIGN, MonarchProgressionEngine.calculateMonarchRank(11))
-        assertEquals(MonarchRank.SOVEREIGN, MonarchProgressionEngine.calculateMonarchRank(20))
-        assertEquals(MonarchRank.MONARCH, MonarchProgressionEngine.calculateMonarchRank(21))
-        assertEquals(MonarchRank.MONARCH, MonarchProgressionEngine.calculateMonarchRank(30))
-        assertEquals(MonarchRank.SHADOW_SOVEREIGN, MonarchProgressionEngine.calculateMonarchRank(31))
-        assertEquals(MonarchRank.SHADOW_SOVEREIGN, MonarchProgressionEngine.calculateMonarchRank(50))
+        assertEquals(MonarchRank.AWAKENING, MonarchRank.forLevel(1))
+        assertEquals(MonarchRank.AWAKENING, MonarchRank.forLevel(5))
+        assertEquals(MonarchRank.COMMANDER, MonarchRank.forLevel(6))
+        assertEquals(MonarchRank.COMMANDER, MonarchRank.forLevel(10))
+        assertEquals(MonarchRank.SOVEREIGN, MonarchRank.forLevel(11))
+        assertEquals(MonarchRank.SOVEREIGN, MonarchRank.forLevel(20))
+        assertEquals(MonarchRank.MONARCH, MonarchRank.forLevel(21))
+        assertEquals(MonarchRank.MONARCH, MonarchRank.forLevel(30))
+        assertEquals(MonarchRank.SHADOW_SOVEREIGN, MonarchRank.forLevel(31))
+        assertEquals(MonarchRank.SHADOW_SOVEREIGN, MonarchRank.forLevel(50))
     }
 
     @Test
-    fun monarchProgression_armyCapacityScalesWithLevel() {
-        val capLv1 = MonarchProgressionEngine.calculateArmyCapacity(1)
-        val capLv10 = MonarchProgressionEngine.calculateArmyCapacity(10)
-        val capLv20 = MonarchProgressionEngine.calculateArmyCapacity(20)
-        val capLv35 = MonarchProgressionEngine.calculateArmyCapacity(35)
+    fun monarchProgression_xpRequirementsScaleWithLevel() {
+        val xpLv2 = MonarchProgressionEngine.calculateNextLevelXp(1)
+        val xpLv5 = MonarchProgressionEngine.calculateNextLevelXp(4)
+        val xpLv10 = MonarchProgressionEngine.calculateNextLevelXp(9)
+        val xpLv20 = MonarchProgressionEngine.calculateNextLevelXp(19)
 
-        assertTrue(capLv1 in 5..10)
-        assertTrue(capLv10 > capLv1)
-        assertTrue(capLv20 > capLv10)
-        assertTrue(capLv35 > capLv20)
+        assertTrue(xpLv2 > 0L)
+        assertTrue(xpLv5 > xpLv2)
+        assertTrue(xpLv10 > xpLv5)
+        assertTrue(xpLv20 > xpLv10)
+        assertEquals(5, com.example.domain.model.ShadowMonarchProfile.monarchLevelForXp(xpLv5))
     }
 
     @Test
-    fun monarchProgression_monarchAuthorityScalesDeterministically() {
-        val auth1 = MonarchProgressionEngine.calculateAuthority(1)
-        val auth10 = MonarchProgressionEngine.calculateAuthority(10)
-        assertEquals(10, auth1)
-        assertEquals(55, auth10)
+    fun monarchProgression_constantsAndXpFormulaDeterministic() {
+        assertEquals(10, MonarchProgressionEngine.BASE_ARMY_CAPACITY)
+        assertEquals(5, MonarchProgressionEngine.ARMY_EXPANSION_PER_UNLOCK)
+        assertEquals(3, MonarchProgressionEngine.BASE_AUTHORITY_PER_LEVEL)
+        assertEquals(
+            com.example.domain.model.ShadowMonarchProfile.monarchXpRequired(10),
+            MonarchProgressionEngine.calculateNextLevelXp(9)
+        )
     }
 
     // ========================================================================
@@ -145,41 +149,34 @@ class ShadowMonarchEngineUnitTest {
 
     @Test
     fun shadowEvolution_rankProgressionThresholds() {
-        assertEquals(ShadowRank.E_RANK, ShadowEvolutionEngine.calculateRank(1))
-        assertEquals(ShadowRank.E_RANK, ShadowEvolutionEngine.calculateRank(9))
-        assertEquals(ShadowRank.D_RANK, ShadowEvolutionEngine.calculateRank(10))
-        assertEquals(ShadowRank.C_RANK, ShadowEvolutionEngine.calculateRank(20))
-        assertEquals(ShadowRank.B_RANK, ShadowEvolutionEngine.calculateRank(30))
-        assertEquals(ShadowRank.A_RANK, ShadowEvolutionEngine.calculateRank(40))
-        assertEquals(ShadowRank.S_RANK, ShadowEvolutionEngine.calculateRank(50))
-        assertEquals(ShadowRank.MONARCH_CLASS, ShadowEvolutionEngine.calculateRank(60))
+        assertEquals(ShadowRank.E_RANK, ShadowEvolutionEngine.calculateRank(1, 0L))
+        assertEquals(ShadowRank.E_RANK, ShadowEvolutionEngine.calculateRank(9, 400L))
+        assertEquals(ShadowRank.D_RANK, ShadowEvolutionEngine.calculateRank(10, 500L))
+        assertEquals(ShadowRank.C_RANK, ShadowEvolutionEngine.calculateRank(25, 2000L))
+        assertEquals(ShadowRank.B_RANK, ShadowEvolutionEngine.calculateRank(40, 5000L))
+        assertEquals(ShadowRank.A_RANK, ShadowEvolutionEngine.calculateRank(60, 12000L))
+        assertEquals(ShadowRank.S_RANK, ShadowEvolutionEngine.calculateRank(80, 25000L))
+        assertEquals(ShadowRank.MONARCH_CLASS, ShadowEvolutionEngine.calculateRank(100, 50000L))
     }
 
     @Test
     fun shadowEvolution_stageProgressionThresholds() {
-        assertEquals(ShadowEvolutionStage.NEWLY_EXTRACTED, ShadowEvolutionEngine.calculateEvolutionStage(1))
-        assertEquals(ShadowEvolutionStage.AWAKENED, ShadowEvolutionEngine.calculateEvolutionStage(10))
-        assertEquals(ShadowEvolutionStage.ELITE_KNIGHT, ShadowEvolutionEngine.calculateEvolutionStage(20))
-        assertEquals(ShadowEvolutionStage.SHADOW_COMMANDER, ShadowEvolutionEngine.calculateEvolutionStage(35))
-        assertEquals(ShadowEvolutionStage.GRAND_MARSHAL, ShadowEvolutionEngine.calculateEvolutionStage(50))
-        assertEquals(ShadowEvolutionStage.SOVEREIGN_ASCENDANT, ShadowEvolutionEngine.calculateEvolutionStage(65))
+        assertEquals(ShadowEvolutionStage.NEWLY_EXTRACTED, ShadowEvolutionEngine.calculateEvolutionStage(1, ShadowRank.E_RANK))
+        assertEquals(ShadowEvolutionStage.AWAKENED, ShadowEvolutionEngine.calculateEvolutionStage(5, ShadowRank.D_RANK))
+        assertEquals(ShadowEvolutionStage.ELITE, ShadowEvolutionEngine.calculateEvolutionStage(15, ShadowRank.C_RANK))
+        assertEquals(ShadowEvolutionStage.COMMANDER, ShadowEvolutionEngine.calculateEvolutionStage(30, ShadowRank.B_RANK))
+        assertEquals(ShadowEvolutionStage.GENERAL, ShadowEvolutionEngine.calculateEvolutionStage(50, ShadowRank.A_RANK))
+        assertEquals(ShadowEvolutionStage.MONARCH_GUARD, ShadowEvolutionEngine.calculateEvolutionStage(75, ShadowRank.S_RANK))
     }
 
     @Test
-    fun shadowEvolution_statGainsReflectClassSpecialization() {
-        val vanguardStats = ShadowStats(15, 10, 10, 10, 10, 10)
-        val boostedVanguard = ShadowEvolutionEngine.applyLevelUpStats(vanguardStats, ShadowClass.VANGUARD)
+    fun shadowEvolution_initialStatsReflectClassSpecializationAndXpScales() {
+        val vanguardStats = ShadowExtractionEngine.calculateInitialStats(ShadowClass.VANGUARD, ShadowRarity.COMMON, 1L)
+        val arcanistStats = ShadowExtractionEngine.calculateInitialStats(ShadowClass.ARCANIST, ShadowRarity.COMMON, 1L)
 
-        // Vanguard primary is power (+3) and endurance (+2)
-        assertEquals(18, boostedVanguard.power)
-        assertEquals(12, boostedVanguard.endurance)
-
-        val arcanistStats = ShadowStats(10, 10, 10, 10, 15, 10)
-        val boostedArcanist = ShadowEvolutionEngine.applyLevelUpStats(arcanistStats, ShadowClass.ARCANIST)
-
-        // Arcanist primary is wisdom (+3) and focus (+2)
-        assertEquals(18, boostedArcanist.wisdom)
-        assertEquals(12, boostedArcanist.focus)
+        assertTrue("Vanguard should prioritize power over Arcanist", vanguardStats.power > arcanistStats.power)
+        assertTrue("Arcanist should prioritize wisdom over Vanguard", arcanistStats.wisdom > vanguardStats.wisdom)
+        assertTrue(ShadowEvolutionEngine.xpToNextLevel(10) > ShadowEvolutionEngine.xpToNextLevel(1))
     }
 
     @Test
@@ -193,7 +190,7 @@ class ShadowMonarchEngineUnitTest {
             level = 45,
             shadowXp = 500,
             stats = ShadowStats(power = 60, endurance = 50, focus = 40, discipline = 40, wisdom = 35, adaptability = 40),
-            evolutionStage = ShadowEvolutionStage.SHADOW_COMMANDER,
+            evolutionStage = ShadowEvolutionStage.COMMANDER,
             passiveAbility = "Red Commander Aura",
             activeSkillIds = listOf("vanguard_cleave", "vanguard_whirlwind"),
             recruitmentSource = "Boss Battle: Blood-Red Commander Igris",
@@ -214,10 +211,10 @@ class ShadowMonarchEngineUnitTest {
         assertEquals(8, MonarchSkillCatalog.skills.size)
         val skillMap = MonarchSkillCatalog.skills.associateBy { it.skillId }
 
-        // Test ARISE skill
-        val ariseSkill = skillMap[MonarchSkillIds.EXTRACTION_AUTHORITY]
+        // Test Shadow Extraction skill
+        val ariseSkill = skillMap[MonarchSkillIds.SHADOW_EXTRACTION]
         assertNotNull(ariseSkill)
-        assertEquals(1, ariseSkill?.tier)
+        assertEquals(1, ariseSkill?.order)
         assertEquals(1, ariseSkill?.requiredMonarchLevel)
 
         // Skills with prerequisites must reference existing catalog skill IDs
@@ -232,14 +229,14 @@ class ShadowMonarchEngineUnitTest {
     }
 
     @Test
-    fun shadowSkillCatalog_hasUniversalAndClassSpecificSkills() {
+    fun shadowSkillCatalog_hasPassiveAndActiveSkills() {
         assertTrue(ShadowSkillCatalog.skills.size >= 8)
 
-        val universalSkills = ShadowSkillCatalog.skills.filter { it.requiredClass == null }
-        val classSkills = ShadowSkillCatalog.skills.filter { it.requiredClass != null }
+        val passiveSkills = ShadowSkillCatalog.skills.filter { it.isPassive }
+        val activeSkills = ShadowSkillCatalog.skills.filter { !it.isPassive }
 
-        assertTrue(universalSkills.isNotEmpty())
-        assertTrue(classSkills.isNotEmpty())
+        assertTrue(passiveSkills.isNotEmpty())
+        assertTrue(activeSkills.isNotEmpty())
     }
 
     // ========================================================================
@@ -252,7 +249,7 @@ class ShadowMonarchEngineUnitTest {
         ShadowQuestCatalog.quests.forEach { quest ->
             assertTrue("Quest ${quest.questId} target must be positive", quest.targetValue > 0)
             assertTrue("Quest ${quest.questId} Monarch XP reward must be positive", quest.monarchXpReward > 0)
-            assertTrue("Quest ${quest.questId} Essence reward must be non-negative", quest.essenceReward >= 0)
+            assertTrue("Quest ${quest.questId} Essence reward must be non-negative", quest.shadowEssenceReward >= 0)
         }
     }
 
@@ -261,11 +258,10 @@ class ShadowMonarchEngineUnitTest {
     // ========================================================================
 
     @Test
-    fun formationTypes_allTypesHaveDistinctModifiersAndMaxSlots() {
+    fun formationTypes_allTypesHaveValidLabelsAndMaxSlots() {
         ShadowFormationType.entries.forEach { type ->
             assertTrue("Formation ${type.name} slots must be >= 3", type.maxSlots >= 3)
-            assertFalse(type.displayName.isBlank())
-            assertFalse(type.description.isBlank())
+            assertFalse(type.label.isBlank())
         }
     }
 }

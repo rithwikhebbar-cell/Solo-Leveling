@@ -36,6 +36,7 @@ import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Psychology
+import androidx.compose.material.icons.rounded.RecordVoiceOver
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.ReportProblem
 import androidx.compose.material.icons.rounded.Settings
@@ -164,7 +165,9 @@ fun SystemOverviewScreen(
     onOpenVoiceConsole: () -> Unit = {},
     onOpenSystemVoiceSettings: () -> Unit = {},
     onOpenWidgetHub: () -> Unit = {},
-    onOpenCelebrationVault: () -> Unit = {}
+    onOpenCelebrationVault: () -> Unit = {},
+    onOpenShadowRealm: () -> Unit = {},
+    onOpenSocialMastery: () -> Unit = {}
 ) {
     SystemStateScaffold(
         uiState = uiState,
@@ -174,6 +177,8 @@ fun SystemOverviewScreen(
     ) { state ->
         val accent = healthAccentColor(state.healthReport.overallStatus)
         val links = listOf(
+            Triple("Social Mastery", "8 interpersonal modules, speech practice & mastery engine", Icons.Rounded.RecordVoiceOver to onOpenSocialMastery),
+            Triple("The Shadow Realm", "Monarch progression, Shadow Extraction & army formations", Icons.Rounded.Bolt to onOpenShadowRealm),
             Triple("AI System Companion", "Holographic advisory Q&A, consent guard & speech", Icons.Rounded.AutoAwesome to onOpenAiCompanion),
             Triple("Voice Command Console", "Tap-to-speak allowlisted navigation & fallback", Icons.Rounded.Mic to onOpenVoiceConsole),
             Triple("System Voice & Alerts", "TTS voice controls, announcement categories & feed", Icons.Rounded.Psychology to onOpenSystemVoiceSettings),

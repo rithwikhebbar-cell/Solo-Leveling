@@ -58,6 +58,25 @@ enum class SocialMissionLifecycleStatus(val label: String) {
     }
 }
 
+enum class SocialArtifactValidationState(
+    val label: String,
+    val qualifiesForRealWorldMastery: Boolean
+) {
+    NONE("No Artifact", false),
+    ARTIFACT_DESCRIBED("Artifact Described (Note Only)", false),
+    ARTIFACT_ATTACHED("Artifact Attached", false),
+    ARTIFACT_STORED("Artifact Stored", false),
+    ARTIFACT_RETRIEVABLE("Artifact Verified Retrievable", true),
+    ARTIFACT_REVIEWED("Artifact Reviewed", true);
+
+    companion object {
+        fun fromString(value: String?): SocialArtifactValidationState {
+            if (value.isNullOrBlank()) return NONE
+            return entries.firstOrNull { it.name.equals(value.trim(), ignoreCase = true) } ?: NONE
+        }
+    }
+}
+
 enum class SocialMissionEvidenceType(
     val label: String,
     val verificationTier: VerificationStatus,
@@ -76,11 +95,17 @@ enum class SocialMissionEvidenceType(
         isIndependentlyVerified = false,
         explanation = "In-app practice simulation evaluated with deterministic text/speech rubrics; does not prove real-world execution."
     ),
-    ARTIFACT_ATTACHED(
-        label = "Artifact-Referenced Material",
+    ARTIFACT_DESCRIBED(
+        label = "Artifact Described (Note Only)",
         verificationTier = VerificationStatus.SELF_REPORTED,
         isIndependentlyVerified = false,
-        explanation = "Player provided title or summary of supporting artifact; does not verify interpersonal interaction occurred."
+        explanation = "Written description or title of an artifact without an attached file; preserves history but does not unlock ADVANCED mastery."
+    ),
+    ARTIFACT_ATTACHED(
+        label = "Attached Retrievable Artifact",
+        verificationTier = VerificationStatus.SELF_REPORTED,
+        isIndependentlyVerified = false,
+        explanation = "Account-owned file or document stored locally and verified retrievable; note-only claims are rejected. Self-reported without third-party signature."
     ),
     HUMAN_CONFIRMATION_REPORTED(
         label = "Human-Confirmation Reported",
@@ -100,7 +125,8 @@ enum class SocialMissionEvidenceType(
             return when (value.uppercase()) {
                 "SELF_REFLECTION", "SELF_REPORTED" -> SELF_REPORTED
                 "PRACTICE_EVALUATION", "SIMULATION_EVALUATED" -> SIMULATION_EVALUATED
-                "OPTIONAL_ARTIFACT", "ARTIFACT_ATTACHED" -> ARTIFACT_ATTACHED
+                "OPTIONAL_ARTIFACT", "ARTIFACT_DESCRIBED" -> ARTIFACT_DESCRIBED
+                "ARTIFACT_ATTACHED" -> ARTIFACT_ATTACHED
                 "HUMAN_CONFIRMATION_REPORTED" -> HUMAN_CONFIRMATION_REPORTED
                 "HUMAN_CONFIRMED" -> HUMAN_CONFIRMED
                 else -> entries.firstOrNull { it.name.equals(value, ignoreCase = true) } ?: SELF_REPORTED
@@ -185,7 +211,11 @@ data class SocialMissionRecord(
     val xpAwarded: Int = 0,
     val verificationStatus: VerificationStatus,
     val idempotencyKey: String,
-    val updatedAtEpochMs: Long = System.currentTimeMillis()
+    val updatedAtEpochMs: Long = System.currentTimeMillis(),
+    val artifactUri: String? = null,
+    val artifactOwnerId: String? = null,
+    val artifactContentHash: String? = null,
+    val artifactValidationState: SocialArtifactValidationState = SocialArtifactValidationState.NONE
 )
 
 data class SkillAssessmentRubric(

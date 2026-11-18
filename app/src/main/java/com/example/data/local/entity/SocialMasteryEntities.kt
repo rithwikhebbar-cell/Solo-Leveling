@@ -456,31 +456,65 @@ data class SocialMissionRecordEntity(
     val xpAwarded: Int = 0,
     val verificationStatus: String,
     val idempotencyKey: String,
-    val updatedAtEpochMs: Long
+    val updatedAtEpochMs: Long,
+    val artifactUri: String? = null,
+    val artifactOwnerId: String? = null,
+    val artifactContentHash: String? = null,
+    val artifactStateName: String = com.example.domain.model.SocialArtifactValidationState.NONE.name
 )
 
-fun SocialMissionRecordEntity.toDomain() = SocialMissionRecord(
-    recordId = recordId,
-    accountOwnerId = accountOwnerId,
-    missionId = missionId,
-    module = SocialModuleIdentifier.fromCode(moduleName),
-    title = title,
-    difficultyRank = MissionDifficultyRank.fromString(difficultyRank),
-    lifecycleStatus = SocialMissionLifecycleStatus.fromString(lifecycleStatus),
-    startedEpochMs = startedEpochMs,
-    submittedEpochMs = submittedEpochMs,
-    completedEpochMs = completedEpochMs,
-    evidenceType = SocialMissionEvidenceType.fromString(evidenceType),
-    reflectionText = reflectionText,
-    humanConfirmingRole = humanConfirmingRole,
-    artifactNote = artifactNote,
-    aiFeedbackNotes = aiFeedbackNotes,
-    evaluationRubricScore = evaluationRubricScore,
-    xpAwarded = xpAwarded,
-    verificationStatus = runCatching { VerificationStatus.valueOf(verificationStatus) }.getOrDefault(VerificationStatus.SELF_REPORTED),
-    idempotencyKey = idempotencyKey,
-    updatedAtEpochMs = updatedAtEpochMs
-)
+fun SocialMissionRecordEntity.toDomain(): SocialMissionRecord {
+    val parsedEvidenceType = SocialMissionEvidenceType.fromString(evidenceType)
+    val resolvedEvidenceType = if (
+        parsedEvidenceType == SocialMissionEvidenceType.ARTIFACT_ATTACHED &&
+        artifactUri.isNullOrBlank()
+    ) {
+        if (!artifactNote.isNullOrBlank()) {
+            SocialMissionEvidenceType.ARTIFACT_DESCRIBED
+        } else {
+            SocialMissionEvidenceType.SELF_REPORTED
+        }
+    } else {
+        parsedEvidenceType
+    }
+    val parsedState = com.example.domain.model.SocialArtifactValidationState.fromString(artifactStateName)
+    val resolvedState = when {
+        parsedState != com.example.domain.model.SocialArtifactValidationState.NONE -> parsedState
+        !artifactUri.isNullOrBlank() && !artifactContentHash.isNullOrBlank() ->
+            com.example.domain.model.SocialArtifactValidationState.ARTIFACT_RETRIEVABLE
+        !artifactUri.isNullOrBlank() ->
+            com.example.domain.model.SocialArtifactValidationState.ARTIFACT_ATTACHED
+        !artifactNote.isNullOrBlank() ->
+            com.example.domain.model.SocialArtifactValidationState.ARTIFACT_DESCRIBED
+        else -> com.example.domain.model.SocialArtifactValidationState.NONE
+    }
+    return SocialMissionRecord(
+        recordId = recordId,
+        accountOwnerId = accountOwnerId,
+        missionId = missionId,
+        module = SocialModuleIdentifier.fromCode(moduleName),
+        title = title,
+        difficultyRank = MissionDifficultyRank.fromString(difficultyRank),
+        lifecycleStatus = SocialMissionLifecycleStatus.fromString(lifecycleStatus),
+        startedEpochMs = startedEpochMs,
+        submittedEpochMs = submittedEpochMs,
+        completedEpochMs = completedEpochMs,
+        evidenceType = resolvedEvidenceType,
+        reflectionText = reflectionText,
+        humanConfirmingRole = humanConfirmingRole,
+        artifactNote = artifactNote,
+        aiFeedbackNotes = aiFeedbackNotes,
+        evaluationRubricScore = evaluationRubricScore,
+        xpAwarded = xpAwarded,
+        verificationStatus = runCatching { VerificationStatus.valueOf(verificationStatus) }.getOrDefault(VerificationStatus.SELF_REPORTED),
+        idempotencyKey = idempotencyKey,
+        updatedAtEpochMs = updatedAtEpochMs,
+        artifactUri = artifactUri,
+        artifactOwnerId = artifactOwnerId,
+        artifactContentHash = artifactContentHash,
+        artifactValidationState = resolvedState
+    )
+}
 
 fun SocialMissionRecord.toEntity() = SocialMissionRecordEntity(
     recordId = recordId,
@@ -502,6 +536,10 @@ fun SocialMissionRecord.toEntity() = SocialMissionRecordEntity(
     xpAwarded = xpAwarded,
     verificationStatus = verificationStatus.name,
     idempotencyKey = idempotencyKey,
-    updatedAtEpochMs = updatedAtEpochMs
+    updatedAtEpochMs = updatedAtEpochMs,
+    artifactUri = artifactUri,
+    artifactOwnerId = artifactOwnerId,
+    artifactContentHash = artifactContentHash,
+    artifactStateName = artifactValidationState.name
 )
 

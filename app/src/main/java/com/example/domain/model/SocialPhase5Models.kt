@@ -121,12 +121,18 @@ enum class MasteryDevelopmentStage(
     DEVELOPING("Developing", 2, "Actively acquiring structured habits through repeated simulations."),
     COMPETENT("Competent", 3, "Consistent passing performance across standard simulation rubrics."),
     ADVANCED("Advanced", 4, "High proficiency in simulations supported by documented real-world missions."),
-    MASTERY_CANDIDATE("Mastery Candidate", 5, "Sustained high performance across complex simulations and real-world execution."),
-    MAINTENANCE("Maintenance", 6, "Mastery achieved; engaging in periodic refresher practice to retain sharp execution.");
+    MASTERY_CANDIDATE("Mastery Candidate", 5, "Sustained high performance across complex simulations and repeated real-world execution.");
 
     companion object {
+        fun isLegacyMaintenance(value: String?): Boolean {
+            return value?.trim()?.equals("MAINTENANCE", ignoreCase = true) == true
+        }
+
         fun fromString(value: String): MasteryDevelopmentStage {
-            return entries.firstOrNull { it.name.equals(value, ignoreCase = true) } ?: UNEXPLORED
+            if (isLegacyMaintenance(value)) {
+                return UNEXPLORED
+            }
+            return entries.firstOrNull { it.name.equals(value.trim(), ignoreCase = true) } ?: UNEXPLORED
         }
     }
 }
@@ -176,7 +182,7 @@ enum class AdaptiveDifficulty(
 // 4. RECOMMENDATION CATEGORIES & STATUS
 // =========================================================================
 
-enum class RecommendationCategory(val label: String) {
+enum class SocialRecommendationCategory(val label: String) {
     IMPROVE_WEAKNESS("Improve Weakness"),
     MAINTAIN_STRENGTH("Maintain Strength"),
     PRACTICE_NEW_SKILL("Practice New Skill"),
@@ -186,17 +192,17 @@ enum class RecommendationCategory(val label: String) {
     REASSESS_SKILL("Reassess Skill");
 
     companion object {
-        fun fromString(value: String): RecommendationCategory {
+        fun fromString(value: String): SocialRecommendationCategory {
             return entries.firstOrNull { it.name.equals(value, ignoreCase = true) } ?: IMPROVE_WEAKNESS
         }
     }
 }
 
-enum class RecommendationStatus {
+enum class SocialRecommendationStatus {
     NEW, ACCEPTED, DISMISSED, COMPLETED, EXPIRED;
 
     companion object {
-        fun fromString(value: String): RecommendationStatus {
+        fun fromString(value: String): SocialRecommendationStatus {
             return entries.firstOrNull { it.name.equals(value, ignoreCase = true) } ?: NEW
         }
     }
@@ -208,7 +214,7 @@ data class PersonalizedSocialRecommendation(
     val title: String,
     val targetModule: SocialModuleIdentifier,
     val targetCompetency: String,
-    val category: RecommendationCategory,
+    val category: SocialRecommendationCategory,
     val explanation: String,
     val supportingEvidenceReferences: List<String>,
     val recommendedActivityId: String,
@@ -216,7 +222,7 @@ data class PersonalizedSocialRecommendation(
     val estimatedDurationMinutes: Int,
     val difficulty: AdaptiveDifficulty,
     val expectedLearningOutcome: String,
-    val status: RecommendationStatus = RecommendationStatus.NEW,
+    val status: SocialRecommendationStatus = SocialRecommendationStatus.NEW,
     val createdAtEpochMs: Long = System.currentTimeMillis(),
     val updatedAtEpochMs: Long = System.currentTimeMillis()
 )
@@ -287,7 +293,10 @@ data class SocialCompetencyProgress(
     val lastPracticedEpochMs: Long?,
     val lastEvaluatedScore: Int?,
     val evidenceClassification: MasteryEvidenceClassification,
-    val updatedAtEpochMs: Long = System.currentTimeMillis()
+    val updatedAtEpochMs: Long = System.currentTimeMillis(),
+    val maintenanceRequired: Boolean = false,
+    val maintenanceReason: String? = null,
+    val daysSinceLastPractice: Int? = null
 )
 
 data class SocialMasteryPathway(
@@ -297,7 +306,9 @@ data class SocialMasteryPathway(
     val recommendedNextActivityTitle: String,
     val recommendedNextActivityId: String,
     val lastPracticedEpochMs: Long?,
-    val primaryLearningObjective: String
+    val primaryLearningObjective: String,
+    val maintenanceRequiredCount: Int = 0,
+    val maintenanceSummary: String? = null
 )
 
 // =========================================================================

@@ -7,7 +7,7 @@ import com.example.domain.engine.AdvancedScenarioLibrary
 import com.example.domain.engine.CommunicationPracticeEngine
 import com.example.domain.engine.SocialMasteryAnalyticsEngine
 import com.example.domain.engine.SocialPracticeCatalog
-import com.example.domain.model.ActivityRewardCalculation
+import com.example.domain.engine.ActivityRewardCalculation
 import com.example.domain.model.AdaptiveSocialRecommendation
 import com.example.domain.model.AdvancedScenario
 import com.example.domain.model.AiCoachingMessage
@@ -42,14 +42,17 @@ import com.example.domain.model.SocialMissionRecord
 import com.example.domain.model.AdaptiveDifficulty
 import com.example.domain.model.PersonalizedSocialRecommendation
 import com.example.domain.model.PersonalizedWeeklyTrainingPlan
-import com.example.domain.model.RecommendationStatus
+import com.example.domain.model.SocialRecommendationStatus
 import com.example.domain.model.ScheduledTrainingActivity
 import com.example.domain.model.SocialCompetencyProgress
 import com.example.domain.model.SocialMasteryPathway
 import com.example.domain.model.SocialWeeklyDevelopmentReport
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
@@ -122,7 +125,8 @@ class SocialMasteryViewModel(
     private val analyticsEngine: SocialMasteryAnalyticsEngine = SocialMasteryAnalyticsEngine(socialRepository),
     private val aiCoach: SocialMasteryAiCoach? = null,
     private val voiceCoachController: SocialVoiceCoachController? = null,
-    private val accountOwnerId: String = "local_vault_player_1"
+    private val accountOwnerId: String = "local_vault_player_1",
+    private val accountOwnerIdFlow: Flow<String>? = null
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SocialDashboardUiState())
@@ -134,9 +138,29 @@ class SocialMasteryViewModel(
     private val _aiCoachState = MutableStateFlow(AiCoachUiState())
     val aiCoachState: StateFlow<AiCoachUiState> = _aiCoachState.asStateFlow()
 
+    @Volatile
+    private var activeAccountOwnerId: String = accountOwnerId
+    private var ownerObserverJob: Job? = null
+
     init {
-        loadSocialFoundation()
         observeAiCoachStreams()
+        if (accountOwnerIdFlow != null) {
+            accountOwnerIdFlow
+                .distinctUntilChanged()
+                .onEach { nextOwnerId ->
+                    val resolvedOwner = nextOwnerId.ifBlank { accountOwnerId }
+                    if (resolvedOwner != activeAccountOwnerId || ownerObserverJob == null) {
+                        activeAccountOwnerId = resolvedOwner
+                        _uiState.value = SocialDashboardUiState()
+                        _sessionState.value = PracticeActiveSessionUiState()
+                        aiCoach?.clearSession()
+                        loadSocialFoundationFor(resolvedOwner)
+                    }
+                }
+                .launchIn(viewModelScope)
+        } else {
+            loadSocialFoundation()
+        }
     }
 
     private fun observeAiCoachStreams() {
@@ -162,18 +186,23 @@ class SocialMasteryViewModel(
     }
 
     fun loadSocialFoundation() {
-        viewModelScope.launch {
+        loadSocialFoundationFor(activeAccountOwnerId)
+    }
+
+    private fun loadSocialFoundationFor(ownerId: String) {
+        ownerObserverJob?.cancel()
+        ownerObserverJob = viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
             runCatching {
-                socialRepository.getOrCreateProfile(accountOwnerId)
-                socialRepository.initializeMissingModuleProgress(accountOwnerId)
+                socialRepository.getOrCreateProfile(ownerId)
+                socialRepository.initializeMissingModuleProgress(ownerId)
                 socialRepository.seedInitialScenariosIfEmpty()
             }.onFailure { err ->
                 _uiState.value = _uiState.value.copy(errorMessage = err.localizedMessage)
             }
 
             // Load Phase 2 + Phase 3 + Phase 4 Catalogues
-            val analytics = runCatching { analyticsEngine.computeAnalyticsSummary(accountOwnerId) }.getOrNull()
+            val analytics = runCatching { analyticsEngine.computeAnalyticsSummary(ownerId) }.getOrNull()
 
             _uiState.value = _uiState.value.copy(
                 availableExercises = SocialPracticeCatalog.exercises,
@@ -187,65 +216,65 @@ class SocialMasteryViewModel(
                 analyticsSummary = analytics,
                 isLoading = false
             )
-        }
 
-        socialRepository.observeProfile(accountOwnerId)
-            .onEach { prof ->
-                _uiState.value = _uiState.value.copy(profile = prof, isLoading = false)
-            }
-            .launchIn(viewModelScope)
-
-        socialRepository.observeMissionRecords(accountOwnerId)
-            .onEach { records ->
-                val active = records.filter { it.lifecycleStatus in listOf(
-                    SocialMissionLifecycleStatus.ACCEPTED,
-                    SocialMissionLifecycleStatus.IN_PROGRESS,
-                    SocialMissionLifecycleStatus.SUBMITTED,
-                    SocialMissionLifecycleStatus.UNDER_REVIEW
-                ) }
-                _uiState.value = _uiState.value.copy(activeMissionRecords = active)
-            }
-            .launchIn(viewModelScope)
-
-        socialRepository.observeAllModuleProgress(accountOwnerId)
-            .onEach { progress ->
-                val mapped = SocialModuleIdentifier.entries.map { mod ->
-                    progress.find { it.module == mod } ?: SocialModuleProgress(
-                        accountOwnerId = accountOwnerId,
-                        module = mod,
-                        masteryStage = SocialMasteryStage.NOVICE
-                    )
+            socialRepository.observeProfile(ownerId)
+                .onEach { prof ->
+                    _uiState.value = _uiState.value.copy(profile = prof, isLoading = false)
                 }
-                _uiState.value = _uiState.value.copy(moduleProgressList = mapped, isLoading = false)
-            }
-            .launchIn(viewModelScope)
+                .launchIn(this)
 
-        viewModelScope.launch {
-            socialRepository.observeRecentSessions(accountOwnerId, 20)
+            socialRepository.observeMissionRecords(ownerId)
+                .onEach { records ->
+                    val active = records.filter {
+                        it.lifecycleStatus in listOf(
+                            SocialMissionLifecycleStatus.ACCEPTED,
+                            SocialMissionLifecycleStatus.IN_PROGRESS,
+                            SocialMissionLifecycleStatus.SUBMITTED,
+                            SocialMissionLifecycleStatus.UNDER_REVIEW
+                        )
+                    }
+                    _uiState.value = _uiState.value.copy(activeMissionRecords = active)
+                }
+                .launchIn(this)
+
+            socialRepository.observeAllModuleProgress(ownerId)
+                .onEach { progress ->
+                    val mapped = SocialModuleIdentifier.entries.map { mod ->
+                        progress.find { it.module == mod } ?: SocialModuleProgress(
+                            accountOwnerId = ownerId,
+                            module = mod,
+                            masteryStage = SocialMasteryStage.NOVICE
+                        )
+                    }
+                    _uiState.value = _uiState.value.copy(moduleProgressList = mapped, isLoading = false)
+                }
+                .launchIn(this)
+
+            socialRepository.observeRecentSessions(ownerId, 20)
                 .onEach { sessions ->
                     _uiState.value = _uiState.value.copy(recentSessions = sessions)
                 }
-                .launchIn(viewModelScope)
+                .launchIn(this)
+
+            // Milestone 12 — Phase 5: Observers for Recommendations, Training Plan & Pathways
+            socialRepository.observeAdaptiveRecommendations(ownerId)
+                .onEach { recs ->
+                    _uiState.value = _uiState.value.copy(activeRecommendations = recs)
+                }
+                .launchIn(this)
+
+            socialRepository.observeWeeklyTrainingPlan(ownerId)
+                .onEach { plan ->
+                    _uiState.value = _uiState.value.copy(currentTrainingPlan = plan)
+                }
+                .launchIn(this)
+
+            socialRepository.observeAllPathways(ownerId)
+                .onEach { pathways ->
+                    _uiState.value = _uiState.value.copy(masteryPathways = pathways)
+                }
+                .launchIn(this)
         }
-
-        // Milestone 12 — Phase 5: Observers for Recommendations, Training Plan & Pathways
-        socialRepository.observeAdaptiveRecommendations(accountOwnerId)
-            .onEach { recs ->
-                _uiState.value = _uiState.value.copy(activeRecommendations = recs)
-            }
-            .launchIn(viewModelScope)
-
-        socialRepository.observeWeeklyTrainingPlan(accountOwnerId)
-            .onEach { plan ->
-                _uiState.value = _uiState.value.copy(currentTrainingPlan = plan)
-            }
-            .launchIn(viewModelScope)
-
-        socialRepository.observeAllPathways(accountOwnerId)
-            .onEach { pathways ->
-                _uiState.value = _uiState.value.copy(masteryPathways = pathways)
-            }
-            .launchIn(viewModelScope)
     }
 
     // AI Coaching Actions
@@ -281,7 +310,7 @@ class SocialMasteryViewModel(
     fun startExerciseSession(exerciseId: String) {
         val exercise = practiceEngine.getExerciseById(exerciseId) ?: return
         val session = practiceEngine.createPracticeSession(
-            accountOwnerId = accountOwnerId,
+            accountOwnerId = activeAccountOwnerId,
             module = exercise.module,
             activityKind = when (exercise.category) {
                 PracticeCategory.IMPROMPTU_SPEAKING,
@@ -342,11 +371,12 @@ class SocialMasteryViewModel(
         val scenario = _sessionState.value.currentScenario ?: return
         val updatedTurns = _sessionState.value.scenarioUserTurns + responseText
         val nextRound = _sessionState.value.scenarioCurrentRound + 1
+        val ownerId = activeAccountOwnerId
 
         if (nextRound > scenario.targetRounds) {
             viewModelScope.launch {
                 practiceEngine.recordConversationScenarioComplete(
-                    accountOwnerId = accountOwnerId,
+                    accountOwnerId = ownerId,
                     scenario = scenario,
                     userTurns = updatedTurns,
                     score = 88
@@ -370,7 +400,7 @@ class SocialMasteryViewModel(
     fun startListeningExercise(exerciseId: String) {
         val ex = SocialPracticeCatalog.listeningExercises.find { it.exerciseId == exerciseId } ?: return
         val session = practiceEngine.createPracticeSession(
-            accountOwnerId = accountOwnerId,
+            accountOwnerId = activeAccountOwnerId,
             module = ex.module,
             activityKind = SocialActivityKind.LISTENING_EXERCISE
         )
@@ -447,9 +477,10 @@ class SocialMasteryViewModel(
     }
 
     fun startMission(missionId: String) {
+        val ownerId = activeAccountOwnerId
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isSubmittingMission = true)
-            socialRepository.startMission(accountOwnerId, missionId)
+            socialRepository.startMission(ownerId, missionId)
                 .onSuccess { record ->
                     val mission = SocialMissionCatalog.getMissionById(missionId)
                     _uiState.value = _uiState.value.copy(
@@ -469,8 +500,9 @@ class SocialMasteryViewModel(
     }
 
     fun postponeMission(recordId: String) {
+        val ownerId = activeAccountOwnerId
         viewModelScope.launch {
-            socialRepository.postponeMission(recordId, accountOwnerId)
+            socialRepository.postponeMission(recordId, ownerId)
                 .onSuccess { record ->
                     _uiState.value = _uiState.value.copy(
                         selectedMissionRecord = record,
@@ -481,8 +513,9 @@ class SocialMasteryViewModel(
     }
 
     fun cancelMission(recordId: String) {
+        val ownerId = activeAccountOwnerId
         viewModelScope.launch {
-            socialRepository.cancelMission(recordId, accountOwnerId)
+            socialRepository.cancelMission(recordId, ownerId)
                 .onSuccess { record ->
                     _uiState.value = _uiState.value.copy(
                         selectedMissionRecord = record,
@@ -493,8 +526,9 @@ class SocialMasteryViewModel(
     }
 
     fun retryMission(recordId: String) {
+        val ownerId = activeAccountOwnerId
         viewModelScope.launch {
-            socialRepository.retryMission(recordId, accountOwnerId)
+            socialRepository.retryMission(recordId, ownerId)
                 .onSuccess { record ->
                     _uiState.value = _uiState.value.copy(
                         selectedMissionRecord = record,
@@ -514,24 +548,29 @@ class SocialMasteryViewModel(
         reflectionText: String,
         humanConfirmingRole: String? = null,
         artifactNote: String? = null,
-        aiFeedbackNotes: String? = null
+        aiFeedbackNotes: String? = null,
+        artifactAttachmentUri: String? = null,
+        onSuccess: () -> Unit = {}
     ) {
+        val ownerId = activeAccountOwnerId
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isSubmittingMission = true)
+            _uiState.value = _uiState.value.copy(isSubmittingMission = true, missionSubmissionMessage = null)
             socialRepository.submitMissionReflection(
                 recordId = recordId,
-                accountOwnerId = accountOwnerId,
+                accountOwnerId = ownerId,
                 evidenceType = evidenceType,
                 reflectionText = reflectionText,
                 humanConfirmingRole = humanConfirmingRole,
                 artifactNote = artifactNote,
-                aiFeedbackNotes = aiFeedbackNotes
+                aiFeedbackNotes = aiFeedbackNotes,
+                artifactAttachmentUri = artifactAttachmentUri
             ).onSuccess { (record, reward) ->
                 _uiState.value = _uiState.value.copy(
                     isSubmittingMission = false,
                     selectedMissionRecord = record,
                     missionSubmissionMessage = "Mission Cleared! +${reward.xpAwarded} XP awarded."
                 )
+                onSuccess()
             }.onFailure { err ->
                 _uiState.value = _uiState.value.copy(
                     isSubmittingMission = false,
@@ -551,10 +590,11 @@ class SocialMasteryViewModel(
         s5: Int,
         notes: String
     ) {
+        val ownerId = activeAccountOwnerId
         viewModelScope.launch {
             val submission = SkillAssessmentSubmission(
                 assessmentId = UUID.randomUUID().toString(),
-                accountOwnerId = accountOwnerId,
+                accountOwnerId = ownerId,
                 module = module,
                 scoreDim1 = s1,
                 scoreDim2 = s2,
@@ -564,7 +604,7 @@ class SocialMasteryViewModel(
                 qualitativeNotes = notes
             )
             socialRepository.recordSkillAssessment(submission)
-                .onSuccess { (assessment, reward) ->
+                .onSuccess { (_, reward) ->
                     val evalResult = SocialSkillAssessmentEngine.evaluateSubmission(submission)
                     _uiState.value = _uiState.value.copy(
                         latestAssessmentResult = evalResult,
@@ -606,9 +646,10 @@ class SocialMasteryViewModel(
     // =========================================================================
 
     fun refreshRecommendations() {
+        val ownerId = activeAccountOwnerId
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)
-            socialRepository.generateAndSaveRecommendations(accountOwnerId)
+            socialRepository.generateAndSaveRecommendations(ownerId)
                 .onSuccess { recs ->
                     _uiState.value = _uiState.value.copy(
                         activeRecommendations = recs,
@@ -626,21 +667,24 @@ class SocialMasteryViewModel(
     }
 
     fun acceptRecommendation(recommendationId: String) {
+        val ownerId = activeAccountOwnerId
         viewModelScope.launch {
-            socialRepository.updateRecommendationStatus(recommendationId, accountOwnerId, RecommendationStatus.ACCEPTED)
+            socialRepository.updateRecommendationStatus(recommendationId, ownerId, SocialRecommendationStatus.ACCEPTED)
         }
     }
 
     fun dismissRecommendation(recommendationId: String) {
+        val ownerId = activeAccountOwnerId
         viewModelScope.launch {
-            socialRepository.updateRecommendationStatus(recommendationId, accountOwnerId, RecommendationStatus.DISMISSED)
+            socialRepository.updateRecommendationStatus(recommendationId, ownerId, SocialRecommendationStatus.DISMISSED)
         }
     }
 
     fun generateWeeklyPlan(targetDays: Int = 5, targetMinutes: Int = 15) {
+        val ownerId = activeAccountOwnerId
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isGeneratingPlan = true)
-            socialRepository.generateWeeklyTrainingPlan(accountOwnerId, targetDays, targetMinutes)
+            socialRepository.generateWeeklyTrainingPlan(ownerId, targetDays, targetMinutes)
                 .onSuccess { plan ->
                     _uiState.value = _uiState.value.copy(
                         currentTrainingPlan = plan,
@@ -658,38 +702,44 @@ class SocialMasteryViewModel(
     }
 
     fun completePlannedActivity(activityId: String) {
+        val ownerId = activeAccountOwnerId
         viewModelScope.launch {
-            socialRepository.updateActivityStatus(activityId, accountOwnerId, isCompleted = true, isSkipped = false)
+            socialRepository.updateActivityStatus(activityId, ownerId, isCompleted = true, isSkipped = false)
         }
     }
 
     fun skipPlannedActivity(activityId: String) {
+        val ownerId = activeAccountOwnerId
         viewModelScope.launch {
-            socialRepository.updateActivityStatus(activityId, accountOwnerId, isCompleted = false, isSkipped = true)
+            socialRepository.updateActivityStatus(activityId, ownerId, isCompleted = false, isSkipped = true)
         }
     }
 
     fun reschedulePlannedActivity(activityId: String, newDateEpochMs: Long, newDayOfWeek: Int) {
+        val ownerId = activeAccountOwnerId
         viewModelScope.launch {
-            socialRepository.rescheduleActivity(activityId, accountOwnerId, newDateEpochMs, newDayOfWeek)
+            socialRepository.rescheduleActivity(activityId, ownerId, newDateEpochMs, newDayOfWeek)
         }
     }
 
     fun togglePauseTrainingPlan(planId: String, isPaused: Boolean) {
+        val ownerId = activeAccountOwnerId
         viewModelScope.launch {
-            socialRepository.pauseOrResumeTrainingPlan(planId, accountOwnerId, isPaused)
+            socialRepository.pauseOrResumeTrainingPlan(planId, ownerId, isPaused)
         }
     }
 
     fun setCompetencyDifficultyOverride(competencyId: String, difficulty: AdaptiveDifficulty) {
+        val ownerId = activeAccountOwnerId
         viewModelScope.launch {
-            socialRepository.updateCompetencyDifficultyOverride(competencyId, accountOwnerId, difficulty)
+            socialRepository.updateCompetencyDifficultyOverride(competencyId, ownerId, difficulty)
         }
     }
 
     fun loadWeeklyReport() {
+        val ownerId = activeAccountOwnerId
         viewModelScope.launch {
-            socialRepository.generateWeeklyReport(accountOwnerId)
+            socialRepository.generateWeeklyReport(ownerId)
                 .onSuccess { report ->
                     _uiState.value = _uiState.value.copy(weeklyDevelopmentReport = report)
                 }

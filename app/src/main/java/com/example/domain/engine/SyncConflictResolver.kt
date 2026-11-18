@@ -277,6 +277,83 @@ object SyncConflictResolver {
         return if (eligible.ordinal > currentRank.ordinal) eligible else currentRank
     }
 
+    // -------------------------------------------------------------------------
+    // SHADOW ARMY CONFLICT RESOLUTION (Strictly Account-Scoped)
+    // -------------------------------------------------------------------------
+
+    fun resolveShadowMonarchProfile(
+        local: com.example.domain.model.ShadowMonarchProfile,
+        cloud: com.example.domain.model.ShadowMonarchProfile
+    ): com.example.domain.model.ShadowMonarchProfile {
+        require(local.accountOwnerId == cloud.accountOwnerId) {
+            "Cross-account ShadowMonarchProfile reconciliation rejected"
+        }
+        val xpWinner = if (cloud.monarchXp > local.monarchXp) cloud else local
+        val highestRank = if (cloud.highestShadowRank.order > local.highestShadowRank.order) {
+            cloud.highestShadowRank
+        } else {
+            local.highestShadowRank
+        }
+        val mergedSkills = (local.unlockedMonarchSkillIds + cloud.unlockedMonarchSkillIds).distinct()
+        return xpWinner.copy(
+            monarchAuthority = maxOf(local.monarchAuthority, cloud.monarchAuthority),
+            armyCapacity = maxOf(local.armyCapacity, cloud.armyCapacity),
+            activeShadowCount = maxOf(local.activeShadowCount, cloud.activeShadowCount),
+            totalShadowsRecruited = maxOf(local.totalShadowsRecruited, cloud.totalShadowsRecruited),
+            highestShadowRank = highestRank,
+            totalEvolutions = maxOf(local.totalEvolutions, cloud.totalEvolutions),
+            shadowArmyPowerRating = maxOf(local.shadowArmyPowerRating, cloud.shadowArmyPowerRating),
+            unlockedMonarchSkillIds = mergedSkills,
+            updatedAtEpochMs = maxOf(local.updatedAtEpochMs, cloud.updatedAtEpochMs)
+        )
+    }
+
+    fun resolveShadow(
+        local: com.example.domain.model.Shadow,
+        cloud: com.example.domain.model.Shadow
+    ): com.example.domain.model.Shadow {
+        require(local.accountOwnerId == cloud.accountOwnerId) {
+            "Cross-account Shadow reconciliation rejected"
+        }
+        val progressWinner = if (cloud.shadowXp > local.shadowXp) cloud else local
+        val rankWinner = if (cloud.currentRank.order > local.currentRank.order) cloud.currentRank else local.currentRank
+        val stageWinner = if (cloud.evolutionStage.order > local.evolutionStage.order) cloud.evolutionStage else local.evolutionStage
+        return progressWinner.copy(
+            level = maxOf(local.level, cloud.level),
+            shadowXp = maxOf(local.shadowXp, cloud.shadowXp),
+            currentRank = rankWinner,
+            evolutionStage = stageWinner,
+            activeSkillIds = (local.activeSkillIds + cloud.activeSkillIds).distinct(),
+            isRetired = local.isRetired || cloud.isRetired
+        )
+    }
+
+    fun resolveShadowDeployment(
+        local: com.example.domain.model.ShadowDeploymentRecord,
+        cloud: com.example.domain.model.ShadowDeploymentRecord
+    ): com.example.domain.model.ShadowDeploymentRecord {
+        require(local.accountOwnerId == cloud.accountOwnerId) {
+            "Cross-account ShadowDeployment reconciliation rejected"
+        }
+        return when {
+            cloud.status == com.example.domain.model.ShadowDeploymentStatus.RECALLED &&
+                local.status != com.example.domain.model.ShadowDeploymentStatus.RECALLED -> cloud
+            local.status == com.example.domain.model.ShadowDeploymentStatus.RECALLED &&
+                cloud.status != com.example.domain.model.ShadowDeploymentStatus.RECALLED -> local
+            else -> if ((cloud.recalledAtEpochMs ?: cloud.assignedAtEpochMs) >= (local.recalledAtEpochMs ?: local.assignedAtEpochMs)) cloud else local
+        }
+    }
+
+    fun resolveShadowFormation(
+        local: com.example.domain.model.ShadowFormation,
+        cloud: com.example.domain.model.ShadowFormation
+    ): com.example.domain.model.ShadowFormation {
+        require(local.accountOwnerId == cloud.accountOwnerId) {
+            "Cross-account ShadowFormation reconciliation rejected"
+        }
+        return if (cloud.updatedAtEpochMs > local.updatedAtEpochMs) cloud else local
+    }
+
     fun computeSha256(content: String): String {
         val digest = MessageDigest.getInstance("SHA-256").digest(content.toByteArray(Charsets.UTF_8))
         return digest.joinToString("") { "%02x".format(it) }

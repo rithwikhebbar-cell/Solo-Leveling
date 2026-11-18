@@ -202,8 +202,8 @@ class RoomMigration10To11Test {
         assertEquals(1, monarchCursor.getInt(monarchCursor.getColumnIndexOrThrow("monarchLevel")))
         assertEquals(0L, monarchCursor.getLong(monarchCursor.getColumnIndexOrThrow("monarchXp")))
         assertEquals("AWAKENING", monarchCursor.getString(monarchCursor.getColumnIndexOrThrow("monarchRankName")))
-        assertEquals(10, monarchCursor.getInt(monarchCursor.getColumnIndexOrThrow("monarchAuthority")))
-        assertEquals(5, monarchCursor.getInt(monarchCursor.getColumnIndexOrThrow("armyCapacity")))
+        assertEquals(0, monarchCursor.getInt(monarchCursor.getColumnIndexOrThrow("monarchAuthority")))
+        assertEquals(10, monarchCursor.getInt(monarchCursor.getColumnIndexOrThrow("armyCapacity")))
         assertEquals(0, monarchCursor.getInt(monarchCursor.getColumnIndexOrThrow("activeShadowCount")))
         monarchCursor.close()
 

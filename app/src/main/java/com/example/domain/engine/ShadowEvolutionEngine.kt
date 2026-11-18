@@ -1,39 +1,44 @@
 package com.example.domain.engine
 
+import androidx.room.withTransaction
+import com.example.data.local.SoloLevelingDatabase
 import com.example.data.local.dao.ShadowDao
 import com.example.data.local.dao.ShadowSkillUnlockDao
+import com.example.data.local.dao.ShadowXpTraceDao
 import com.example.data.local.entity.ShadowSkillUnlockEntity
+import com.example.data.local.entity.ShadowXpTraceEntity
 import com.example.data.local.entity.toDomain
 import com.example.data.local.entity.toEntity
+import com.example.domain.model.DEFAULT_SHADOW_ACCOUNT_OWNER_ID
 import com.example.domain.model.Shadow
 import com.example.domain.model.ShadowEvolutionStage
 import com.example.domain.model.ShadowRank
 import com.example.domain.model.ShadowSkillCatalog
 import com.example.domain.model.ShadowSkillUnlock
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import java.util.UUID
 
 // ============================================================================
-// SHADOW EVOLUTION ENGINE
+// SHADOW EVOLUTION ENGINE (Account-Isolated & Idempotency-Protected)
 // Controls shadow XP, leveling, rank progression, and evolution stages.
-//
-// SAFETY GUARANTEES:
-//  - Shadow XP is completely separate from Player XP and Monarch XP.
-//  - Rank-ups are deterministic (based on level + XP thresholds).
-//  - Evolution requires explicit player confirmation.
-//  - No duplicate XP events (enforced via source event idempotency).
 // ============================================================================
 
 class ShadowEvolutionEngine(
     private val shadowDao: ShadowDao,
     private val shadowSkillUnlockDao: ShadowSkillUnlockDao,
-    private val monarchProgressionEngine: MonarchProgressionEngine
+    private val monarchProgressionEngine: MonarchProgressionEngine,
+    private val shadowXpTraceDao: ShadowXpTraceDao? = null,
+    private val database: SoloLevelingDatabase? = null,
+    private val mutex: Mutex = Mutex()
 ) {
 
     companion object {
         const val MONARCH_XP_PER_EVOLUTION = 200
+        const val TRACE_TYPE_SHADOW_XP = "SHADOW_XP"
 
-        // Rank-up thresholds: minimum level required for each rank
         private val RANK_UP_REQUIREMENTS: Map<ShadowRank, Pair<Int, Long>> = mapOf(
             ShadowRank.D_RANK to Pair(10, 500L),
             ShadowRank.C_RANK to Pair(25, 2000L),
@@ -43,9 +48,6 @@ class ShadowEvolutionEngine(
             ShadowRank.MONARCH_CLASS to Pair(100, 50000L)
         )
 
-        /**
-         * Determines the appropriate shadow rank for given level and XP.
-         */
         fun calculateRank(level: Int, totalXp: Long): ShadowRank {
             return ShadowRank.entries.sortedByDescending { it.order }.firstOrNull { rank ->
                 val reqs = RANK_UP_REQUIREMENTS[rank]
@@ -53,9 +55,6 @@ class ShadowEvolutionEngine(
             } ?: ShadowRank.E_RANK
         }
 
-        /**
-         * Determines the evolution stage for a given level and rank.
-         */
         fun calculateEvolutionStage(level: Int, rank: ShadowRank): ShadowEvolutionStage {
             return ShadowEvolutionStage.entries
                 .sortedByDescending { it.order }
@@ -64,9 +63,6 @@ class ShadowEvolutionEngine(
                 } ?: ShadowEvolutionStage.NEWLY_EXTRACTED
         }
 
-        /**
-         * XP awarded per shadow level (simple linear function).
-         */
         fun xpToNextLevel(currentLevel: Int): Long {
             return (50L * currentLevel * currentLevel + 25L * currentLevel).coerceAtLeast(100L)
         }
@@ -76,75 +72,113 @@ class ShadowEvolutionEngine(
         }
     }
 
-    // -------------------------------------------------------------------------
-    // AWARD SHADOW XP
-    // -------------------------------------------------------------------------
-
-    /**
-     * Awards XP to a shadow from an eligible, deterministic source.
-     * Returns true if XP was actually awarded (not duplicate, shadow exists).
-     * Never modifies player XP or any player attributes.
-     */
-    suspend fun awardShadowXp(shadowId: String, xpAmount: Int, sourceTag: String): Boolean {
-        val shadow = shadowDao.getShadowById(shadowId) ?: return false
-        if (shadow.isRetired) return false
-        if (xpAmount <= 0) return false
-
-        val domain = shadow.toDomain()
-        val newXp = domain.shadowXp + xpAmount
-        val newLevel = Shadow.shadowLevelForXp(newXp)
-        val newRank = calculateRank(newLevel, newXp)
-
-        // Determine new evolution stage
-        val oldEvolutionStage = domain.evolutionStage
-        val newEvolutionStage = calculateEvolutionStage(newLevel, newRank)
-
-        // Update evolution history if stage changed
-        val evolutionHistory = if (newEvolutionStage != oldEvolutionStage) {
-            val existing = try {
-                Json.decodeFromString<List<String>>(domain.evolutionHistoryJson)
-            } catch (e: Exception) { emptyList() }
-            (existing + "${newEvolutionStage.name}:${System.currentTimeMillis()}").let {
-                Json.encodeToString(it)
+    private suspend fun <T> withLockedTransaction(block: suspend () -> T): T {
+        return mutex.withLock {
+            val db = database
+            if (db != null) {
+                db.withTransaction { block() }
+            } else {
+                block()
             }
-        } else {
-            domain.evolutionHistoryJson
         }
-
-        val updated = domain.copy(
-            shadowXp = newXp,
-            level = newLevel,
-            currentRank = newRank,
-            evolutionStage = newEvolutionStage,
-            evolutionHistoryJson = evolutionHistory
-        )
-        shadowDao.updateShadow(updated.toEntity())
-
-        // Award Monarch XP for evolution milestone (idempotent)
-        if (newEvolutionStage != oldEvolutionStage) {
-            monarchProgressionEngine.awardMonarchXp(
-                sourceTag = "evolution_${shadowId}_${newEvolutionStage.name}",
-                xpAmount = MONARCH_XP_PER_EVOLUTION,
-                sourceDescription = "Shadow ${domain.name} evolved to ${newEvolutionStage.label}"
-            )
-            monarchProgressionEngine.refreshMonarchProfile()
-        }
-
-        return true
     }
 
     // -------------------------------------------------------------------------
-    // CONFIRM EVOLUTION (player must confirm)
+    // AWARD SHADOW XP (Owner-Verified & Idempotent)
     // -------------------------------------------------------------------------
 
-    /**
-     * Checks if a shadow is eligible for evolution to the next stage.
-     */
-    suspend fun isEligibleForEvolution(shadowId: String): Pair<Boolean, List<String>> {
-        val shadow = shadowDao.getShadowById(shadowId)?.toDomain() ?: return Pair(false, listOf("Shadow not found"))
+    suspend fun awardShadowXp(
+        shadowId: String,
+        xpAmount: Int,
+        sourceTag: String,
+        accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID
+    ): Boolean {
+        val owner = accountOwnerId.trim()
+        val tag = sourceTag.trim()
+        if (owner.isBlank() || shadowId.isBlank() || tag.isBlank() || xpAmount <= 0) return false
+
+        return withLockedTransaction {
+            val shadow = shadowDao.getShadowByIdForOwner(shadowId, owner) ?: return@withLockedTransaction false
+            if (shadow.isRetired) return@withLockedTransaction false
+
+            val now = System.currentTimeMillis()
+            val compositeTag = "${shadowId}::$tag"
+            if (shadowXpTraceDao != null) {
+                if (shadowXpTraceDao.findTrace(owner, TRACE_TYPE_SHADOW_XP, compositeTag) != null) {
+                    return@withLockedTransaction false
+                }
+                val inserted = shadowXpTraceDao.insertTraceIgnore(
+                    ShadowXpTraceEntity(
+                        traceId = UUID.randomUUID().toString(),
+                        accountOwnerId = owner,
+                        traceType = TRACE_TYPE_SHADOW_XP,
+                        sourceTag = compositeTag,
+                        targetEntityId = shadowId,
+                        xpAmount = xpAmount,
+                        description = "Shadow XP award ($tag)",
+                        timestampEpochMs = now
+                    )
+                )
+                if (inserted == -1L) return@withLockedTransaction false
+            }
+
+            val domain = shadow.toDomain()
+            val newXp = domain.shadowXp + xpAmount
+            val newLevel = Shadow.shadowLevelForXp(newXp)
+            val newRank = calculateRank(newLevel, newXp)
+
+            val oldEvolutionStage = domain.evolutionStage
+            val newEvolutionStage = calculateEvolutionStage(newLevel, newRank)
+
+            val evolutionHistory = if (newEvolutionStage != oldEvolutionStage) {
+                val existing = try {
+                    Json.decodeFromString<List<String>>(domain.evolutionHistoryJson)
+                } catch (_: Exception) { emptyList() }
+                (existing + "${newEvolutionStage.name}:$now").let { Json.encodeToString(it) }
+            } else {
+                domain.evolutionHistoryJson
+            }
+
+            val updated = domain.copy(
+                accountOwnerId = owner,
+                shadowXp = newXp,
+                level = newLevel,
+                currentRank = newRank,
+                evolutionStage = newEvolutionStage,
+                evolutionHistoryJson = evolutionHistory
+            )
+            val updatedRows = shadowDao.updateShadow(updated.toEntity())
+            if (updatedRows <= 0) return@withLockedTransaction false
+
+            if (newEvolutionStage != oldEvolutionStage) {
+                monarchProgressionEngine.awardMonarchXpLocked(
+                    accountOwnerId = owner,
+                    sourceTag = "evolution_${shadowId}_${newEvolutionStage.name}",
+                    xpAmount = MONARCH_XP_PER_EVOLUTION,
+                    sourceDescription = "Shadow ${domain.name} evolved to ${newEvolutionStage.label}"
+                )
+                monarchProgressionEngine.refreshMonarchProfileLocked(owner)
+            }
+
+            true
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // EVOLUTION ELIGIBILITY
+    // -------------------------------------------------------------------------
+
+    suspend fun isEligibleForEvolution(
+        shadowId: String,
+        accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID
+    ): Pair<Boolean, List<String>> {
+        val owner = accountOwnerId.trim()
+        if (owner.isBlank()) return Pair(false, listOf("Invalid account owner"))
+        val shadow = shadowDao.getShadowByIdForOwner(shadowId, owner)?.toDomain()
+            ?: return Pair(false, listOf("Shadow not found"))
         val blockers = mutableListOf<String>()
 
-        val nextStageIdx = shadow.evolutionStage.order  // next stage order = current order + 1
+        val nextStageIdx = shadow.evolutionStage.order
         val nextStage = ShadowEvolutionStage.entries.firstOrNull { it.order == nextStageIdx + 1 }
             ?: return Pair(false, listOf("Shadow is at maximum evolution stage"))
 
@@ -159,62 +193,63 @@ class ShadowEvolutionEngine(
     }
 
     // -------------------------------------------------------------------------
-    // SHADOW SKILL MANAGEMENT
+    // SHADOW SKILL MANAGEMENT (Owner-Verified & Transactional)
     // -------------------------------------------------------------------------
 
-    /**
-     * Attempts to unlock a shadow skill. Returns true if unlocked successfully.
-     * Checks rank, level, and prerequisite requirements.
-     */
-    suspend fun unlockShadowSkill(shadowId: String, skillId: String, evidenceNote: String): Boolean {
-        val shadow = shadowDao.getShadowById(shadowId)?.toDomain() ?: return false
-        val skillDef = ShadowSkillCatalog.findById(skillId) ?: return false
+    suspend fun unlockShadowSkill(
+        shadowId: String,
+        skillId: String,
+        evidenceNote: String,
+        accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID
+    ): Boolean {
+        val owner = accountOwnerId.trim()
+        if (owner.isBlank() || shadowId.isBlank() || skillId.isBlank()) return false
 
-        // Check if already unlocked
-        val existing = shadowSkillUnlockDao.getUnlock(shadowId, skillId)
-        if (existing != null) return false
+        return withLockedTransaction {
+            val shadow = shadowDao.getShadowByIdForOwner(shadowId, owner)?.toDomain()
+                ?: return@withLockedTransaction false
+            if (shadow.isRetired) return@withLockedTransaction false
+            val skillDef = ShadowSkillCatalog.findById(skillId) ?: return@withLockedTransaction false
 
-        // Check requirements
-        if (shadow.currentRank.order < skillDef.requiredShadowRank.order) return false
-        if (shadow.level < skillDef.requiredShadowLevel) return false
+            val existing = shadowSkillUnlockDao.getUnlockForOwner(owner, shadowId, skillId)
+            if (existing != null) return@withLockedTransaction false
 
-        // Check prerequisites
-        for (prereqId in skillDef.prerequisiteSkillIds) {
-            val prereqUnlocked = shadowSkillUnlockDao.getUnlock(shadowId, prereqId)
-            if (prereqUnlocked == null) return false
-        }
+            if (shadow.currentRank.order < skillDef.requiredShadowRank.order) return@withLockedTransaction false
+            if (shadow.level < skillDef.requiredShadowLevel) return@withLockedTransaction false
 
-        // Unlock the skill
-        shadowSkillUnlockDao.insertUnlock(
-            ShadowSkillUnlockEntity(
-                shadowId = shadowId,
-                skillId = skillId,
-                unlockedAtEpochMs = System.currentTimeMillis(),
-                evidenceNote = evidenceNote
+            for (prereqId in skillDef.prerequisiteSkillIds) {
+                val prereqUnlocked = shadowSkillUnlockDao.getUnlockForOwner(owner, shadowId, prereqId)
+                if (prereqUnlocked == null) return@withLockedTransaction false
+            }
+
+            val inserted = shadowSkillUnlockDao.insertUnlock(
+                ShadowSkillUnlockEntity(
+                    accountOwnerId = owner,
+                    shadowId = shadowId,
+                    skillId = skillId,
+                    unlockedAtEpochMs = System.currentTimeMillis(),
+                    evidenceNote = evidenceNote
+                )
             )
-        )
+            if (inserted <= 0L) return@withLockedTransaction false
 
-        // Update shadow's active skill list
-        val updatedSkills = (shadow.activeSkillIds + skillId).distinct()
-        shadowDao.updateShadow(shadow.copy(activeSkillIds = updatedSkills).toEntity())
+            val updatedSkills = (shadow.activeSkillIds + skillId).distinct()
+            shadowDao.updateShadow(shadow.copy(accountOwnerId = owner, activeSkillIds = updatedSkills).toEntity())
 
-        return true
+            true
+        }
     }
 
-    suspend fun getShadowSkillUnlocks(shadowId: String): List<ShadowSkillUnlock> {
-        return shadowSkillUnlockDao.getUnlocksForShadowOnce(shadowId).map { it.toDomain() }
+    suspend fun getShadowSkillUnlocks(
+        shadowId: String,
+        accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID
+    ): List<ShadowSkillUnlock> {
+        return shadowSkillUnlockDao.getUnlocksForShadowForOwnerOnce(accountOwnerId, shadowId)
+            .map { it.toDomain() }
     }
 
-    // -------------------------------------------------------------------------
-    // RANK-UP VALIDATION
-    // -------------------------------------------------------------------------
-
-    /**
-     * Returns the requirements needed for the shadow to advance to the next rank.
-     */
     fun getRankUpRequirements(currentRank: ShadowRank): Pair<Int, Long>? {
         val nextRank = currentRank.nextRank() ?: return null
         return RANK_UP_REQUIREMENTS[nextRank]
     }
 }
-

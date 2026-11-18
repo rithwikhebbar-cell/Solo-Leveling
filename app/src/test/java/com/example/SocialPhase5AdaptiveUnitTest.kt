@@ -12,7 +12,7 @@ import com.example.domain.model.MasteryEvidenceClassification
 import com.example.domain.model.MissionDifficultyRank
 import com.example.domain.model.PersonalizedWeeklyTrainingPlan
 import com.example.domain.model.PlayerProfile
-import com.example.domain.model.RecommendationCategory
+import com.example.domain.model.SocialRecommendationCategory
 import com.example.domain.model.ScheduledTrainingActivity
 import com.example.domain.model.SkillAssessmentClassification
 import com.example.domain.model.SkillAssessmentSubmission
@@ -20,6 +20,7 @@ import com.example.domain.model.SocialActivityKind
 import com.example.domain.model.SocialAssessment
 import com.example.domain.model.SocialAssessmentType
 import com.example.domain.model.SocialCompetencyCatalog
+import com.example.domain.model.SocialArtifactValidationState
 import com.example.domain.model.SocialCompetencyProgress
 import com.example.domain.model.SocialEvidenceSource
 import com.example.domain.model.SocialMasteryStage
@@ -104,7 +105,7 @@ class SocialPhase5AdaptiveUnitTest {
             nowEpochMs = now
         )
 
-        val weaknessRec = recommendations.find { it.category == RecommendationCategory.IMPROVE_WEAKNESS }
+        val weaknessRec = recommendations.find { it.category == SocialRecommendationCategory.IMPROVE_WEAKNESS }
         assertNotNull("Must generate an IMPROVE_WEAKNESS recommendation for score < 70%", weaknessRec)
         assertEquals(SocialModuleIdentifier.COMMUNICATION_MASTERY, weaknessRec!!.targetModule)
         assertEquals("Active Listening", weaknessRec.targetCompetency)
@@ -138,7 +139,7 @@ class SocialPhase5AdaptiveUnitTest {
             nowEpochMs = now
         )
 
-        val realWorldRec = recommendations.find { it.category == RecommendationCategory.REAL_WORLD_APPLICATION }
+        val realWorldRec = recommendations.find { it.category == SocialRecommendationCategory.REAL_WORLD_APPLICATION }
         assertNotNull("Must recommend REAL_WORLD_APPLICATION when simulation fluency is high", realWorldRec)
         assertEquals("MISSION", realWorldRec!!.recommendedActivityType)
         assertTrue("Explanation must cite strong simulation performance", realWorldRec.explanation.contains("88%"))
@@ -170,7 +171,7 @@ class SocialPhase5AdaptiveUnitTest {
             nowEpochMs = now
         )
 
-        val inactiveRec = recommendations.find { it.category == RecommendationCategory.REVISIT_INACTIVE_SKILL }
+        val inactiveRec = recommendations.find { it.category == SocialRecommendationCategory.REVISIT_INACTIVE_SKILL }
         assertNotNull("Must generate REVISIT_INACTIVE_SKILL recommendation when inactive > 14 days", inactiveRec)
         assertTrue("Explanation must mention days of inactivity", inactiveRec!!.explanation.contains("15 days"))
     }
@@ -201,7 +202,7 @@ class SocialPhase5AdaptiveUnitTest {
         )
 
         assertTrue("Recommendations must not crash on zero history", recommendations.isNotEmpty())
-        assertTrue("New player recommendations should focus on exploring new skills", recommendations.any { it.category == RecommendationCategory.PRACTICE_NEW_SKILL })
+        assertTrue("New player recommendations should focus on exploring new skills", recommendations.any { it.category == SocialRecommendationCategory.PRACTICE_NEW_SKILL })
     }
 
     // =========================================================================
@@ -336,7 +337,7 @@ class SocialPhase5AdaptiveUnitTest {
                     verificationStatus = VerificationStatus.SELF_REPORTED, idempotencyKey = "key_s_$it"
                 )
             },
-            attempts = List(4) {
+            attempts = List(5) {
                 SocialScenarioAttempt(
                     attemptId = "att_$it", accountOwnerId = accountOwnerId, scenarioId = "scen_1",
                     scenarioTitle = "Active Listening", module = SocialModuleIdentifier.COMMUNICATION_MASTERY,
@@ -355,7 +356,101 @@ class SocialPhase5AdaptiveUnitTest {
         // Without completed real-world missions, stage is capped at COMPETENT even with 90% scores!
         assertEquals("Cannot advance to ADVANCED without real-world mission completion", MasteryDevelopmentStage.COMPETENT, compWithoutMission!!.masteryStage)
 
-        // Now provide a completed real-world mission
+        // Bare self-reported mission without concrete artifact must STILL cap at COMPETENT
+        val evaluatedWithSelfReportedOnly = AdaptiveSocialMasteryEngine.evaluateCompetencies(
+            accountOwnerId = accountOwnerId,
+            sessions = List(6) {
+                SocialPracticeSession(
+                    sessionId = "sess_sr_$it", accountOwnerId = accountOwnerId,
+                    module = SocialModuleIdentifier.COMMUNICATION_MASTERY,
+                    activityKind = SocialActivityKind.PRACTICE, sessionStatus = SocialSessionStatus.COMPLETED,
+                    durationSeconds = 600, startedEpochMs = now - 10000, completedEpochMs = now,
+                    evidenceSource = SocialEvidenceSource.SYSTEM_OBSERVED,
+                    verificationStatus = VerificationStatus.SELF_REPORTED, idempotencyKey = "key_s_sr_$it"
+                )
+            },
+            attempts = List(5) {
+                SocialScenarioAttempt(
+                    attemptId = "att_sr_$it", accountOwnerId = accountOwnerId, scenarioId = "scen_1",
+                    scenarioTitle = "Active Listening", module = SocialModuleIdentifier.COMMUNICATION_MASTERY,
+                    userResponseText = "Good response", evaluationScore = 90, isPassed = true,
+                    evidenceSource = SocialEvidenceSource.AI_ASSESSED,
+                    verificationStatus = VerificationStatus.VERIFIED_AI_RUBRIC, idempotencyKey = "key_a_sr_$it"
+                )
+            },
+            missions = listOf(
+                SocialMissionRecord(
+                    recordId = "m_rec_sr_01", accountOwnerId = accountOwnerId, missionId = "MSN_COMM_E01",
+                    module = SocialModuleIdentifier.COMMUNICATION_MASTERY, title = "Active Listening Check-In",
+                    difficultyRank = MissionDifficultyRank.E_RANK, lifecycleStatus = SocialMissionLifecycleStatus.COMPLETED,
+                    startedEpochMs = now - 50000, completedEpochMs = now - 1000,
+                    evidenceType = SocialMissionEvidenceType.SELF_REPORTED,
+                    reflectionText = "Self reflection without external artifact notes.",
+                    verificationStatus = VerificationStatus.SELF_REPORTED,
+                    idempotencyKey = "msn_reward_m_rec_sr_01", xpAwarded = 25
+                )
+            ),
+            assessments = emptyList(),
+            nowEpochMs = now
+        )
+
+        val compSelfReportedOnly = evaluatedWithSelfReportedOnly.find { it.competencyName == "Active Listening" }
+        assertNotNull(compSelfReportedOnly)
+        assertEquals(
+            "Self-reported mission without concrete artifact cannot elevate beyond COMPETENT",
+            MasteryDevelopmentStage.COMPETENT,
+            compSelfReportedOnly!!.masteryStage
+        )
+
+        // Note-only artifact ("12345") or ARTIFACT_DESCRIBED MUST STILL cap at COMPETENT
+        val evaluatedWithNoteOnly = AdaptiveSocialMasteryEngine.evaluateCompetencies(
+            accountOwnerId = accountOwnerId,
+            sessions = List(6) {
+                SocialPracticeSession(
+                    sessionId = "sess_note_$it", accountOwnerId = accountOwnerId,
+                    module = SocialModuleIdentifier.COMMUNICATION_MASTERY,
+                    activityKind = SocialActivityKind.PRACTICE, sessionStatus = SocialSessionStatus.COMPLETED,
+                    durationSeconds = 600, startedEpochMs = now - 10000, completedEpochMs = now,
+                    evidenceSource = SocialEvidenceSource.SYSTEM_OBSERVED,
+                    verificationStatus = VerificationStatus.SELF_REPORTED, idempotencyKey = "key_s_note_$it"
+                )
+            },
+            attempts = List(5) {
+                SocialScenarioAttempt(
+                    attemptId = "att_note_$it", accountOwnerId = accountOwnerId, scenarioId = "scen_1",
+                    scenarioTitle = "Active Listening", module = SocialModuleIdentifier.COMMUNICATION_MASTERY,
+                    userResponseText = "Good response", evaluationScore = 92, isPassed = true,
+                    evidenceSource = SocialEvidenceSource.AI_ASSESSED,
+                    verificationStatus = VerificationStatus.VERIFIED_AI_RUBRIC, idempotencyKey = "key_a_note_$it"
+                )
+            },
+            missions = listOf(
+                SocialMissionRecord(
+                    recordId = "m_rec_note_only", accountOwnerId = accountOwnerId, missionId = "MSN_COMM_E01",
+                    module = SocialModuleIdentifier.COMMUNICATION_MASTERY, title = "Active Listening Check-In",
+                    difficultyRank = MissionDifficultyRank.E_RANK, lifecycleStatus = SocialMissionLifecycleStatus.COMPLETED,
+                    startedEpochMs = now - 50000, completedEpochMs = now - 1000,
+                    evidenceType = SocialMissionEvidenceType.ARTIFACT_ATTACHED,
+                    artifactNote = "12345",
+                    artifactUri = null,
+                    artifactValidationState = SocialArtifactValidationState.ARTIFACT_DESCRIBED,
+                    verificationStatus = VerificationStatus.SELF_REPORTED,
+                    idempotencyKey = "msn_reward_m_rec_note_only", xpAwarded = 25
+                )
+            ),
+            assessments = emptyList(),
+            nowEpochMs = now
+        )
+
+        val compNoteOnly = evaluatedWithNoteOnly.find { it.competencyName == "Active Listening" }
+        assertNotNull(compNoteOnly)
+        assertEquals(
+            "Five-character or unattached artifact note must NOT unlock ADVANCED",
+            MasteryDevelopmentStage.COMPETENT,
+            compNoteOnly!!.masteryStage
+        )
+
+        // Now provide a verified retrievable, account-owned real-world artifact mission
         val evaluatedWithMission = AdaptiveSocialMasteryEngine.evaluateCompetencies(
             accountOwnerId = accountOwnerId,
             sessions = List(6) {
@@ -368,7 +463,7 @@ class SocialPhase5AdaptiveUnitTest {
                     verificationStatus = VerificationStatus.SELF_REPORTED, idempotencyKey = "key_s2_$it"
                 )
             },
-            attempts = List(4) {
+            attempts = List(5) {
                 SocialScenarioAttempt(
                     attemptId = "att2_$it", accountOwnerId = accountOwnerId, scenarioId = "scen_1",
                     scenarioTitle = "Active Listening", module = SocialModuleIdentifier.COMMUNICATION_MASTERY,
@@ -383,26 +478,141 @@ class SocialPhase5AdaptiveUnitTest {
                     module = SocialModuleIdentifier.COMMUNICATION_MASTERY, title = "Active Listening Check-In",
                     difficultyRank = MissionDifficultyRank.E_RANK, lifecycleStatus = SocialMissionLifecycleStatus.COMPLETED,
                     startedEpochMs = now - 50000, completedEpochMs = now - 1000,
-                    evidenceType = SocialMissionEvidenceType.SELF_REPORTED, verificationStatus = VerificationStatus.SELF_REPORTED,
+                    evidenceType = SocialMissionEvidenceType.ARTIFACT_ATTACHED,
+                    artifactNote = "Recorded 3 follow-up notes after team debrief.",
+                    artifactUri = "/vault/$accountOwnerId/m_rec_01_debrief.txt",
+                    artifactOwnerId = accountOwnerId,
+                    artifactContentHash = "hash_debrief_01",
+                    artifactValidationState = SocialArtifactValidationState.ARTIFACT_RETRIEVABLE,
+                    verificationStatus = VerificationStatus.SELF_REPORTED,
                     idempotencyKey = "msn_reward_m_rec_01", xpAwarded = 25
                 )
             ),
             assessments = emptyList(),
-            nowEpochMs = now
+            nowEpochMs = now,
+            artifactVerifier = { true }
         )
 
         val compWithMission = evaluatedWithMission.find { it.competencyName == "Active Listening" }
         assertNotNull(compWithMission)
-        assertEquals("ADVANCED stage unlocked with real-world mission evidence", MasteryDevelopmentStage.ADVANCED, compWithMission!!.masteryStage)
+        assertEquals("ADVANCED stage unlocked with retrievable artifact-supported mission evidence", MasteryDevelopmentStage.ADVANCED, compWithMission!!.masteryStage)
+        assertEquals(MasteryEvidenceClassification.ARTIFACT_SUPPORTED, compWithMission.evidenceClassification)
     }
 
     @Test
-    fun testInactivityDoesNotDemotePlayerStage() {
+    fun testMasteryCandidateRequiresRepeatedArtifactEvidenceAndHighScores() {
+        val accountOwnerId = "test_player_candidate"
+        val now = System.currentTimeMillis()
+
+        val sessions = List(6) {
+            SocialPracticeSession(
+                sessionId = "cand_s_$it", accountOwnerId = accountOwnerId,
+                module = SocialModuleIdentifier.COMMUNICATION_MASTERY,
+                activityKind = SocialActivityKind.PRACTICE, sessionStatus = SocialSessionStatus.COMPLETED,
+                durationSeconds = 600, startedEpochMs = now - 20000, completedEpochMs = now - 1000,
+                transcriptText = "Practiced Active Listening structured reflection drill #$it",
+                evidenceSource = SocialEvidenceSource.SYSTEM_OBSERVED,
+                verificationStatus = VerificationStatus.SELF_REPORTED, idempotencyKey = "cand_ks_$it"
+            )
+        }
+        val attempts = List(3) {
+            SocialScenarioAttempt(
+                attemptId = "cand_a_$it", accountOwnerId = accountOwnerId, scenarioId = "scen_cand",
+                scenarioTitle = "Active Listening", module = SocialModuleIdentifier.COMMUNICATION_MASTERY,
+                userResponseText = "Structured reflection response", evaluationScore = 88, isPassed = true,
+                evidenceSource = SocialEvidenceSource.AI_ASSESSED,
+                verificationStatus = VerificationStatus.VERIFIED_AI_RUBRIC, idempotencyKey = "cand_ka_$it",
+                completedEpochMs = now - (it * 1000L)
+            )
+        }
+        val twoArtifactMissions = List(2) {
+            SocialMissionRecord(
+                recordId = "cand_m_$it", accountOwnerId = accountOwnerId, missionId = "MSN_COMM_E01",
+                module = SocialModuleIdentifier.COMMUNICATION_MASTERY, title = "Active Listening Debrief $it",
+                difficultyRank = MissionDifficultyRank.C_RANK, lifecycleStatus = SocialMissionLifecycleStatus.COMPLETED,
+                startedEpochMs = now - 50000, completedEpochMs = now - 2000,
+                evidenceType = SocialMissionEvidenceType.ARTIFACT_ATTACHED,
+                artifactNote = "Meeting agenda and summary checklist #$it",
+                artifactUri = "/vault/$accountOwnerId/cand_m_$it.txt",
+                artifactOwnerId = accountOwnerId,
+                artifactContentHash = "cand_hash_$it",
+                artifactValidationState = SocialArtifactValidationState.ARTIFACT_RETRIEVABLE,
+                verificationStatus = VerificationStatus.SELF_REPORTED,
+                idempotencyKey = "cand_km_$it", xpAwarded = 35
+            )
+        }
+
+        // With 2 distinct artifact missions (total practiceCount = 11), capped at ADVANCED
+        val withTwoMissions = AdaptiveSocialMasteryEngine.evaluateCompetencies(
+            accountOwnerId = accountOwnerId,
+            sessions = sessions,
+            attempts = attempts,
+            missions = twoArtifactMissions,
+            assessments = emptyList(),
+            nowEpochMs = now,
+            artifactVerifier = { true }
+        ).find { it.competencyName == "Active Listening" }
+        assertNotNull(withTwoMissions)
+        assertEquals(MasteryDevelopmentStage.ADVANCED, withTwoMissions!!.masteryStage)
+
+        // Duplicate artifact hash repeated 3 times MUST stay capped at ADVANCED (1 distinct artifact)
+        val duplicateHashMissions = List(3) {
+            twoArtifactMissions[0].copy(
+                recordId = "dup_m_$it",
+                idempotencyKey = "dup_km_$it"
+            )
+        }
+        val withDupHashes = AdaptiveSocialMasteryEngine.evaluateCompetencies(
+            accountOwnerId = accountOwnerId,
+            sessions = sessions,
+            attempts = attempts,
+            missions = duplicateHashMissions,
+            assessments = emptyList(),
+            nowEpochMs = now,
+            artifactVerifier = { true }
+        ).find { it.competencyName == "Active Listening" }
+        assertEquals(
+            "Duplicate identical artifact hashes must NOT satisfy 3 distinct real-world evidences",
+            MasteryDevelopmentStage.ADVANCED,
+            withDupHashes!!.masteryStage
+        )
+
+        // With 3 distinct retrievable artifact missions + >=10 practices + >=2 attempts >=85%, unlocks MASTERY_CANDIDATE
+        val threeArtifactMissions = twoArtifactMissions + SocialMissionRecord(
+            recordId = "cand_m_2", accountOwnerId = accountOwnerId, missionId = "MSN_COMM_C03",
+            module = SocialModuleIdentifier.COMMUNICATION_MASTERY, title = "Active Listening Paraphrase",
+            difficultyRank = MissionDifficultyRank.C_RANK, lifecycleStatus = SocialMissionLifecycleStatus.COMPLETED,
+            startedEpochMs = now - 40000, completedEpochMs = now - 500,
+            evidenceType = SocialMissionEvidenceType.ARTIFACT_ATTACHED,
+            artifactNote = "Signed off client paraphrase transcript log",
+            artifactUri = "/vault/$accountOwnerId/cand_m_2.txt",
+            artifactOwnerId = accountOwnerId,
+            artifactContentHash = "cand_hash_2",
+            artifactValidationState = SocialArtifactValidationState.ARTIFACT_REVIEWED,
+            verificationStatus = VerificationStatus.SELF_REPORTED,
+            idempotencyKey = "cand_km_2", xpAwarded = 50
+        )
+
+        val withThreeMissions = AdaptiveSocialMasteryEngine.evaluateCompetencies(
+            accountOwnerId = accountOwnerId,
+            sessions = sessions,
+            attempts = attempts,
+            missions = threeArtifactMissions,
+            assessments = emptyList(),
+            nowEpochMs = now,
+            artifactVerifier = { true }
+        ).find { it.competencyName == "Active Listening" }
+        assertNotNull(withThreeMissions)
+        assertEquals(MasteryDevelopmentStage.MASTERY_CANDIDATE, withThreeMissions!!.masteryStage)
+    }
+
+    @Test
+    fun testInactivityDoesNotDemotePlayerStageAndSetsMaintenanceFlag() {
         val accountOwnerId = "test_player_inactivity"
         val now = System.currentTimeMillis()
         val twentyDaysAgo = now - (20L * 24L * 60L * 60L * 1000L)
 
-        // Competency was ADVANCED and practiced 20 days ago
+        // Competency was ADVANCED and practiced 20 days ago with artifact-backed mission
         val evaluated = AdaptiveSocialMasteryEngine.evaluateCompetencies(
             accountOwnerId = accountOwnerId,
             sessions = List(6) {
@@ -431,18 +641,142 @@ class SocialPhase5AdaptiveUnitTest {
                     module = SocialModuleIdentifier.COMMUNICATION_MASTERY, title = "Active Listening",
                     difficultyRank = MissionDifficultyRank.E_RANK, lifecycleStatus = SocialMissionLifecycleStatus.COMPLETED,
                     startedEpochMs = twentyDaysAgo, completedEpochMs = twentyDaysAgo,
-                    evidenceType = SocialMissionEvidenceType.SELF_REPORTED, verificationStatus = VerificationStatus.SELF_REPORTED,
+                    evidenceType = SocialMissionEvidenceType.ARTIFACT_ATTACHED,
+                    artifactNote = "Retrospective notes shared with team.",
+                    artifactUri = "/vault/$accountOwnerId/m_old_01.txt",
+                    artifactOwnerId = accountOwnerId,
+                    artifactContentHash = "old_hash_01",
+                    artifactValidationState = SocialArtifactValidationState.ARTIFACT_RETRIEVABLE,
+                    verificationStatus = VerificationStatus.SELF_REPORTED,
                     idempotencyKey = "msn_reward_m_old_01", xpAwarded = 25
                 )
             ),
             assessments = emptyList(),
-            nowEpochMs = now
+            nowEpochMs = now,
+            artifactVerifier = { true }
         )
 
         val comp = evaluated.find { it.competencyName == "Active Listening" }
         assertNotNull(comp)
         // Strict requirement: Do not demote players simply because they temporarily stop practising.
         assertEquals("Must NOT demote player due to inactivity", MasteryDevelopmentStage.ADVANCED, comp!!.masteryStage)
+        assertTrue("Maintenance flag must be active after 20 days inactivity", comp.maintenanceRequired)
+        assertEquals(20, comp.daysSinceLastPractice)
+        assertNotNull("Maintenance reason must explain refresher without demotion", comp.maintenanceReason)
+    }
+
+    @Test
+    fun testAllSevenRecommendationCategoriesReachableDeterministicAndDeduplicated() {
+        val accountOwnerId = "test_all_cats"
+        val now = 1_700_000_000_000L
+        val dayMs = 24L * 60L * 60L * 1000L
+
+        fun comp(
+            id: String,
+            mod: SocialModuleIdentifier,
+            name: String,
+            stage: MasteryDevelopmentStage,
+            practiceCount: Int,
+            daysAgo: Long?,
+            score: Int?,
+            evidence: MasteryEvidenceClassification = MasteryEvidenceClassification.SIMULATION_EVALUATED
+        ) = SocialCompetencyProgress(
+            competencyId = "${accountOwnerId}_${mod.code}_$id",
+            accountOwnerId = accountOwnerId,
+            module = mod,
+            competencyName = name,
+            masteryStage = stage,
+            recommendedDifficulty = AdaptiveDifficulty.NORMAL,
+            practiceCount = practiceCount,
+            lastPracticedEpochMs = daysAgo?.let { now - it * dayMs },
+            lastEvaluatedScore = score,
+            evidenceClassification = evidence
+        )
+
+        val scenarios = listOf(
+            comp("C1", SocialModuleIdentifier.COMMUNICATION_MASTERY, "Active Listening", MasteryDevelopmentStage.DEVELOPING, 3, 1L, 58) to SocialRecommendationCategory.IMPROVE_WEAKNESS,
+            comp("C2", SocialModuleIdentifier.PUBLIC_SPEAKING, "Speech Organization", MasteryDevelopmentStage.COMPETENT, 5, 35L, 76) to SocialRecommendationCategory.REASSESS_SKILL,
+            comp("C3", SocialModuleIdentifier.NEGOTIATION_PERSUASION, "Identifying Interests", MasteryDevelopmentStage.COMPETENT, 5, 18L, 78) to SocialRecommendationCategory.REVISIT_INACTIVE_SKILL,
+            comp("C4", SocialModuleIdentifier.LEADERSHIP_TEAMWORK, "Delegation", MasteryDevelopmentStage.ADVANCED, 7, 2L, 88, MasteryEvidenceClassification.ARTIFACT_SUPPORTED) to SocialRecommendationCategory.MAINTAIN_STRENGTH,
+            comp("C5", SocialModuleIdentifier.NETWORKING_RELATIONSHIPS, "Follow-Up Communication", MasteryDevelopmentStage.COMPETENT, 6, 1L, 84) to SocialRecommendationCategory.REAL_WORLD_APPLICATION,
+            comp("C6", SocialModuleIdentifier.EMOTIONAL_INTELLIGENCE, "Perspective-Taking", MasteryDevelopmentStage.DEVELOPING, 3, 2L, 76) to SocialRecommendationCategory.ADVANCE_MASTERY_LEVEL,
+            comp("C7", SocialModuleIdentifier.PROFESSIONAL_EXCELLENCE, "Time Management", MasteryDevelopmentStage.UNEXPLORED, 0, null, null, MasteryEvidenceClassification.SELF_REPORTED) to SocialRecommendationCategory.PRACTICE_NEW_SKILL
+        )
+
+        for ((progress, expectedCategory) in scenarios) {
+            val recsFirstRun = AdaptiveSocialMasteryEngine.generateRecommendations(
+                accountOwnerId = accountOwnerId,
+                competencies = listOf(progress),
+                missions = emptyList(),
+                nowEpochMs = now
+            )
+            val recsLaterRun = AdaptiveSocialMasteryEngine.generateRecommendations(
+                accountOwnerId = accountOwnerId,
+                competencies = listOf(progress),
+                missions = emptyList(),
+                nowEpochMs = now + 123_456L
+            )
+            assertEquals("Expected single rec for ${progress.competencyName}", 1, recsFirstRun.size)
+            assertEquals("Wrong category for ${progress.competencyName}", expectedCategory, recsFirstRun.first().category)
+            assertEquals("Recommendation IDs must be deterministic across timestamps", recsFirstRun.first().recommendationId, recsLaterRun.first().recommendationId)
+        }
+
+        // Combined list caps at 5 and enforces at most 1 per competency
+        val combined = AdaptiveSocialMasteryEngine.generateRecommendations(
+            accountOwnerId = accountOwnerId,
+            competencies = scenarios.map { it.first },
+            missions = emptyList(),
+            nowEpochMs = now
+        )
+        assertEquals(5, combined.size)
+        assertEquals(5, combined.map { it.targetModule to it.targetCompetency }.distinct().size)
+    }
+
+    @Test
+    fun testChronologicalSortDeterminesAdaptiveDifficultyRegardlessOfInputOrder() {
+        val accountOwnerId = "test_sort_order"
+        val now = 1_700_000_000_000L
+
+        // Input intentionally UNSORTED (oldest 50% first, newest 92% and 90% later)
+        val unsortedAttempts = listOf(
+            SocialScenarioAttempt(
+                attemptId = "a_old", accountOwnerId = accountOwnerId, scenarioId = "s1",
+                scenarioTitle = "Active Listening", module = SocialModuleIdentifier.COMMUNICATION_MASTERY,
+                userResponseText = "Earlier attempt", evaluationScore = 50, isPassed = false,
+                evidenceSource = SocialEvidenceSource.AI_ASSESSED,
+                verificationStatus = VerificationStatus.VERIFIED_AI_RUBRIC, idempotencyKey = "k_old",
+                completedEpochMs = now - 300_000L
+            ),
+            SocialScenarioAttempt(
+                attemptId = "a_mid", accountOwnerId = accountOwnerId, scenarioId = "s1",
+                scenarioTitle = "Active Listening", module = SocialModuleIdentifier.COMMUNICATION_MASTERY,
+                userResponseText = "Improved attempt", evaluationScore = 90, isPassed = true,
+                evidenceSource = SocialEvidenceSource.AI_ASSESSED,
+                verificationStatus = VerificationStatus.VERIFIED_AI_RUBRIC, idempotencyKey = "k_mid",
+                completedEpochMs = now - 100_000L
+            ),
+            SocialScenarioAttempt(
+                attemptId = "a_newest", accountOwnerId = accountOwnerId, scenarioId = "s1",
+                scenarioTitle = "Active Listening", module = SocialModuleIdentifier.COMMUNICATION_MASTERY,
+                userResponseText = "Most recent attempt", evaluationScore = 92, isPassed = true,
+                evidenceSource = SocialEvidenceSource.AI_ASSESSED,
+                verificationStatus = VerificationStatus.VERIFIED_AI_RUBRIC, idempotencyKey = "k_newest",
+                completedEpochMs = now
+            )
+        )
+
+        val evaluated = AdaptiveSocialMasteryEngine.evaluateCompetencies(
+            accountOwnerId = accountOwnerId,
+            sessions = emptyList(),
+            attempts = unsortedAttempts,
+            missions = emptyList(),
+            assessments = emptyList(),
+            nowEpochMs = now
+        )
+
+        val comp = evaluated.find { it.competencyName == "Active Listening" }!!
+        assertEquals("recentScore must come from newest chronological attempt", 92, comp.lastEvaluatedScore)
+        assertEquals("Two newest high scores (92%, 90%) must upgrade to CHALLENGING", AdaptiveDifficulty.CHALLENGING, comp.recommendedDifficulty)
     }
 
     // =========================================================================
@@ -475,7 +809,7 @@ class SocialPhase5AdaptiveUnitTest {
     @Test
     fun testPlayerDifficultyOverrideHonored() {
         val accountOwnerId = "p_override"
-        val compKey = "${accountOwnerId}_COMM_COMP_COMM_01"
+        val compKey = "${accountOwnerId}_${SocialModuleIdentifier.COMMUNICATION_MASTERY.code}_COMP_COMM_01"
         val overrides = mapOf(compKey to AdaptiveDifficulty.EXPERT)
 
         val evaluated = AdaptiveSocialMasteryEngine.evaluateCompetencies(
@@ -563,5 +897,163 @@ class SocialPhase5AdaptiveUnitTest {
         )
         assertEquals("Must award 0 XP when daily 3 self-reported activity limit is reached", 0, cappedCount.xpAwarded)
         assertTrue(cappedCount.wasCapped)
+    }
+
+    // =========================================================================
+    // 7. PHASE 5.1.1 REGRESSION: LEGACY MAINTENANCE RECOVERY & ARTIFACT VALIDATION
+    // =========================================================================
+
+    @Test
+    fun testLegacyMaintenanceNeverMapsToMasteryCandidateAndRecoversFromHistory() {
+        assertFalse(
+            "MAINTENANCE must NEVER map to MASTERY_CANDIDATE",
+            MasteryDevelopmentStage.fromString("MAINTENANCE") == MasteryDevelopmentStage.MASTERY_CANDIDATE
+        )
+        assertEquals(MasteryDevelopmentStage.UNEXPLORED, MasteryDevelopmentStage.fromString("MAINTENANCE"))
+        assertTrue(MasteryDevelopmentStage.isLegacyMaintenance("maintenance"))
+        assertEquals(
+            SocialMissionEvidenceType.ARTIFACT_DESCRIBED,
+            SocialMissionEvidenceType.fromString("OPTIONAL_ARTIFACT")
+        )
+
+        val accountOwnerId = "legacy_maint_player"
+        val now = 1_700_500_000_000L
+        val fiveDaysAgo = now - (5L * 24L * 60L * 60L * 1000L)
+        val compKey = "${accountOwnerId}_${SocialModuleIdentifier.COMMUNICATION_MASTERY.code}_COMP_COMM_01"
+
+        // Simulated legacy deserialized MAINTENANCE record with maintenanceRequired=true preserved separately
+        val legacyPriorNoHistory = mapOf(
+            compKey to SocialCompetencyProgress(
+                competencyId = compKey,
+                accountOwnerId = accountOwnerId,
+                module = SocialModuleIdentifier.COMMUNICATION_MASTERY,
+                competencyName = "Active Listening",
+                masteryStage = MasteryDevelopmentStage.fromString("MAINTENANCE"),
+                recommendedDifficulty = AdaptiveDifficulty.NORMAL,
+                practiceCount = 0,
+                lastPracticedEpochMs = null,
+                lastEvaluatedScore = null,
+                evidenceClassification = MasteryEvidenceClassification.SELF_REPORTED,
+                updatedAtEpochMs = fiveDaysAgo,
+                maintenanceRequired = true,
+                maintenanceReason = "Legacy MAINTENANCE state preserved separately."
+            )
+        )
+
+        // 1. No historical evidence -> safe UNEXPLORED fallback (no unearned mastery), maintenance flag preserved
+        val unrecoverable = AdaptiveSocialMasteryEngine.evaluateCompetencies(
+            accountOwnerId = accountOwnerId,
+            sessions = emptyList(),
+            attempts = emptyList(),
+            missions = emptyList(),
+            assessments = emptyList(),
+            priorProgress = legacyPriorNoHistory,
+            nowEpochMs = now
+        ).first { it.competencyName == "Active Listening" }
+
+        assertEquals(MasteryDevelopmentStage.UNEXPLORED, unrecoverable.masteryStage)
+        assertTrue(unrecoverable.maintenanceRequired)
+        assertNotNull(unrecoverable.maintenanceReason)
+
+        // 2. With real historical evidence supporting COMPETENT -> recovers COMPETENT cleanly (NOT MASTERY_CANDIDATE)
+        val recovered = AdaptiveSocialMasteryEngine.evaluateCompetencies(
+            accountOwnerId = accountOwnerId,
+            sessions = List(4) {
+                SocialPracticeSession(
+                    sessionId = "rec_s_$it", accountOwnerId = accountOwnerId,
+                    module = SocialModuleIdentifier.COMMUNICATION_MASTERY,
+                    activityKind = SocialActivityKind.PRACTICE, sessionStatus = SocialSessionStatus.COMPLETED,
+                    durationSeconds = 600, startedEpochMs = fiveDaysAgo - 10000, completedEpochMs = fiveDaysAgo,
+                    transcriptText = "Active Listening historical drill $it",
+                    evidenceSource = SocialEvidenceSource.SYSTEM_OBSERVED,
+                    verificationStatus = VerificationStatus.SELF_REPORTED, idempotencyKey = "rec_ks_$it"
+                )
+            },
+            attempts = List(2) {
+                SocialScenarioAttempt(
+                    attemptId = "rec_a_$it", accountOwnerId = accountOwnerId, scenarioId = "SCN_ACTIVE_LISTEN_01",
+                    scenarioTitle = "Active Listening", module = SocialModuleIdentifier.COMMUNICATION_MASTERY,
+                    userResponseText = "Active Listening response", evaluationScore = 80, isPassed = true,
+                    evidenceSource = SocialEvidenceSource.AI_ASSESSED,
+                    verificationStatus = VerificationStatus.VERIFIED_AI_RUBRIC, idempotencyKey = "rec_ka_$it",
+                    completedEpochMs = fiveDaysAgo
+                )
+            },
+            missions = emptyList(),
+            assessments = emptyList(),
+            priorProgress = legacyPriorNoHistory,
+            nowEpochMs = now
+        ).first { it.competencyName == "Active Listening" }
+
+        assertEquals(MasteryDevelopmentStage.COMPETENT, recovered.masteryStage)
+        assertTrue(recovered.maintenanceRequired)
+    }
+
+    @Test
+    fun testFailedRetrievalAndWrongAccountOwnerArtifactCannotPromoteToAdvanced() {
+        val owner = "artifact_owner_a"
+        val now = System.currentTimeMillis()
+        val sessions = List(4) {
+            SocialPracticeSession(
+                sessionId = "s_art_$it", accountOwnerId = owner,
+                module = SocialModuleIdentifier.COMMUNICATION_MASTERY,
+                activityKind = SocialActivityKind.PRACTICE, sessionStatus = SocialSessionStatus.COMPLETED,
+                durationSeconds = 600, startedEpochMs = now - 20000, completedEpochMs = now - 1000,
+                transcriptText = "Active Listening session $it",
+                evidenceSource = SocialEvidenceSource.SYSTEM_OBSERVED,
+                verificationStatus = VerificationStatus.SELF_REPORTED, idempotencyKey = "s_art_k_$it"
+            )
+        }
+        val attempts = List(2) {
+            SocialScenarioAttempt(
+                attemptId = "a_art_$it", accountOwnerId = owner, scenarioId = "SCN_ACTIVE_LISTEN_01",
+                scenarioTitle = "Active Listening", module = SocialModuleIdentifier.COMMUNICATION_MASTERY,
+                userResponseText = "Active Listening paraphrase", evaluationScore = 90, isPassed = true,
+                evidenceSource = SocialEvidenceSource.AI_ASSESSED,
+                verificationStatus = VerificationStatus.VERIFIED_AI_RUBRIC, idempotencyKey = "a_art_k_$it",
+                completedEpochMs = now - 1000
+            )
+        }
+
+        val wrongOwnerMission = SocialMissionRecord(
+            recordId = "m_wrong_owner", accountOwnerId = owner, missionId = "MSN_COMM_E01",
+            module = SocialModuleIdentifier.COMMUNICATION_MASTERY, title = "Active Listening Check-In",
+            difficultyRank = MissionDifficultyRank.E_RANK, lifecycleStatus = SocialMissionLifecycleStatus.COMPLETED,
+            startedEpochMs = now - 50000, completedEpochMs = now - 1000,
+            evidenceType = SocialMissionEvidenceType.ARTIFACT_ATTACHED,
+            artifactNote = "Stolen artifact note",
+            artifactUri = "/vault/other_user/stolen.pdf",
+            artifactOwnerId = "other_user",
+            artifactContentHash = "hash_other",
+            artifactValidationState = SocialArtifactValidationState.ARTIFACT_RETRIEVABLE,
+            verificationStatus = VerificationStatus.SELF_REPORTED,
+            idempotencyKey = "msn_wrong", xpAwarded = 25
+        )
+        val wrongOwnerComp = AdaptiveSocialMasteryEngine.evaluateCompetencies(
+            accountOwnerId = owner,
+            sessions = sessions,
+            attempts = attempts,
+            missions = listOf(wrongOwnerMission),
+            assessments = emptyList(),
+            nowEpochMs = now,
+            artifactVerifier = { true }
+        ).first { it.competencyName == "Active Listening" }
+        assertEquals("Cross-owner artifact must be rejected", MasteryDevelopmentStage.COMPETENT, wrongOwnerComp.masteryStage)
+
+        val brokenRetrievalMission = wrongOwnerMission.copy(
+            recordId = "m_broken_retrieval",
+            artifactOwnerId = owner,
+            artifactUri = "/vault/$owner/missing.pdf"
+        )
+        val failedRetrievalComp = AdaptiveSocialMasteryEngine.evaluateCompetencies(
+            accountOwnerId = owner,
+            sessions = sessions,
+            attempts = attempts,
+            missions = listOf(brokenRetrievalMission),
+            assessments = emptyList(),
+            nowEpochMs = now,
+            artifactVerifier = { false } // file unreadable/deleted
+        ).first { it.competencyName == "Active Listening" }
+        assertEquals("Unretrievable artifact must not unlock ADVANCED", MasteryDevelopmentStage.COMPETENT, failedRetrievalComp.masteryStage)
     }
 }

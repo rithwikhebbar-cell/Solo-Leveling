@@ -116,7 +116,7 @@ fun ShadowCollectionScreen(
                 title = { Text("SHADOW ROSTER (${uiState.allShadows.size})", style = MaterialTheme.typography.titleMedium, color = ShadowColors.PureIce) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.rounded.ArrowBack, contentDescription = "Back", tint = ShadowColors.PureIce)
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back", tint = ShadowColors.PureIce)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = ShadowColors.Obsidian)
@@ -169,7 +169,7 @@ fun ShadowCollectionScreen(
                     FilterChip(
                         selected = selectedClassFilter == cls,
                         onClick = { selectedClassFilter = if (selectedClassFilter == cls) null else cls },
-                        label = { Text(cls.displayName, fontSize = 11.sp) },
+                        label = { Text(cls.label, fontSize = 11.sp) },
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = ShadowColors.classColor(cls).copy(alpha = 0.2f),
                             selectedLabelColor = ShadowColors.classColor(cls)
@@ -190,7 +190,7 @@ fun ShadowCollectionScreen(
                     FilterChip(
                         selected = selectedRankFilter == rank,
                         onClick = { selectedRankFilter = if (selectedRankFilter == rank) null else rank },
-                        label = { Text(rank.displayName, fontSize = 11.sp) },
+                        label = { Text(rank.label, fontSize = 11.sp) },
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = ShadowColors.rankColor(rank).copy(alpha = 0.2f),
                             selectedLabelColor = ShadowColors.rankColor(rank)
@@ -257,7 +257,7 @@ fun ShadowDetailScreen(
                 title = { Text(shadow?.name ?: "SHADOW PROFILE", style = MaterialTheme.typography.titleMedium, color = ShadowColors.PureIce) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.rounded.ArrowBack, contentDescription = "Back", tint = ShadowColors.PureIce)
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back", tint = ShadowColors.PureIce)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = ShadowColors.Obsidian)
@@ -326,7 +326,7 @@ fun ShadowDetailScreen(
                         Spacer(modifier = Modifier.height(12.dp))
 
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text(text = "Stage: ${shadow.evolutionStage.displayName}", style = MaterialTheme.typography.bodySmall, color = ShadowColors.Muted)
+                            Text(text = "Stage: ${shadow.evolutionStage.label}", style = MaterialTheme.typography.bodySmall, color = ShadowColors.Muted)
                             Text(text = "Power: ${shadow.calculatePowerRating()} PWR", style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold), color = ShadowColors.Gold)
                         }
                     }
@@ -373,8 +373,10 @@ fun ShadowDetailScreen(
                     Button(
                         onClick = { onNavigateToSkillTree(shadow.shadowId) },
                         modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(containerColor = ShadowColors.Cyan),
-                        contentColor = ShadowColors.Obsidian
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = ShadowColors.Cyan,
+                            contentColor = ShadowColors.Obsidian
+                        )
                     ) {
                         Icon(Icons.Rounded.Star, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(6.dp))
@@ -445,7 +447,7 @@ private fun DeployShadowDialog(
                         modifier = Modifier.fillMaxWidth().clickable { selectedCategory = category }
                     ) {
                         Text(
-                            text = category.displayName,
+                            text = category.label,
                             style = MaterialTheme.typography.bodyMedium,
                             color = if (selectedCategory == category) ShadowColors.Cyan else ShadowColors.PureIce,
                             modifier = Modifier.padding(10.dp)
@@ -496,7 +498,7 @@ fun ShadowEvolutionScreen(
                 title = { Text("SHADOW EVOLUTION", style = MaterialTheme.typography.titleMedium, color = ShadowColors.PureIce) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.rounded.ArrowBack, contentDescription = "Back", tint = ShadowColors.PureIce)
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back", tint = ShadowColors.PureIce)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = ShadowColors.Obsidian)
@@ -530,15 +532,15 @@ fun ShadowEvolutionScreen(
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                             Column {
                                 Text(text = "CURRENT", style = MaterialTheme.typography.labelSmall, color = ShadowColors.Muted)
-                                Text(text = shadow.evolutionStage.displayName, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = ShadowColors.PureIce)
+                                Text(text = shadow.evolutionStage.label, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = ShadowColors.PureIce)
                                 ShadowRankBadge(shadow.currentRank)
                             }
                             Icon(Icons.Rounded.Upgrade, contentDescription = null, tint = ShadowColors.Violet, modifier = Modifier.size(32.dp))
                             Column(horizontalAlignment = Alignment.End) {
                                 Text(text = "NEXT STAGE", style = MaterialTheme.typography.labelSmall, color = ShadowColors.Muted)
-                                val nextStage = ShadowEvolutionEngine.calculateEvolutionStage(shadow.level + 10)
-                                Text(text = nextStage.displayName, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = ShadowColors.Cyan)
-                                val nextRank = ShadowEvolutionEngine.calculateRank(shadow.level + 10)
+                                val nextRank = ShadowEvolutionEngine.calculateRank(shadow.level + 10, shadow.shadowXp)
+                                val nextStage = ShadowEvolutionEngine.calculateEvolutionStage(shadow.level + 10, nextRank)
+                                Text(text = nextStage.label, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = ShadowColors.Cyan)
                                 ShadowRankBadge(nextRank)
                             }
                         }
@@ -619,7 +621,7 @@ fun ShadowSkillTreeScreen(
     val uiState by viewModel.uiState.collectAsState()
     val shadow = uiState.allShadows.find { it.shadowId == shadowId }
     val catalog = viewModel.getShadowSkillCatalog()
-    val classSkills = catalog.filter { it.requiredClass == null || it.requiredClass == shadow?.shadowClass }
+    val classSkills = catalog
 
     Scaffold(
         topBar = {
@@ -627,7 +629,7 @@ fun ShadowSkillTreeScreen(
                 title = { Text("${shadow?.name ?: "SHADOW"} SKILL TREE", style = MaterialTheme.typography.titleMedium, color = ShadowColors.PureIce) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.rounded.ArrowBack, contentDescription = "Back", tint = ShadowColors.PureIce)
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back", tint = ShadowColors.PureIce)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = ShadowColors.Obsidian)
@@ -644,7 +646,10 @@ fun ShadowSkillTreeScreen(
         ) {
             items(classSkills) { skill ->
                 val isUnlocked = shadow?.activeSkillIds?.contains(skill.skillId) == true
-                val canUnlock = !isUnlocked && (shadow?.level ?: 0) >= skill.requiredLevel
+                val canUnlock = !isUnlocked &&
+                    (shadow?.level ?: 0) >= skill.requiredShadowLevel &&
+                    (shadow?.currentRank?.order ?: 0) >= skill.requiredShadowRank.order &&
+                    skill.prerequisiteSkillIds.all { it in (shadow?.activeSkillIds ?: emptyList()) }
 
                 Card(
                     colors = CardDefaults.cardColors(containerColor = ShadowColors.PanelSurface),
@@ -677,7 +682,7 @@ fun ShadowSkillTreeScreen(
                             Text(text = skill.name, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold), color = ShadowColors.PureIce)
                             Text(text = skill.description, style = MaterialTheme.typography.bodySmall, color = ShadowColors.Muted)
                             Spacer(modifier = Modifier.height(2.dp))
-                            Text(text = "Requires Lv. ${skill.requiredLevel}", style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace), color = ShadowColors.Cyan)
+                            Text(text = "Requires ${skill.requiredShadowRank.label} • Lv. ${skill.requiredShadowLevel}", style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace), color = ShadowColors.Cyan)
                         }
                         if (canUnlock && shadow != null) {
                             Button(
@@ -712,7 +717,7 @@ fun ShadowDeploymentScreen(
                 title = { Text("SHADOW DEPLOYMENT", style = MaterialTheme.typography.titleMedium, color = ShadowColors.PureIce) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.rounded.ArrowBack, contentDescription = "Back", tint = ShadowColors.PureIce)
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back", tint = ShadowColors.PureIce)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = ShadowColors.Obsidian)
@@ -761,7 +766,7 @@ fun ShadowDeploymentScreen(
                         Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(text = deployment.shadowName, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold), color = ShadowColors.PureIce)
-                                Text(text = "Category: ${deployment.category.displayName}", style = MaterialTheme.typography.bodySmall, color = ShadowColors.Emerald)
+                                Text(text = "Category: ${deployment.category.label}", style = MaterialTheme.typography.bodySmall, color = ShadowColors.Emerald)
                                 Text(text = "Role: ${deployment.role}", style = MaterialTheme.typography.bodySmall, color = ShadowColors.Muted)
                             }
                             Button(
@@ -797,7 +802,7 @@ fun ArmyFormationManagerScreen(
                 title = { Text("ARMY FORMATIONS", style = MaterialTheme.typography.titleMedium, color = ShadowColors.PureIce) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.rounded.ArrowBack, contentDescription = "Back", tint = ShadowColors.PureIce)
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back", tint = ShadowColors.PureIce)
                     }
                 },
                 actions = {
@@ -853,7 +858,7 @@ fun ArmyFormationManagerScreen(
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                                 Column {
                                     Text(text = formation.name, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold), color = ShadowColors.PureIce)
-                                    Text(text = formation.formationType.displayName, style = MaterialTheme.typography.bodySmall, color = ShadowColors.Cyan)
+                                    Text(text = formation.formationType.label, style = MaterialTheme.typography.bodySmall, color = ShadowColors.Cyan)
                                 }
                                 if (isActive) {
                                     Surface(
@@ -947,7 +952,7 @@ fun MonarchSkillTreeScreen(
                 title = { Text("MONARCH SKILL TREE", style = MaterialTheme.typography.titleMedium, color = ShadowColors.PureIce) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.rounded.ArrowBack, contentDescription = "Back", tint = ShadowColors.PureIce)
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back", tint = ShadowColors.PureIce)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = ShadowColors.Obsidian)
@@ -1047,7 +1052,7 @@ fun ShadowQuestBoardScreen(
                 title = { Text("MONARCH QUESTS", style = MaterialTheme.typography.titleMedium, color = ShadowColors.PureIce) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.rounded.ArrowBack, contentDescription = "Back", tint = ShadowColors.PureIce)
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back", tint = ShadowColors.PureIce)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = ShadowColors.Obsidian)
@@ -1097,7 +1102,7 @@ fun ShadowQuestBoardScreen(
 
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Text(text = "PROGRESS: $current / $target", style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace), color = ShadowColors.Muted)
-                            Text(text = "+${quest.monarchXpReward} Monarch XP | +${quest.essenceReward} Essence", style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace), color = ShadowColors.Gold)
+                            Text(text = "+${quest.monarchXpReward} Monarch XP | +${quest.shadowEssenceReward} Essence", style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace), color = ShadowColors.Gold)
                         }
                         Spacer(modifier = Modifier.height(4.dp))
                         LinearProgressIndicator(

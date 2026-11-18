@@ -12,11 +12,18 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 
 interface ProgressionEventInput {
   idempotencyKey: string;
-  sourceModule: "PHYSICAL" | "ACADEMIC" | "LIFE" | "RPG";
+  sourceModule: "PHYSICAL" | "ACADEMIC" | "LIFE" | "RPG" | "SOCIAL_MASTERY";
   sourceRecordId: string;
   title: string;
-  verificationStatus: "VERIFIED_HEALTH_CONNECT" | "VERIFIED_ASSESSMENT" | "VERIFIED_SYSTEM_TIMER" | "SELF_REPORTED";
-  baseXp: number;
+  verificationStatus:
+    | "VERIFIED_HEALTH_CONNECT"
+    | "VERIFIED_ASSESSMENT"
+    | "VERIFIED_SYSTEM_TIMER"
+    | "VERIFIED_AI_RUBRIC"
+    | "SELF_REPORTED"
+    | "PENDING_REVIEW";
+  baseXp?: number;
+  xpAwarded?: number;
   primaryAttribute: string;
   primaryAttrXp: number;
   secondaryAttribute?: string | null;
@@ -36,7 +43,10 @@ const DAILY_CAPS: Record<string, number> = {
   ACADEMIC: 240,
   LIFE: 200,
   RPG: 300,
+  SOCIAL_MASTERY: 180,
 };
+
+const DAILY_SOCIAL_SELF_REPORTED_LIMIT = 3;
 
 function xpRequiredForLevel(level: number): number {
   const safe = Math.max(1, level);
@@ -50,7 +60,10 @@ function multiplierFor(status: string): number {
     case "VERIFIED_ASSESSMENT":
       return 1.0;
     case "VERIFIED_SYSTEM_TIMER":
+    case "VERIFIED_AI_RUBRIC":
       return 0.85;
+    case "PENDING_REVIEW":
+      return 0.0;
     default:
       return 0.65;
   }
@@ -113,17 +126,44 @@ serve(async (req: Request) => {
 
     const dayStart = new Date(ev.occurredAtEpochMs);
     dayStart.setUTCHours(0, 0, 0, 0);
+    const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
     const { data: dayRows } = await supabaseAdmin
       .from("progression_events")
-      .select("xp_awarded")
+      .select("xp_awarded, verification_status")
       .eq("user_id", userId)
       .eq("source_module", ev.sourceModule)
-      .gte("occurred_at", dayStart.toISOString());
+      .gte("occurred_at", dayStart.toISOString())
+      .lt("occurred_at", dayEnd.toISOString());
 
     const earnedToday = (dayRows ?? []).reduce((sum, r) => sum + (r.xp_awarded ?? 0), 0);
+    const selfReportedToday = (dayRows ?? []).filter(
+      (r) => (r.verification_status === "SELF_REPORTED" || r.verification_status === "PENDING_REVIEW") && (r.xp_awarded ?? 0) > 0
+    ).length;
+
     const cap = DAILY_CAPS[ev.sourceModule] ?? 200;
-    const scaled = Math.max(0, Math.floor(ev.baseXp * multiplierFor(ev.verificationStatus)));
-    const awarded = Math.min(scaled, Math.max(0, cap - earnedToday));
+    const rawBase = Math.max(0, ev.baseXp ?? ev.xpAwarded ?? 0);
+    const isSocialSelfReported =
+      ev.sourceModule === "SOCIAL_MASTERY" &&
+      (ev.verificationStatus === "SELF_REPORTED" || ev.verificationStatus === "PENDING_REVIEW");
+
+    let awarded: number;
+    let scaled: number;
+    let note: string;
+
+    if (isSocialSelfReported && selfReportedToday >= DAILY_SOCIAL_SELF_REPORTED_LIMIT) {
+      scaled = Math.max(0, Math.floor(rawBase * multiplierFor(ev.verificationStatus)));
+      awarded = 0;
+      note = "Daily SOCIAL_MASTERY self-reported reward limit (3/day) applied";
+    } else if (ev.sourceModule === "SOCIAL_MASTERY" && ev.xpAwarded !== undefined) {
+      // Client calculated bounded Social XP; enforce server daily cap ceiling
+      scaled = Math.max(0, Math.min(rawBase, DAILY_CAPS.SOCIAL_MASTERY));
+      awarded = Math.min(scaled, Math.max(0, cap - earnedToday));
+      note = awarded < scaled ? "Daily SOCIAL_MASTERY cap applied" : "Server validated";
+    } else {
+      scaled = Math.max(0, Math.floor(rawBase * multiplierFor(ev.verificationStatus)));
+      awarded = Math.min(scaled, Math.max(0, cap - earnedToday));
+      note = awarded < scaled ? `Daily ${ev.sourceModule} cap applied` : "Server validated";
+    }
     const ratio = scaled <= 0 ? 0 : awarded / scaled;
 
     await supabaseAdmin.from("progression_events").insert({
@@ -138,8 +178,8 @@ serve(async (req: Request) => {
       primary_attr_xp: Math.floor((ev.primaryAttrXp ?? 0) * ratio),
       secondary_attribute: ev.secondaryAttribute ?? null,
       secondary_attr_xp: Math.floor((ev.secondaryAttrXp ?? 0) * ratio),
-      was_capped: awarded < scaled,
-      validation_note: awarded < scaled ? `Daily ${ev.sourceModule} cap applied` : "Server validated",
+      was_capped: awarded < scaled || (isSocialSelfReported && selfReportedToday >= DAILY_SOCIAL_SELF_REPORTED_LIMIT),
+      validation_note: note,
       occurred_at: new Date(ev.occurredAtEpochMs).toISOString(),
     });
 

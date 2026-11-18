@@ -1,8 +1,10 @@
 package com.example.domain.model
 
 // ============================================================================
-// MILESTONE 11 — THE SHADOW MONARCH: COMPLETE SHADOW ARMY DOMAIN MODELS
+// MILESTONE 11 + 12 PHASE 6.1 — SHADOW ARMY DOMAIN MODELS
 // ============================================================================
+
+const val DEFAULT_SHADOW_ACCOUNT_OWNER_ID = "local_vault_player_1"
 
 // ----------------------------------------------------------------------------
 // SHADOW CLASS
@@ -156,7 +158,8 @@ enum class ShadowExtractionOutcome(val label: String) {
     ALREADY_CLAIMED("Already Claimed"),
     ARMY_CAPACITY_REACHED("Army Capacity Reached"),
     SOURCE_INVALID("Source Evidence Invalid"),
-    PENDING_CONFIRMATION("Pending Confirmation")
+    PENDING_CONFIRMATION("Pending Confirmation"),
+    DUPLICATE_RESOLVED("Duplicate Resonance")
 }
 
 // ----------------------------------------------------------------------------
@@ -246,6 +249,7 @@ data class ShadowStats(
 
 data class ShadowMonarchProfile(
     val id: Int = 1,
+    val accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID,
     val monarchLevel: Int = 1,
     val monarchXp: Long = 0L,
     val monarchRank: MonarchRank = MonarchRank.AWAKENING,
@@ -280,6 +284,7 @@ data class ShadowMonarchProfile(
 
 data class Shadow(
     val shadowId: String,
+    val accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID,
     val name: String,
     val shadowClass: ShadowClass,
     val rarity: ShadowRarity,
@@ -305,8 +310,6 @@ data class Shadow(
 
     fun calculatePowerRating(): Long = stats.total.toLong() * level
 
-    fun calculatePowerRating(): Long = stats.total.toLong() * level
-
     companion object {
         fun shadowXpRequired(level: Int): Long {
             if (level <= 1) return 0L
@@ -322,6 +325,7 @@ data class Shadow(
 
 data class ShadowExtractionEvent(
     val extractionId: String,
+    val accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID,
     val sourceType: ShadowExtractionSourceType,
     val sourceEventId: String,
     val outcome: ShadowExtractionOutcome,
@@ -352,6 +356,7 @@ data class ShadowSkillDefinition(
 
 data class ShadowSkillUnlock(
     val id: Long = 0,
+    val accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID,
     val shadowId: String,
     val skillId: String,
     val unlockedAtEpochMs: Long,
@@ -360,6 +365,7 @@ data class ShadowSkillUnlock(
 
 data class ShadowDeploymentRecord(
     val deploymentId: String,
+    val accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID,
     val shadowId: String,
     val shadowName: String,
     val category: ShadowDeploymentCategory,
@@ -372,6 +378,7 @@ data class ShadowDeploymentRecord(
 
 data class ShadowFormation(
     val formationId: String,
+    val accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID,
     val name: String,
     val formationType: ShadowFormationType,
     val description: String,
@@ -397,6 +404,7 @@ data class MonarchSkillDefinition(
 
 data class MonarchSkillUnlock(
     val id: Long = 0,
+    val accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID,
     val skillId: String,
     val unlockedAtEpochMs: Long,
     val evidenceNote: String = ""
@@ -424,6 +432,7 @@ enum class ShadowQuestCategory(val label: String) {
 
 data class ShadowQuestProgress(
     val id: Long = 0,
+    val accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID,
     val questId: String,
     val currentValue: Int = 0,
     val isCompleted: Boolean = false,
@@ -433,6 +442,7 @@ data class ShadowQuestProgress(
 
 data class ShadowResourceTransaction(
     val transactionId: String,
+    val accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID,
     val resourceType: ShadowResourceType,
     val amount: Int,
     val transactionType: ShadowResourceTransactionType,

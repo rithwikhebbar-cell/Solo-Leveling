@@ -4,7 +4,9 @@ import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import com.example.domain.model.DEFAULT_SHADOW_ACCOUNT_OWNER_ID
 import com.example.domain.model.MonarchRank
+import com.example.domain.model.MonarchSkillUnlock
 import com.example.domain.model.Shadow
 import com.example.domain.model.ShadowClass
 import com.example.domain.model.ShadowDeploymentCategory
@@ -27,13 +29,13 @@ import com.example.domain.model.ShadowSkillUnlock
 import com.example.domain.model.ShadowStats
 
 // ============================================================================
-// MILESTONE 11 — DATABASE ENTITIES
+// MILESTONE 11 + MILESTONE 12 PHASE 6.1 — ACCOUNT-ISOLATED SHADOW ENTITIES
 // ============================================================================
 
-// 1. ShadowMonarchProfileEntity — Singleton (id = 1)
+// 1. ShadowMonarchProfileEntity — Multi-account (PK = accountOwnerId)
 @Entity(tableName = "shadow_monarch_profile")
 data class ShadowMonarchProfileEntity(
-    @PrimaryKey val id: Int = 1,
+    @PrimaryKey val accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID,
     val monarchLevel: Int,
     val monarchXp: Long,
     val monarchRankName: String,
@@ -48,20 +50,30 @@ data class ShadowMonarchProfileEntity(
     val updatedAtEpochMs: Long
 )
 
-// 2. ShadowEntity — each recruited shadow
+// 2. ShadowEntity — each recruited shadow, strictly owned by accountOwnerId
 @Entity(
     tableName = "shadows",
+    foreignKeys = [
+        ForeignKey(
+            entity = ShadowMonarchProfileEntity::class,
+            parentColumns = ["accountOwnerId"],
+            childColumns = ["accountOwnerId"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ],
     indices = [
         Index(value = ["shadowId"], unique = true),
-        Index(value = ["shadowClassName"]),
-        Index(value = ["currentRankName"]),
+        Index(value = ["accountOwnerId"]),
+        Index(value = ["accountOwnerId", "isRetired"]),
+        Index(value = ["accountOwnerId", "shadowClassName"]),
+        Index(value = ["accountOwnerId", "currentRankName"]),
         Index(value = ["rarityName"]),
-        Index(value = ["deploymentStatusName"]),
-        Index(value = ["isRetired"])
+        Index(value = ["deploymentStatusName"])
     ]
 )
 data class ShadowEntity(
     @PrimaryKey val shadowId: String,
+    val accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID,
     val name: String,
     val shadowClassName: String,
     val rarityName: String,
@@ -87,17 +99,26 @@ data class ShadowEntity(
     val notes: String
 )
 
-// 3. ShadowExtractionEntity — extraction event record
+// 3. ShadowExtractionEntity — extraction event record, unique per (accountOwnerId, sourceTypeName, sourceEventId)
 @Entity(
     tableName = "shadow_extractions",
+    foreignKeys = [
+        ForeignKey(
+            entity = ShadowMonarchProfileEntity::class,
+            parentColumns = ["accountOwnerId"],
+            childColumns = ["accountOwnerId"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ],
     indices = [
         Index(value = ["extractionId"], unique = true),
-        Index(value = ["sourceTypeName", "sourceEventId"], unique = true), // composite unique constraint: prevent double-extraction same event
-        Index(value = ["timestampEpochMs"])
+        Index(value = ["accountOwnerId", "sourceTypeName", "sourceEventId"], unique = true),
+        Index(value = ["accountOwnerId", "timestampEpochMs"])
     ]
 )
 data class ShadowExtractionEntity(
     @PrimaryKey val extractionId: String,
+    val accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID,
     val sourceTypeName: String,
     val sourceEventId: String,
     val outcomeName: String,
@@ -112,34 +133,65 @@ data class ShadowExtractionEntity(
     val monarchXpAwarded: Int
 )
 
-// 4. ShadowSkillUnlockEntity — per-shadow skill unlocks
+// 4. ShadowSkillUnlockEntity — per-shadow skill unlocks with shadow & account FKs
 @Entity(
     tableName = "shadow_skill_unlocks",
+    foreignKeys = [
+        ForeignKey(
+            entity = ShadowMonarchProfileEntity::class,
+            parentColumns = ["accountOwnerId"],
+            childColumns = ["accountOwnerId"],
+            onDelete = ForeignKey.CASCADE
+        ),
+        ForeignKey(
+            entity = ShadowEntity::class,
+            parentColumns = ["shadowId"],
+            childColumns = ["shadowId"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ],
     indices = [
-        Index(value = ["shadowId", "skillId"], unique = true),
-        Index(value = ["shadowId"])
+        Index(value = ["accountOwnerId", "shadowId", "skillId"], unique = true),
+        Index(value = ["shadowId"]),
+        Index(value = ["accountOwnerId"])
     ]
 )
 data class ShadowSkillUnlockEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID,
     val shadowId: String,
     val skillId: String,
     val unlockedAtEpochMs: Long,
     val evidenceNote: String
 )
 
-// 5. ShadowDeploymentEntity — deployment records
+// 5. ShadowDeploymentEntity — deployment records with shadow & account FKs
 @Entity(
     tableName = "shadow_deployments",
+    foreignKeys = [
+        ForeignKey(
+            entity = ShadowMonarchProfileEntity::class,
+            parentColumns = ["accountOwnerId"],
+            childColumns = ["accountOwnerId"],
+            onDelete = ForeignKey.CASCADE
+        ),
+        ForeignKey(
+            entity = ShadowEntity::class,
+            parentColumns = ["shadowId"],
+            childColumns = ["shadowId"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ],
     indices = [
         Index(value = ["deploymentId"], unique = true),
+        Index(value = ["accountOwnerId", "statusName"]),
         Index(value = ["shadowId"]),
-        Index(value = ["categoryName"]),
-        Index(value = ["statusName"])
+        Index(value = ["categoryName"])
     ]
 )
 data class ShadowDeploymentEntity(
     @PrimaryKey val deploymentId: String,
+    val accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID,
     val shadowId: String,
     val shadowName: String,
     val categoryName: String,
@@ -150,16 +202,25 @@ data class ShadowDeploymentEntity(
     val notes: String
 )
 
-// 6. ShadowFormationEntity — formation configurations
+// 6. ShadowFormationEntity — formation configurations per account
 @Entity(
     tableName = "shadow_formations",
+    foreignKeys = [
+        ForeignKey(
+            entity = ShadowMonarchProfileEntity::class,
+            parentColumns = ["accountOwnerId"],
+            childColumns = ["accountOwnerId"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ],
     indices = [
         Index(value = ["formationId"], unique = true),
-        Index(value = ["isActive"])
+        Index(value = ["accountOwnerId", "isActive"])
     ]
 )
 data class ShadowFormationEntity(
     @PrimaryKey val formationId: String,
+    val accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID,
     val name: String,
     val formationTypeName: String,
     val description: String,
@@ -170,25 +231,49 @@ data class ShadowFormationEntity(
     val updatedAtEpochMs: Long
 )
 
-// 7. MonarchSkillUnlockEntity — which Monarch skills are unlocked
+// 7. MonarchSkillUnlockEntity — per-account Monarch skill unlocks
 @Entity(
     tableName = "monarch_skill_unlocks",
-    indices = [Index(value = ["skillId"], unique = true)]
+    foreignKeys = [
+        ForeignKey(
+            entity = ShadowMonarchProfileEntity::class,
+            parentColumns = ["accountOwnerId"],
+            childColumns = ["accountOwnerId"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ],
+    indices = [
+        Index(value = ["accountOwnerId", "skillId"], unique = true),
+        Index(value = ["accountOwnerId"])
+    ]
 )
 data class MonarchSkillUnlockEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID,
     val skillId: String,
     val unlockedAtEpochMs: Long,
     val evidenceNote: String
 )
 
-// 8. ShadowQuestProgressEntity — quest progress tracking
+// 8. ShadowQuestProgressEntity — per-account quest progress tracking
 @Entity(
     tableName = "shadow_quest_progress",
-    indices = [Index(value = ["questId"], unique = true)]
+    foreignKeys = [
+        ForeignKey(
+            entity = ShadowMonarchProfileEntity::class,
+            parentColumns = ["accountOwnerId"],
+            childColumns = ["accountOwnerId"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ],
+    indices = [
+        Index(value = ["accountOwnerId", "questId"], unique = true),
+        Index(value = ["accountOwnerId"])
+    ]
 )
 data class ShadowQuestProgressEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID,
     val questId: String,
     val currentValue: Int,
     val isCompleted: Boolean,
@@ -196,25 +281,65 @@ data class ShadowQuestProgressEntity(
     val completedAtEpochMs: Long?
 )
 
-// 9. ShadowResourceTransactionEntity — resource ledger
+// 9. ShadowResourceTransactionEntity — per-account resource ledger
 @Entity(
     tableName = "shadow_resource_transactions",
+    foreignKeys = [
+        ForeignKey(
+            entity = ShadowMonarchProfileEntity::class,
+            parentColumns = ["accountOwnerId"],
+            childColumns = ["accountOwnerId"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ],
     indices = [
         Index(value = ["transactionId"], unique = true),
-        Index(value = ["sourceEventId", "resourceTypeName", "transactionTypeName"], unique = true), // enforce single award per source event and transaction type
-        Index(value = ["resourceTypeName"]),
-        Index(value = ["timestampEpochMs"]),
+        Index(
+            value = ["accountOwnerId", "sourceEventId", "resourceTypeName", "transactionTypeName"],
+            unique = true
+        ),
+        Index(value = ["accountOwnerId", "resourceTypeName", "timestampEpochMs"]),
         Index(value = ["sourceEventId"])
     ]
 )
 data class ShadowResourceTransactionEntity(
     @PrimaryKey val transactionId: String,
+    val accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID,
     val resourceTypeName: String,
     val amount: Int,
     val transactionTypeName: String,
     val sourceEventId: String,
     val sourceDescription: String,
     val balanceAfter: Int,
+    val timestampEpochMs: Long
+)
+
+// 10. ShadowXpTraceEntity — dedicated idempotency ledger for Monarch XP and Shadow XP awards
+@Entity(
+    tableName = "shadow_xp_traces",
+    foreignKeys = [
+        ForeignKey(
+            entity = ShadowMonarchProfileEntity::class,
+            parentColumns = ["accountOwnerId"],
+            childColumns = ["accountOwnerId"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ],
+    indices = [
+        Index(value = ["traceId"], unique = true),
+        Index(value = ["accountOwnerId", "traceType", "sourceTag"], unique = true),
+        Index(value = ["accountOwnerId"]),
+        Index(value = ["timestampEpochMs"])
+    ]
+)
+data class ShadowXpTraceEntity(
+    @PrimaryKey val traceId: String,
+    val accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID,
+    val traceType: String, // "MONARCH_XP" or "SHADOW_XP"
+    val sourceTag: String,
+    val targetEntityId: String = "",
+    val xpAmount: Int,
+    val description: String,
     val timestampEpochMs: Long
 )
 
@@ -225,10 +350,11 @@ data class ShadowResourceTransactionEntity(
 fun ShadowMonarchProfileEntity.toDomain(): ShadowMonarchProfile {
     val skillIds = try {
         kotlinx.serialization.json.Json.decodeFromString<List<String>>(unlockedMonarchSkillIdsJson)
-    } catch (e: Exception) { emptyList() }
+    } catch (_: Exception) { emptyList() }
 
     return ShadowMonarchProfile(
-        id = id,
+        id = 1,
+        accountOwnerId = accountOwnerId,
         monarchLevel = monarchLevel,
         monarchXp = monarchXp,
         monarchRank = runCatching { MonarchRank.valueOf(monarchRankName) }.getOrDefault(MonarchRank.AWAKENING),
@@ -247,7 +373,7 @@ fun ShadowMonarchProfileEntity.toDomain(): ShadowMonarchProfile {
 fun ShadowMonarchProfile.toEntity(): ShadowMonarchProfileEntity {
     val skillJson = kotlinx.serialization.json.Json.encodeToString(unlockedMonarchSkillIds)
     return ShadowMonarchProfileEntity(
-        id = id,
+        accountOwnerId = accountOwnerId,
         monarchLevel = monarchLevel,
         monarchXp = monarchXp,
         monarchRankName = monarchRank.name,
@@ -266,9 +392,10 @@ fun ShadowMonarchProfile.toEntity(): ShadowMonarchProfileEntity {
 fun ShadowEntity.toDomain(): Shadow {
     val skillIds = try {
         kotlinx.serialization.json.Json.decodeFromString<List<String>>(activeSkillIdsJson)
-    } catch (e: Exception) { emptyList() }
+    } catch (_: Exception) { emptyList() }
     return Shadow(
         shadowId = shadowId,
+        accountOwnerId = accountOwnerId,
         name = name,
         shadowClass = runCatching { ShadowClass.valueOf(shadowClassName) }.getOrDefault(ShadowClass.SUPPORT),
         rarity = runCatching { ShadowRarity.valueOf(rarityName) }.getOrDefault(ShadowRarity.COMMON),
@@ -294,6 +421,7 @@ fun Shadow.toEntity(): ShadowEntity {
     val skillJson = kotlinx.serialization.json.Json.encodeToString(activeSkillIds)
     return ShadowEntity(
         shadowId = shadowId,
+        accountOwnerId = accountOwnerId,
         name = name,
         shadowClassName = shadowClass.name,
         rarityName = rarity.name,
@@ -322,6 +450,7 @@ fun Shadow.toEntity(): ShadowEntity {
 
 fun ShadowExtractionEntity.toDomain() = ShadowExtractionEvent(
     extractionId = extractionId,
+    accountOwnerId = accountOwnerId,
     sourceType = runCatching { ShadowExtractionSourceType.valueOf(sourceTypeName) }.getOrDefault(ShadowExtractionSourceType.DUNGEON_COMPLETION),
     sourceEventId = sourceEventId,
     outcome = runCatching { ShadowExtractionOutcome.valueOf(outcomeName) }.getOrDefault(ShadowExtractionOutcome.UNAVAILABLE),
@@ -338,6 +467,7 @@ fun ShadowExtractionEntity.toDomain() = ShadowExtractionEvent(
 
 fun ShadowExtractionEvent.toEntity() = ShadowExtractionEntity(
     extractionId = extractionId,
+    accountOwnerId = accountOwnerId,
     sourceTypeName = sourceType.name,
     sourceEventId = sourceEventId,
     outcomeName = outcome.name,
@@ -354,6 +484,7 @@ fun ShadowExtractionEvent.toEntity() = ShadowExtractionEntity(
 
 fun ShadowDeploymentEntity.toDomain() = ShadowDeploymentRecord(
     deploymentId = deploymentId,
+    accountOwnerId = accountOwnerId,
     shadowId = shadowId,
     shadowName = shadowName,
     category = runCatching { ShadowDeploymentCategory.valueOf(categoryName) }.getOrDefault(ShadowDeploymentCategory.DISCIPLINE),
@@ -366,6 +497,7 @@ fun ShadowDeploymentEntity.toDomain() = ShadowDeploymentRecord(
 
 fun ShadowDeploymentRecord.toEntity() = ShadowDeploymentEntity(
     deploymentId = deploymentId,
+    accountOwnerId = accountOwnerId,
     shadowId = shadowId,
     shadowName = shadowName,
     categoryName = category.name,
@@ -379,9 +511,10 @@ fun ShadowDeploymentRecord.toEntity() = ShadowDeploymentEntity(
 fun ShadowFormationEntity.toDomain(): ShadowFormation {
     val memberIds = try {
         kotlinx.serialization.json.Json.decodeFromString<List<String>>(memberShadowIdsJson)
-    } catch (e: Exception) { emptyList() }
+    } catch (_: Exception) { emptyList() }
     return ShadowFormation(
         formationId = formationId,
+        accountOwnerId = accountOwnerId,
         name = name,
         formationType = runCatching { ShadowFormationType.valueOf(formationTypeName) }.getOrDefault(ShadowFormationType.BALANCED_FORMATION),
         description = description,
@@ -397,6 +530,7 @@ fun ShadowFormation.toEntity(): ShadowFormationEntity {
     val memberJson = kotlinx.serialization.json.Json.encodeToString(memberShadowIds)
     return ShadowFormationEntity(
         formationId = formationId,
+        accountOwnerId = accountOwnerId,
         name = name,
         formationTypeName = formationType.name,
         description = description,
@@ -410,7 +544,16 @@ fun ShadowFormation.toEntity(): ShadowFormationEntity {
 
 fun ShadowSkillUnlockEntity.toDomain() = ShadowSkillUnlock(
     id = id,
+    accountOwnerId = accountOwnerId,
     shadowId = shadowId,
+    skillId = skillId,
+    unlockedAtEpochMs = unlockedAtEpochMs,
+    evidenceNote = evidenceNote
+)
+
+fun MonarchSkillUnlockEntity.toDomain() = MonarchSkillUnlock(
+    id = id,
+    accountOwnerId = accountOwnerId,
     skillId = skillId,
     unlockedAtEpochMs = unlockedAtEpochMs,
     evidenceNote = evidenceNote
@@ -418,6 +561,7 @@ fun ShadowSkillUnlockEntity.toDomain() = ShadowSkillUnlock(
 
 fun ShadowQuestProgressEntity.toDomain() = ShadowQuestProgress(
     id = id,
+    accountOwnerId = accountOwnerId,
     questId = questId,
     currentValue = currentValue,
     isCompleted = isCompleted,
@@ -427,6 +571,7 @@ fun ShadowQuestProgressEntity.toDomain() = ShadowQuestProgress(
 
 fun ShadowResourceTransactionEntity.toDomain() = ShadowResourceTransaction(
     transactionId = transactionId,
+    accountOwnerId = accountOwnerId,
     resourceType = runCatching { ShadowResourceType.valueOf(resourceTypeName) }.getOrDefault(ShadowResourceType.SHADOW_ESSENCE),
     amount = amount,
     transactionType = runCatching { ShadowResourceTransactionType.valueOf(transactionTypeName) }.getOrDefault(ShadowResourceTransactionType.EARNED),
@@ -436,3 +581,52 @@ fun ShadowResourceTransactionEntity.toDomain() = ShadowResourceTransaction(
     timestampEpochMs = timestampEpochMs
 )
 
+
+@Entity(
+    tableName = "shadow_evidence_claims",
+    foreignKeys = [
+        ForeignKey(
+            entity = ShadowMonarchProfileEntity::class,
+            parentColumns = ["accountOwnerId"],
+            childColumns = ["accountOwnerId"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ],
+    indices = [
+        Index("accountOwnerId"),
+        Index(value = ["accountOwnerId", "sourceType", "sourceRecordId"], unique = true)
+    ]
+)
+data class ShadowEvidenceClaimEntity(
+    @PrimaryKey
+    val claimId: String,
+    val accountOwnerId: String,
+    val sourceType: String,
+    val sourceRecordId: String,
+    val claimedAtEpochMs: Long
+)
+
+@Entity(
+    tableName = "shadow_resonance_records",
+    foreignKeys = [
+        ForeignKey(
+            entity = ShadowMonarchProfileEntity::class,
+            parentColumns = ["accountOwnerId"],
+            childColumns = ["accountOwnerId"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ],
+    indices = [
+        Index("accountOwnerId"),
+        Index(value = ["accountOwnerId", "archetypeId"], unique = true)
+    ]
+)
+data class ShadowResonanceEntity(
+    @PrimaryKey
+    val resonanceId: String,
+    val accountOwnerId: String,
+    val archetypeId: String,
+    val resonanceLevel: Int,
+    val resonanceShards: Int,
+    val lastResonanceEpochMs: Long
+)

@@ -103,11 +103,11 @@ class SocialMasteryAnalyticsEngine(
             list.add(
                 WeaknessPattern(
                     patternId = "WEAK_STALE_${stale.module.code}",
-                    title = "Practice Staleness in ${stale.module.displayName}",
-                    description = "Inactivity has triggered decay flags. Complete two consecutive passing drills to restore previous rank.",
+                    title = "Maintenance Recommended in ${stale.module.displayName}",
+                    description = "Extended inactivity detected without demoting your earned stage. Complete two quick refresher drills to maintain sharp execution.",
                     affectedModule = stale.module,
                     frequencyDetected = 1,
-                    supportingEvidenceNotes = listOf("Module flagged stale due to inactivity interval."),
+                    supportingEvidenceNotes = listOf("Module flagged for maintenance refresher due to extended inactivity."),
                     recommendedExerciseIds = listOf("EX_COMM_02"),
                     recommendedDifficulty = PracticeDifficulty.BASIC
                 )

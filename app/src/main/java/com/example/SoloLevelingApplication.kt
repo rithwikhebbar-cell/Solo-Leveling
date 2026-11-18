@@ -34,6 +34,7 @@ import com.example.data.repository.SocialRepositoryImpl
 import com.example.domain.engine.CommunicationPracticeEngine
 import com.example.domain.engine.SocialMasteryAnalyticsEngine
 import com.example.service.AudioLifecycleManager
+import com.example.service.SocialArtifactStorageManager
 import com.example.service.SocialMasteryAiCoach
 import com.example.service.SocialPrivacyService
 import com.example.service.SocialVoiceCoachController
@@ -44,17 +45,42 @@ import com.example.domain.engine.ShadowExtractionEngine
 import com.example.data.sync.CloudSyncEngine
 import com.example.data.sync.SyncQueueManager
 import com.example.data.sync.SyncStatusTracker
+import com.example.domain.model.AuthStatus
 import com.example.domain.model.SystemEventType
 import com.example.service.AndroidSystemVoiceEngine
 import com.example.worker.CloudSyncWorker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
 
 class AppContainer(application: Application) {
+    companion object {
+        const val DEFAULT_LOCAL_ACCOUNT_OWNER_ID = "local_vault_player_1"
+    }
+
     private val database by lazy { SoloLevelingDatabase.getInstance(application) }
-    private val preferencesRepository by lazy { UserPreferencesRepository(application) }
+
+    val activeAccountOwnerIdFlow: Flow<String> by lazy {
+        database.cloudAuthDao().observeSession()
+            .map { sess ->
+                if (sess != null &&
+                    sess.supabaseUserId.isNotBlank() &&
+                    sess.authStatusName != AuthStatus.SIGNED_OUT.name
+                ) {
+                    sess.supabaseUserId
+                } else {
+                    DEFAULT_LOCAL_ACCOUNT_OWNER_ID
+                }
+            }
+            .distinctUntilChanged()
+    }
+    val preferencesRepository by lazy { UserPreferencesRepository(application) }
     private val healthConnectPort by lazy { AndroidHealthConnectAdapter(application) }
     val healthConnectDataSource: HealthConnectDataSource by lazy { AndroidHealthConnectDataSource(application) }
     val tokenStorage: TokenStorage by lazy { SecureTokenStorage(application) }
@@ -180,29 +206,40 @@ class AppContainer(application: Application) {
     }
 
     val shadowArmyRepository: ShadowArmyRepository by lazy {
+        val shadowMutex = Mutex()
         val monarchProgressionEngine = MonarchProgressionEngine(
             monarchProfileDao = database.shadowMonarchProfileDao(),
             monarchSkillUnlockDao = database.monarchSkillUnlockDao(),
             shadowDao = database.shadowDao(),
             shadowResourceDao = database.shadowResourceDao(),
-            shadowQuestProgressDao = database.shadowQuestProgressDao()
+            shadowQuestProgressDao = database.shadowQuestProgressDao(),
+            shadowXpTraceDao = database.shadowXpTraceDao(),
+            database = database,
+            mutex = shadowMutex
         )
         val extractionEngine = ShadowExtractionEngine(
             database = database,
             shadowDao = database.shadowDao(),
             extractionDao = database.shadowExtractionDao(),
             monarchProfileDao = database.shadowMonarchProfileDao(),
-            monarchProgressionEngine = monarchProgressionEngine
+            monarchProgressionEngine = monarchProgressionEngine,
+            mutex = shadowMutex
         )
         val evolutionEngine = ShadowEvolutionEngine(
             shadowDao = database.shadowDao(),
             shadowSkillUnlockDao = database.shadowSkillUnlockDao(),
-            monarchProgressionEngine = monarchProgressionEngine
+            monarchProgressionEngine = monarchProgressionEngine,
+            shadowXpTraceDao = database.shadowXpTraceDao(),
+            database = database,
+            mutex = shadowMutex
         )
         val deploymentEngine = ShadowDeploymentEngine(
             shadowDao = database.shadowDao(),
             deploymentDao = database.shadowDeploymentDao(),
-            formationDao = database.shadowFormationDao()
+            formationDao = database.shadowFormationDao(),
+            monarchProgressionEngine = monarchProgressionEngine,
+            database = database,
+            mutex = shadowMutex
         )
         ShadowArmyRepository(
             monarchProfileDao = database.shadowMonarchProfileDao(),
@@ -217,12 +254,18 @@ class AppContainer(application: Application) {
             monarchProgressionEngine = monarchProgressionEngine,
             extractionEngine = extractionEngine,
             evolutionEngine = evolutionEngine,
-            deploymentEngine = deploymentEngine
+            deploymentEngine = deploymentEngine,
+            database = database,
+            mutex = shadowMutex
         )
     }
 
     val audioLifecycleManager: AudioLifecycleManager by lazy {
         AudioLifecycleManager(application, database)
+    }
+
+    val socialArtifactStorageManager: SocialArtifactStorageManager by lazy {
+        SocialArtifactStorageManager(application)
     }
 
     val socialPrivacyService: SocialPrivacyService by lazy {
@@ -232,7 +275,8 @@ class AppContainer(application: Application) {
     val socialRepository: SocialRepository by lazy {
         SocialRepositoryImpl(
             database = database,
-            audioLifecycleManager = audioLifecycleManager
+            audioLifecycleManager = audioLifecycleManager,
+            artifactStorageManager = socialArtifactStorageManager
         )
     }
 
@@ -277,9 +321,13 @@ class SoloLevelingApplication : Application() {
             container.systemControlRepository.evaluateSystemHealthAndPerformance()
             container.automationOrchestrator.scheduleAllEnabledWorkers()
             container.systemExperienceRepository.syncCelebrationsFromPlayerProfile()
+            val activeOwnerId = container.activeAccountOwnerIdFlow.firstOrNull()
+                ?: AppContainer.DEFAULT_LOCAL_ACCOUNT_OWNER_ID
+            container.shadowArmyRepository.getMonarchProfile(activeOwnerId)
             container.socialRepository.seedInitialScenariosIfEmpty()
-            container.socialRepository.initializeMissingModuleProgress("local_vault_player_1")
-            container.audioLifecycleManager.reconcileOrphanFiles("local_vault_player_1")
+            container.socialRepository.getOrCreateProfile(activeOwnerId)
+            container.socialRepository.initializeMissingModuleProgress(activeOwnerId)
+            container.audioLifecycleManager.reconcileOrphanFiles(activeOwnerId)
         }
         CloudSyncWorker.enqueueImmediateSync(this, "APP_STARTUP")
         observeNetworkRestoration()
@@ -312,15 +360,21 @@ class SoloLevelingApplication : Application() {
             container.systemControlRepository.evaluateSystemHealthAndPerformance()
             Result.success(Unit)
         }
-        busRepo.registerHandler(SystemEventType.DUNGEON_COMPLETED) { event ->
-            container.shadowArmyRepository.monarchProgressionEngine.checkAndUpdateQuestProgress(
-                event.sourceEventId.ifBlank { event.eventId }
+        busRepo.registerHandler(SystemEventType.DUNGEON_COMPLETED) {
+            val activeOwnerId = container.activeAccountOwnerIdFlow.firstOrNull()
+                ?: AppContainer.DEFAULT_LOCAL_ACCOUNT_OWNER_ID
+            container.shadowArmyRepository.syncShadowQuestProgress(
+                dungeonCompletions = 1,
+                accountOwnerId = activeOwnerId
             )
             Result.success(Unit)
         }
-        busRepo.registerHandler(SystemEventType.BOSS_BATTLE_COMPLETED) { event ->
-            container.shadowArmyRepository.monarchProgressionEngine.checkAndUpdateQuestProgress(
-                event.sourceEventId.ifBlank { event.eventId }
+        busRepo.registerHandler(SystemEventType.BOSS_BATTLE_COMPLETED) {
+            val activeOwnerId = container.activeAccountOwnerIdFlow.firstOrNull()
+                ?: AppContainer.DEFAULT_LOCAL_ACCOUNT_OWNER_ID
+            container.shadowArmyRepository.syncShadowQuestProgress(
+                dungeonCompletions = 1,
+                accountOwnerId = activeOwnerId
             )
             Result.success(Unit)
         }

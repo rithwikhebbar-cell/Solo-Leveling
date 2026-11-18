@@ -271,11 +271,46 @@ interface RpgAuditDao {
     @Query("SELECT * FROM rpg_reward_audit ORDER BY timestampEpochMs DESC")
     suspend fun getAllOnce(): List<RpgRewardAuditEntity>
 
+    @Query("SELECT * FROM rpg_reward_audit WHERE accountOwnerId = :accountOwnerId ORDER BY timestampEpochMs DESC")
+    suspend fun getAllForOwnerOnce(accountOwnerId: String): List<RpgRewardAuditEntity>
+
     @Query("SELECT * FROM rpg_reward_audit WHERE rewardKey = :rewardKey LIMIT 1")
     suspend fun getByRewardKey(rewardKey: String): RpgRewardAuditEntity?
 
     @Query("SELECT COALESCE(SUM(xpAwarded), 0) FROM rpg_reward_audit WHERE timestampEpochMs >= :sinceEpochMs")
     suspend fun sumRpgXpSince(sinceEpochMs: Long): Int
+
+    @Query("""
+        SELECT COALESCE(SUM(xpAwarded), 0)
+        FROM rpg_reward_audit
+        WHERE sourceType = :sourceType
+          AND accountOwnerId = :accountOwnerId
+          AND timestampEpochMs >= :dayStartEpochMs
+          AND timestampEpochMs < :dayEndEpochMs
+    """)
+    suspend fun sumSocialXpInWindow(
+        sourceType: String,
+        accountOwnerId: String,
+        dayStartEpochMs: Long,
+        dayEndEpochMs: Long
+    ): Int
+
+    @Query("""
+        SELECT COUNT(*)
+        FROM rpg_reward_audit
+        WHERE sourceType = :sourceType
+          AND accountOwnerId = :accountOwnerId
+          AND verificationProvenance IN ('SELF_REPORTED', 'PENDING_REVIEW')
+          AND xpAwarded > 0
+          AND timestampEpochMs >= :dayStartEpochMs
+          AND timestampEpochMs < :dayEndEpochMs
+    """)
+    suspend fun countSocialSelfReportedInWindow(
+        sourceType: String,
+        accountOwnerId: String,
+        dayStartEpochMs: Long,
+        dayEndEpochMs: Long
+    ): Int
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertAudit(entity: RpgRewardAuditEntity): Long

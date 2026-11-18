@@ -19,8 +19,11 @@ interface SocialRecommendationDao {
     @Update
     suspend fun updateRecommendation(recommendation: SocialAdaptiveRecommendationEntity)
 
-    @Query("SELECT * FROM social_adaptive_recommendations WHERE accountOwnerId = :accountOwnerId AND status NOT IN ('DISMISSED', 'COMPLETED') ORDER BY createdAtEpochMs DESC")
+    @Query("SELECT * FROM social_adaptive_recommendations WHERE accountOwnerId = :accountOwnerId AND status IN ('NEW', 'ACCEPTED') ORDER BY updatedAtEpochMs DESC, createdAtEpochMs DESC")
     fun observeActiveRecommendations(accountOwnerId: String): Flow<List<SocialAdaptiveRecommendationEntity>>
+
+    @Query("SELECT * FROM social_adaptive_recommendations WHERE accountOwnerId = :accountOwnerId ORDER BY updatedAtEpochMs DESC")
+    suspend fun getAllForOwner(accountOwnerId: String): List<SocialAdaptiveRecommendationEntity>
 
     @Query("SELECT * FROM social_adaptive_recommendations WHERE accountOwnerId = :accountOwnerId AND status = :status ORDER BY createdAtEpochMs DESC")
     suspend fun getRecommendationsByStatus(accountOwnerId: String, status: String): List<SocialAdaptiveRecommendationEntity>
@@ -30,6 +33,12 @@ interface SocialRecommendationDao {
 
     @Query("UPDATE social_adaptive_recommendations SET status = :newStatus, updatedAtEpochMs = :nowEpochMs WHERE recommendationId = :recommendationId AND accountOwnerId = :accountOwnerId")
     suspend fun updateStatus(recommendationId: String, accountOwnerId: String, newStatus: String, nowEpochMs: Long)
+
+    @Query("UPDATE social_adaptive_recommendations SET status = 'EXPIRED', updatedAtEpochMs = :nowEpochMs WHERE accountOwnerId = :accountOwnerId AND status IN ('NEW', 'ACCEPTED') AND recommendationId NOT IN (:activeIds)")
+    suspend fun expireSupersededRecommendations(accountOwnerId: String, activeIds: List<String>, nowEpochMs: Long)
+
+    @Query("UPDATE social_adaptive_recommendations SET status = 'EXPIRED', updatedAtEpochMs = :nowEpochMs WHERE accountOwnerId = :accountOwnerId AND status IN ('NEW', 'ACCEPTED')")
+    suspend fun expireAllActiveRecommendations(accountOwnerId: String, nowEpochMs: Long)
 }
 
 @Dao
@@ -59,11 +68,11 @@ interface SocialTrainingPlanDao {
     @Update
     suspend fun updateActivity(activity: SocialPlannedActivityEntity)
 
-    @Query("SELECT * FROM social_planned_activities WHERE planId = :planId ORDER BY scheduledDateEpochMs ASC, dayOfWeek ASC")
-    fun observeActivitiesForPlan(planId: String): Flow<List<SocialPlannedActivityEntity>>
+    @Query("SELECT * FROM social_planned_activities WHERE planId = :planId AND accountOwnerId = :accountOwnerId ORDER BY scheduledDateEpochMs ASC, dayOfWeek ASC")
+    fun observeActivitiesForPlan(planId: String, accountOwnerId: String): Flow<List<SocialPlannedActivityEntity>>
 
-    @Query("SELECT * FROM social_planned_activities WHERE planId = :planId ORDER BY scheduledDateEpochMs ASC, dayOfWeek ASC")
-    suspend fun getActivitiesForPlan(planId: String): List<SocialPlannedActivityEntity>
+    @Query("SELECT * FROM social_planned_activities WHERE planId = :planId AND accountOwnerId = :accountOwnerId ORDER BY scheduledDateEpochMs ASC, dayOfWeek ASC")
+    suspend fun getActivitiesForPlan(planId: String, accountOwnerId: String): List<SocialPlannedActivityEntity>
 
     @Query("SELECT * FROM social_planned_activities WHERE activityId = :activityId AND accountOwnerId = :accountOwnerId LIMIT 1")
     suspend fun getActivityById(activityId: String, accountOwnerId: String): SocialPlannedActivityEntity?

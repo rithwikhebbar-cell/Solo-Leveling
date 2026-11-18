@@ -430,7 +430,8 @@ data class ShadowCollectionRecordEntity(
     tableName = "rpg_reward_audit",
     indices = [
         Index(value = ["rewardKey"], unique = true),
-        Index(value = ["timestampEpochMs"])
+        Index(value = ["timestampEpochMs"]),
+        Index(value = ["accountOwnerId", "sourceType", "timestampEpochMs"])
     ]
 )
 data class RpgRewardAuditEntity(
@@ -447,7 +448,8 @@ data class RpgRewardAuditEntity(
     val verificationProvenance: String,
     val wasCapped: Boolean,
     val notes: String,
-    val timestampEpochMs: Long
+    val timestampEpochMs: Long,
+    val accountOwnerId: String = "local_vault_player_1"
 )
 
 // 19. AiDungeonProposalEntity

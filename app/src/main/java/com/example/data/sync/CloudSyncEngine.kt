@@ -127,7 +127,7 @@ class CloudSyncEngine(
 
             var hasMoreQueue = true
             while (hasMoreQueue) {
-                val batch = queueManager.getReadyBatch(nowEpochMs, pageSize)
+                val batch = queueManager.getReadyBatchForUser(session.supabaseUserId, nowEpochMs, pageSize)
                 if (batch.isEmpty()) {
                     hasMoreQueue = false
                     break
@@ -468,6 +468,60 @@ class CloudSyncEngine(
                 val dto = runCatching { CloudDataMapper.json.decodeFromString<com.example.data.remote.CloudHabitCompletionPayload>(payloadJson) }.getOrNull()
                     ?: return null
                 CloudDataMapper.habitCompletionPayloadToPostgrestRow(userId, dto)
+            }
+            SyncEntityType.SHADOW_MONARCH_PROFILE -> {
+                val dto = runCatching { CloudDataMapper.json.decodeFromString<com.example.data.remote.CloudShadowMonarchProfilePayload>(payloadJson) }.getOrNull()
+                    ?: return null
+                if (dto.accountOwnerId != userId) return null
+                CloudDataMapper.shadowMonarchProfileToPostgrestRow(userId, dto)
+            }
+            SyncEntityType.SHADOW -> {
+                val dto = runCatching { CloudDataMapper.json.decodeFromString<com.example.data.remote.CloudShadowPayload>(payloadJson) }.getOrNull()
+                    ?: return null
+                if (dto.accountOwnerId != userId) return null
+                CloudDataMapper.shadowToPostgrestRow(userId, dto)
+            }
+            SyncEntityType.SHADOW_EXTRACTION -> {
+                val dto = runCatching { CloudDataMapper.json.decodeFromString<com.example.data.remote.CloudShadowExtractionPayload>(payloadJson) }.getOrNull()
+                    ?: return null
+                if (dto.accountOwnerId != userId) return null
+                CloudDataMapper.shadowExtractionToPostgrestRow(userId, dto)
+            }
+            SyncEntityType.SHADOW_SKILL_UNLOCK -> {
+                val dto = runCatching { CloudDataMapper.json.decodeFromString<com.example.data.remote.CloudShadowSkillUnlockPayload>(payloadJson) }.getOrNull()
+                    ?: return null
+                if (dto.accountOwnerId != userId) return null
+                CloudDataMapper.shadowSkillUnlockToPostgrestRow(userId, dto)
+            }
+            SyncEntityType.SHADOW_DEPLOYMENT -> {
+                val dto = runCatching { CloudDataMapper.json.decodeFromString<com.example.data.remote.CloudShadowDeploymentPayload>(payloadJson) }.getOrNull()
+                    ?: return null
+                if (dto.accountOwnerId != userId) return null
+                CloudDataMapper.shadowDeploymentToPostgrestRow(userId, dto)
+            }
+            SyncEntityType.SHADOW_FORMATION -> {
+                val dto = runCatching { CloudDataMapper.json.decodeFromString<com.example.data.remote.CloudShadowFormationPayload>(payloadJson) }.getOrNull()
+                    ?: return null
+                if (dto.accountOwnerId != userId) return null
+                CloudDataMapper.shadowFormationToPostgrestRow(userId, dto)
+            }
+            SyncEntityType.MONARCH_SKILL_UNLOCK -> {
+                val dto = runCatching { CloudDataMapper.json.decodeFromString<com.example.data.remote.CloudMonarchSkillUnlockPayload>(payloadJson) }.getOrNull()
+                    ?: return null
+                if (dto.accountOwnerId != userId) return null
+                CloudDataMapper.monarchSkillUnlockToPostgrestRow(userId, dto)
+            }
+            SyncEntityType.SHADOW_QUEST_PROGRESS -> {
+                val dto = runCatching { CloudDataMapper.json.decodeFromString<com.example.data.remote.CloudShadowQuestProgressPayload>(payloadJson) }.getOrNull()
+                    ?: return null
+                if (dto.accountOwnerId != userId) return null
+                CloudDataMapper.shadowQuestProgressToPostgrestRow(userId, dto)
+            }
+            SyncEntityType.SHADOW_RESOURCE_TRANSACTION -> {
+                val dto = runCatching { CloudDataMapper.json.decodeFromString<com.example.data.remote.CloudShadowResourceTransactionPayload>(payloadJson) }.getOrNull()
+                    ?: return null
+                if (dto.accountOwnerId != userId) return null
+                CloudDataMapper.shadowResourceTransactionToPostgrestRow(userId, dto)
             }
             else -> runCatching { CloudDataMapper.json.decodeFromString<JsonObject>(payloadJson) }.getOrNull()
         }

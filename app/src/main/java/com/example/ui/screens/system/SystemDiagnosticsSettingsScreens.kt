@@ -288,7 +288,9 @@ fun SystemControlSettingsScreen(
     onOpenSystemVoiceSettings: () -> Unit = {},
     onOpenVoiceConsole: () -> Unit = {},
     onOpenWidgetHub: () -> Unit = {},
-    onOpenCelebrationVault: () -> Unit = {}
+    onOpenCelebrationVault: () -> Unit = {},
+    onOpenShadowRealm: () -> Unit = {},
+    onOpenSocialMastery: () -> Unit = {}
 ) {
     var showChecklist by rememberSaveable { mutableStateOf(false) }
 
@@ -399,6 +401,20 @@ fun SystemControlSettingsScreen(
                                 border = BorderStroke(1.dp, SystemColors.MonarchGold)
                             ) {
                                 Text("CELEBRATIONS", color = SystemColors.MonarchGold, style = MaterialTheme.typography.labelMedium)
+                            }
+                            OutlinedButton(
+                                onClick = onOpenShadowRealm,
+                                modifier = Modifier.testTag("control_settings_shadow_realm_btn"),
+                                border = BorderStroke(1.dp, SystemColors.ArcaneViolet)
+                            ) {
+                                Text("SHADOW REALM", color = SystemColors.ArcaneViolet, style = MaterialTheme.typography.labelMedium)
+                            }
+                            OutlinedButton(
+                                onClick = onOpenSocialMastery,
+                                modifier = Modifier.testTag("control_settings_social_mastery_btn"),
+                                border = BorderStroke(1.dp, SystemColors.ElectricCyan)
+                            ) {
+                                Text("SOCIAL MASTERY", color = SystemColors.ElectricCyan, style = MaterialTheme.typography.labelMedium)
                             }
                         }
                         OutlinedButton(

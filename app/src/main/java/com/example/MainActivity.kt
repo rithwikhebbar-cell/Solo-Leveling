@@ -89,7 +89,9 @@ class MainActivity : ComponentActivity() {
             )
             val shadowRealmViewModel: ShadowRealmViewModel = viewModel(
                 factory = ShadowRealmViewModel.factory(
-                    repository = app.container.shadowArmyRepository
+                    repository = app.container.shadowArmyRepository,
+                    accountOwnerIdFlow = app.container.activeAccountOwnerIdFlow,
+                    preferencesRepository = app.container.preferencesRepository
                 )
             )
             SoloLevelingApp(

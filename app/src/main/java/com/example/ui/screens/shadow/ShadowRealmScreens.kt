@@ -140,7 +140,7 @@ fun ShadowRealmDashboardScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack, modifier = Modifier.testTag("nav_back")) {
-                        Icon(Icons.AutoMirrored.rounded.ArrowBack, contentDescription = "Back", tint = ShadowColors.PureIce)
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back", tint = ShadowColors.PureIce)
                     }
                 },
                 actions = {
@@ -433,7 +433,7 @@ fun MonarchStatusScreen(
                 title = { Text("MONARCH STATUS", style = MaterialTheme.typography.titleMedium, color = ShadowColors.PureIce) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.rounded.ArrowBack, contentDescription = "Back", tint = ShadowColors.PureIce)
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back", tint = ShadowColors.PureIce)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = ShadowColors.Obsidian)
@@ -488,7 +488,7 @@ fun MonarchStatusScreen(
                     AttributeRow("Army Capacity", "${profile.activeShadowCount} / ${profile.armyCapacity}")
                     AttributeRow("Total Recruited", "${profile.totalShadowsRecruited}")
                     AttributeRow("Total Evolutions", "${profile.totalEvolutions}")
-                    AttributeRow("Highest Shadow Rank", profile.highestShadowRank.displayName)
+                    AttributeRow("Highest Shadow Rank", profile.highestShadowRank.label)
                     AttributeRow("Shadow Army Power", "${profile.shadowArmyPowerRating}")
                 }
             }
@@ -569,7 +569,7 @@ fun ShadowExtractionScreen(
                 title = { Text("SHADOW EXTRACTION", style = MaterialTheme.typography.titleMedium, color = ShadowColors.PureIce) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.rounded.ArrowBack, contentDescription = "Back", tint = ShadowColors.PureIce)
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back", tint = ShadowColors.PureIce)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = ShadowColors.Obsidian)
@@ -841,6 +841,7 @@ fun ShadowArmyAnalyticsScreen(
     onNavigateBack: () -> Unit
 ) {
     val analytics by viewModel.analytics.collectAsState()
+    val uiState by viewModel.uiState.collectAsState()
 
     LaunchedEffect(Unit) {
         viewModel.loadAnalytics()
@@ -852,7 +853,7 @@ fun ShadowArmyAnalyticsScreen(
                 title = { Text("ARMY ANALYTICS", style = MaterialTheme.typography.titleMedium, color = ShadowColors.PureIce) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.rounded.ArrowBack, contentDescription = "Back", tint = ShadowColors.PureIce)
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back", tint = ShadowColors.PureIce)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = ShadowColors.Obsidian)
@@ -876,9 +877,9 @@ fun ShadowArmyAnalyticsScreen(
             ) {
                 // High-level cards
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    AnalyticsMetricCard("TOTAL ARMY", "${data.totalShadows}", ShadowColors.Cyan, Modifier.weight(1f))
-                    AnalyticsMetricCard("DEPLOYED", "${data.deployedCount}", ShadowColors.Emerald, Modifier.weight(1f))
-                    AnalyticsMetricCard("POWER", "${data.totalArmyPowerRating}", ShadowColors.Gold, Modifier.weight(1f))
+                    AnalyticsMetricCard("TOTAL ARMY", "${data.activeShadows}", ShadowColors.Cyan, Modifier.weight(1f))
+                    AnalyticsMetricCard("DEPLOYED", "${uiState.activeDeployments.size}", ShadowColors.Emerald, Modifier.weight(1f))
+                    AnalyticsMetricCard("POWER", "${data.monarchProfile.shadowArmyPowerRating}", ShadowColors.Gold, Modifier.weight(1f))
                 }
 
                 // Class breakdown
@@ -894,7 +895,7 @@ fun ShadowArmyAnalyticsScreen(
                             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                                 ShadowClassBadge(cls, modifier = Modifier.width(90.dp))
                                 Spacer(modifier = Modifier.width(10.dp))
-                                val progress = if (data.totalShadows > 0) count.toFloat() / data.totalShadows else 0f
+                                val progress = if (data.activeShadows > 0) count.toFloat() / data.activeShadows else 0f
                                 LinearProgressIndicator(
                                     progress = { progress },
                                     modifier = Modifier.weight(1f).height(6.dp).clip(RoundedCornerShape(3.dp)),
@@ -921,7 +922,7 @@ fun ShadowArmyAnalyticsScreen(
                             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                                 ShadowRankBadge(rank, modifier = Modifier.width(90.dp))
                                 Spacer(modifier = Modifier.width(10.dp))
-                                val progress = if (data.totalShadows > 0) count.toFloat() / data.totalShadows else 0f
+                                val progress = if (data.activeShadows > 0) count.toFloat() / data.activeShadows else 0f
                                 LinearProgressIndicator(
                                     progress = { progress },
                                     modifier = Modifier.weight(1f).height(6.dp).clip(RoundedCornerShape(3.dp)),
@@ -966,7 +967,7 @@ fun ShadowArchiveScreen(
     onNavigateBack: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val extractions by viewModel.repository.observeExtractionHistory().collectAsState(initial = emptyList())
+    val extractions = uiState.extractionHistory
     val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()) }
 
     Scaffold(
@@ -975,7 +976,7 @@ fun ShadowArchiveScreen(
                 title = { Text("SHADOW ARCHIVE & LOGS", style = MaterialTheme.typography.titleMedium, color = ShadowColors.PureIce) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.rounded.ArrowBack, contentDescription = "Back", tint = ShadowColors.PureIce)
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back", tint = ShadowColors.PureIce)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = ShadowColors.Obsidian)
@@ -1052,9 +1053,7 @@ fun ShadowSettingsScreen(
     viewModel: ShadowRealmViewModel,
     onNavigateBack: () -> Unit
 ) {
-    var extractionNotifs by remember { mutableStateOf(true) }
-    var evolutionNotifs by remember { mutableStateOf(true) }
-    var autoRecallOnRest by remember { mutableStateOf(true) }
+    val settings by viewModel.settingsState.collectAsState()
 
     Scaffold(
         topBar = {
@@ -1062,7 +1061,7 @@ fun ShadowSettingsScreen(
                 title = { Text("SHADOW REALM SETTINGS", style = MaterialTheme.typography.titleMedium, color = ShadowColors.PureIce) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.rounded.ArrowBack, contentDescription = "Back", tint = ShadowColors.PureIce)
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back", tint = ShadowColors.PureIce)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = ShadowColors.Obsidian)
@@ -1096,8 +1095,8 @@ fun ShadowSettingsScreen(
                             Text(text = "Announce when new shadows are ready to be extracted", style = MaterialTheme.typography.bodySmall, color = ShadowColors.Muted)
                         }
                         Switch(
-                            checked = extractionNotifs,
-                            onCheckedChange = { extractionNotifs = it },
+                            checked = settings.extractionAlertsEnabled,
+                            onCheckedChange = { viewModel.updateExtractionAlerts(it) },
                             colors = SwitchDefaults.colors(checkedThumbColor = ShadowColors.Cyan, checkedTrackColor = ShadowColors.Violet)
                         )
                     }
@@ -1114,8 +1113,8 @@ fun ShadowSettingsScreen(
                             Text(text = "Notify when a shadow reaches level requirement to evolve", style = MaterialTheme.typography.bodySmall, color = ShadowColors.Muted)
                         }
                         Switch(
-                            checked = evolutionNotifs,
-                            onCheckedChange = { evolutionNotifs = it },
+                            checked = settings.evolutionAlertsEnabled,
+                            onCheckedChange = { viewModel.updateEvolutionAlerts(it) },
                             colors = SwitchDefaults.colors(checkedThumbColor = ShadowColors.Cyan, checkedTrackColor = ShadowColors.Violet)
                         )
                     }
@@ -1132,8 +1131,8 @@ fun ShadowSettingsScreen(
                             Text(text = "Respect player rest days; shadows reduce intensity during rest", style = MaterialTheme.typography.bodySmall, color = ShadowColors.Muted)
                         }
                         Switch(
-                            checked = autoRecallOnRest,
-                            onCheckedChange = { autoRecallOnRest = it },
+                            checked = settings.autoRecallOnRest,
+                            onCheckedChange = { viewModel.updateAutoRecallOnRest(it) },
                             colors = SwitchDefaults.colors(checkedThumbColor = ShadowColors.Cyan, checkedTrackColor = ShadowColors.Violet)
                         )
                     }

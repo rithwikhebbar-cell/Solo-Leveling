@@ -140,6 +140,9 @@ interface SocialPracticeSessionDao {
     @Query("SELECT * FROM social_practice_sessions WHERE sessionId = :sessionId AND accountOwnerId = :accountOwnerId LIMIT 1")
     suspend fun getSessionById(sessionId: String, accountOwnerId: String): SocialPracticeSessionEntity?
 
+    @Query("SELECT accountOwnerId FROM social_practice_sessions WHERE sessionId = :sessionId LIMIT 1")
+    suspend fun getOwnerBySessionId(sessionId: String): String?
+
     @Query("SELECT * FROM social_practice_sessions WHERE accountOwnerId = :accountOwnerId ORDER BY startedEpochMs DESC LIMIT :limit")
     fun observeRecentSessions(accountOwnerId: String, limit: Int = 30): Flow<List<SocialPracticeSessionEntity>>
 
@@ -175,6 +178,9 @@ interface SocialScenarioAttemptDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAttempt(attempt: SocialScenarioAttemptEntity)
 
+    @Query("SELECT accountOwnerId FROM social_scenario_attempts WHERE attemptId = :attemptId LIMIT 1")
+    suspend fun getOwnerByAttemptId(attemptId: String): String?
+
     @Query("SELECT * FROM social_scenario_attempts WHERE accountOwnerId = :accountOwnerId AND moduleName = :moduleName ORDER BY completedEpochMs DESC")
     suspend fun getAttemptsByModule(accountOwnerId: String, moduleName: String): List<SocialScenarioAttemptEntity>
 
@@ -195,6 +201,9 @@ interface SocialScenarioAttemptDao {
 
     @Query("SELECT COUNT(*) FROM social_scenario_attempts WHERE accountOwnerId = :accountOwnerId AND isPassed = 1 AND completedEpochMs >= :dayStartEpochMs")
     suspend fun countPassedToday(accountOwnerId: String, dayStartEpochMs: Long): Int
+
+    @Query("SELECT COUNT(*) FROM social_scenario_attempts WHERE accountOwnerId = :accountOwnerId AND isPassed = 1 AND completedEpochMs >= :dayStartEpochMs AND completedEpochMs < :dayEndEpochMs")
+    suspend fun countPassedInWindow(accountOwnerId: String, dayStartEpochMs: Long, dayEndEpochMs: Long): Int
 }
 
 @Dao
@@ -202,8 +211,11 @@ interface SocialAssessmentDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAssessment(assessment: SocialAssessmentEntity)
 
-    @Query("SELECT * FROM social_assessments WHERE assessmentId = :assessmentId LIMIT 1")
-    suspend fun getAssessmentById(assessmentId: String): SocialAssessmentEntity?
+    @Query("SELECT * FROM social_assessments WHERE assessmentId = :assessmentId AND accountOwnerId = :accountOwnerId LIMIT 1")
+    suspend fun getAssessmentById(assessmentId: String, accountOwnerId: String): SocialAssessmentEntity?
+
+    @Query("SELECT accountOwnerId FROM social_assessments WHERE assessmentId = :assessmentId LIMIT 1")
+    suspend fun getOwnerByAssessmentId(assessmentId: String): String?
 
     @Query("SELECT * FROM social_assessments WHERE accountOwnerId = :accountOwnerId ORDER BY assessedEpochMs DESC")
     suspend fun getAssessmentHistory(accountOwnerId: String): List<SocialAssessmentEntity>
@@ -232,6 +244,9 @@ interface SocialMissionDao {
     @Query("SELECT * FROM social_mission_records WHERE recordId = :recordId AND accountOwnerId = :accountOwnerId LIMIT 1")
     suspend fun getRecordById(recordId: String, accountOwnerId: String): com.example.data.local.entity.SocialMissionRecordEntity?
 
+    @Query("SELECT accountOwnerId FROM social_mission_records WHERE recordId = :recordId LIMIT 1")
+    suspend fun getOwnerByRecordId(recordId: String): String?
+
     @Query("SELECT * FROM social_mission_records WHERE accountOwnerId = :accountOwnerId AND lifecycleStatus IN ('ACCEPTED', 'IN_PROGRESS', 'SUBMITTED', 'UNDER_REVIEW') ORDER BY startedEpochMs DESC")
     suspend fun getActiveRecords(accountOwnerId: String): List<com.example.data.local.entity.SocialMissionRecordEntity>
 
@@ -244,14 +259,23 @@ interface SocialMissionDao {
     @Query("SELECT COUNT(*) FROM social_mission_records WHERE idempotencyKey = :idempotencyKey")
     suspend fun countByIdempotencyKey(idempotencyKey: String): Int
 
-    @Query("SELECT COUNT(*) FROM social_mission_records WHERE accountOwnerId = :accountOwnerId AND lifecycleStatus = 'COMPLETED' AND completedEpochMs >= :dayStartEpochMs")
-    suspend fun countCompletedToday(accountOwnerId: String, dayStartEpochMs: Long): Int
+    @Query("""
+        SELECT COUNT(*) FROM social_mission_records
+        WHERE accountOwnerId = :accountOwnerId
+          AND artifactContentHash = :artifactHash
+          AND recordId != :excludeRecordId
+          AND lifecycleStatus != 'CANCELLED'
+    """)
+    suspend fun countByArtifactHash(accountOwnerId: String, artifactHash: String, excludeRecordId: String): Int
 
-    @Query("SELECT COALESCE(SUM(xpAwarded), 0) FROM social_mission_records WHERE accountOwnerId = :accountOwnerId AND completedEpochMs >= :dayStartEpochMs")
-    suspend fun getSocialXpEarnedToday(accountOwnerId: String, dayStartEpochMs: Long): Int
+    @Query("SELECT COUNT(*) FROM social_mission_records WHERE accountOwnerId = :accountOwnerId AND lifecycleStatus = 'COMPLETED' AND completedEpochMs >= :dayStartEpochMs AND completedEpochMs < :dayEndEpochMs")
+    suspend fun countCompletedInWindow(accountOwnerId: String, dayStartEpochMs: Long, dayEndEpochMs: Long): Int
 
-    @Query("SELECT COUNT(*) FROM social_mission_records WHERE accountOwnerId = :accountOwnerId AND completedEpochMs >= :dayStartEpochMs AND verificationStatus = 'SELF_REPORTED'")
-    suspend fun countSelfReportedCompletedToday(accountOwnerId: String, dayStartEpochMs: Long): Int
+    @Query("SELECT COALESCE(SUM(xpAwarded), 0) FROM social_mission_records WHERE accountOwnerId = :accountOwnerId AND completedEpochMs >= :dayStartEpochMs AND completedEpochMs < :dayEndEpochMs AND ('msn_reward_' || recordId) NOT IN (SELECT rewardKey FROM rpg_reward_audit)")
+    suspend fun getUnauditedSocialXpInWindow(accountOwnerId: String, dayStartEpochMs: Long, dayEndEpochMs: Long): Int
+
+    @Query("SELECT COUNT(*) FROM social_mission_records WHERE accountOwnerId = :accountOwnerId AND completedEpochMs >= :dayStartEpochMs AND completedEpochMs < :dayEndEpochMs AND verificationStatus = 'SELF_REPORTED' AND xpAwarded > 0 AND ('msn_reward_' || recordId) NOT IN (SELECT rewardKey FROM rpg_reward_audit)")
+    suspend fun countUnauditedSelfReportedInWindow(accountOwnerId: String, dayStartEpochMs: Long, dayEndEpochMs: Long): Int
 
     @Query("SELECT COUNT(*) FROM social_mission_records WHERE accountOwnerId = :accountOwnerId AND lifecycleStatus = 'COMPLETED'")
     suspend fun countCompletedMissions(accountOwnerId: String): Int

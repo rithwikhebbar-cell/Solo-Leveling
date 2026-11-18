@@ -104,6 +104,10 @@ class SyncRepository(
                 if (auth.accessToken.isNotBlank()) {
                     tokenStorage.saveTokens(auth.accessToken, auth.refreshToken)
                 }
+                val previousUserId = database.cloudAuthDao().getSessionOnce()?.supabaseUserId
+                if (previousUserId != null && previousUserId != userId) {
+                    clearAccountSyncState()
+                }
                 val profile = database.playerDao().getPlayerOnce()?.toDomain()
                 val identity = persistSessionFromAuth(
                     userId = userId,
@@ -137,6 +141,10 @@ class SyncRepository(
                     ?: return Result.failure(IllegalStateException("Missing user identity from authentication server."))
                 tokenStorage.saveTokens(auth.accessToken, auth.refreshToken)
 
+                val previousUserId = database.cloudAuthDao().getSessionOnce()?.supabaseUserId
+                if (previousUserId != null && previousUserId != userId) {
+                    clearAccountSyncState()
+                }
                 val localProfile = database.playerDao().getPlayerOnce()?.toDomain()
                 val remoteIdentity = when (
                     val idRes = supabaseApi.fetchOrInitializePlayerIdentity(
@@ -258,9 +266,20 @@ class SyncRepository(
             supabaseApi.signOut(token)
         }
         tokenStorage.clearTokens()
-        database.cloudAuthDao().clearSession()
+        database.withTransaction {
+            database.cloudAuthDao().clearSession()
+            clearAccountSyncState()
+        }
         preferencesRepository.setSupabaseCloudSyncEnabled(false)
         return Result.success(Unit)
+    }
+
+    private suspend fun clearAccountSyncState() {
+        database.registeredDeviceDao().clearAll()
+        database.syncQueueDao().clearAll()
+        database.syncConflictDao().clearAll()
+        database.syncMetaDao().clearCursors()
+        database.syncMetaDao().clearAllMeta()
     }
 
     suspend fun updateDisplayName(newName: String): Result<String> {

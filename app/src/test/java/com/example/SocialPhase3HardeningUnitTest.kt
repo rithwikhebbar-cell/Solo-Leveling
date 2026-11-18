@@ -1,23 +1,34 @@
 package com.example
 
 import com.example.data.integration.BackendAiGateway
+import com.example.data.integration.HttpBackendAiGateway
 import com.example.data.repository.SocialRepository
 import com.example.domain.engine.ActivityRewardCalculation
 import com.example.domain.engine.SocialMasteryAnalyticsEngine
+import com.example.domain.model.AdaptiveDifficulty
 import com.example.domain.model.AiCoachingMode
 import com.example.domain.model.AttributeType
+import com.example.domain.model.PersonalizedSocialRecommendation
+import com.example.domain.model.PersonalizedWeeklyTrainingPlan
 import com.example.domain.model.PracticeDifficulty
+import com.example.domain.model.SkillAssessmentSubmission
 import com.example.domain.model.SocialActivityKind
 import com.example.domain.model.SocialAssessment
+import com.example.domain.model.SocialCompetencyProgress
 import com.example.domain.model.SocialEvidenceSource
+import com.example.domain.model.SocialMasteryPathway
 import com.example.domain.model.SocialMasteryStage
+import com.example.domain.model.SocialMissionEvidenceType
+import com.example.domain.model.SocialMissionRecord
 import com.example.domain.model.SocialModuleIdentifier
 import com.example.domain.model.SocialModuleProgress
 import com.example.domain.model.SocialPracticeSession
 import com.example.domain.model.SocialProfile
+import com.example.domain.model.SocialRecommendationStatus
 import com.example.domain.model.SocialScenario
 import com.example.domain.model.SocialScenarioAttempt
 import com.example.domain.model.SocialSessionStatus
+import com.example.domain.model.SocialWeeklyDevelopmentReport
 import com.example.domain.model.VerificationStatus
 import com.example.service.SocialMasteryAiCoach
 import com.example.service.SocialPrivacyService
@@ -75,6 +86,76 @@ class SocialPhase3HardeningUnitTest {
         override suspend fun observeRecentSessions(accountOwnerId: String, limit: Int): Flow<List<SocialPracticeSession>> = flowOf(recentSessions)
         override suspend fun calculateTotalPracticeSeconds(accountOwnerId: String): Long = recentSessions.sumOf { it.durationSeconds.toLong() }
         override suspend fun deletePracticeSession(sessionId: String, accountOwnerId: String): Result<Unit> = Result.success(Unit)
+        override suspend fun startMission(accountOwnerId: String, missionId: String): Result<SocialMissionRecord> =
+            Result.failure(UnsupportedOperationException("Not used in Phase 3 test"))
+        override suspend fun postponeMission(recordId: String, accountOwnerId: String): Result<SocialMissionRecord> =
+            Result.failure(UnsupportedOperationException("Not used in Phase 3 test"))
+        override suspend fun cancelMission(recordId: String, accountOwnerId: String): Result<SocialMissionRecord> =
+            Result.failure(UnsupportedOperationException("Not used in Phase 3 test"))
+        override suspend fun retryMission(recordId: String, accountOwnerId: String): Result<SocialMissionRecord> =
+            Result.failure(UnsupportedOperationException("Not used in Phase 3 test"))
+        override suspend fun submitMissionReflection(
+            recordId: String,
+            accountOwnerId: String,
+            evidenceType: SocialMissionEvidenceType,
+            reflectionText: String,
+            humanConfirmingRole: String?,
+            artifactNote: String?,
+            aiFeedbackNotes: String?,
+            rubricScore: Int?,
+            artifactAttachmentUri: String?,
+            artifactBytes: ByteArray?,
+            artifactFileName: String?
+        ): Result<Pair<SocialMissionRecord, ActivityRewardCalculation>> =
+            Result.failure(UnsupportedOperationException("Not used in Phase 3 test"))
+        override fun observeMissionRecords(accountOwnerId: String): Flow<List<SocialMissionRecord>> = flowOf(emptyList())
+        override suspend fun getMissionRecord(recordId: String, accountOwnerId: String): SocialMissionRecord? = null
+        override suspend fun recordSkillAssessment(submission: SkillAssessmentSubmission): Result<Pair<SocialAssessment, ActivityRewardCalculation>> =
+            Result.failure(UnsupportedOperationException("Not used in Phase 3 test"))
+        override fun observeAdaptiveRecommendations(accountOwnerId: String): Flow<List<PersonalizedSocialRecommendation>> = flowOf(emptyList())
+        override suspend fun generateAndSaveRecommendations(accountOwnerId: String): Result<List<PersonalizedSocialRecommendation>> =
+            Result.success(emptyList())
+        override suspend fun updateRecommendationStatus(
+            recommendationId: String,
+            accountOwnerId: String,
+            status: SocialRecommendationStatus
+        ): Result<Unit> = Result.success(Unit)
+        override fun observeWeeklyTrainingPlan(accountOwnerId: String): Flow<PersonalizedWeeklyTrainingPlan?> = flowOf(null)
+        override suspend fun generateWeeklyTrainingPlan(
+            accountOwnerId: String,
+            targetDaysPerWeek: Int,
+            targetMinutesPerDay: Int
+        ): Result<PersonalizedWeeklyTrainingPlan> =
+            Result.failure(UnsupportedOperationException("Not used in Phase 3 test"))
+        override suspend fun updateActivityStatus(
+            activityId: String,
+            accountOwnerId: String,
+            isCompleted: Boolean,
+            isSkipped: Boolean
+        ): Result<Unit> = Result.success(Unit)
+        override suspend fun rescheduleActivity(
+            activityId: String,
+            accountOwnerId: String,
+            newScheduledDateEpochMs: Long,
+            newDayOfWeek: Int
+        ): Result<Unit> = Result.success(Unit)
+        override suspend fun pauseOrResumeTrainingPlan(
+            planId: String,
+            accountOwnerId: String,
+            isPaused: Boolean
+        ): Result<Unit> = Result.success(Unit)
+        override fun observeAllPathways(accountOwnerId: String): Flow<List<SocialMasteryPathway>> = flowOf(emptyList())
+        override suspend fun getCompetencyProgressList(
+            accountOwnerId: String,
+            module: SocialModuleIdentifier
+        ): List<SocialCompetencyProgress> = emptyList()
+        override suspend fun updateCompetencyDifficultyOverride(
+            competencyId: String,
+            accountOwnerId: String,
+            difficulty: AdaptiveDifficulty
+        ): Result<Unit> = Result.success(Unit)
+        override suspend fun generateWeeklyReport(accountOwnerId: String): Result<SocialWeeklyDevelopmentReport> =
+            Result.failure(UnsupportedOperationException("Not used in Phase 3 test"))
     }
 
     // =========================================================================
@@ -84,7 +165,7 @@ class SocialPhase3HardeningUnitTest {
     @Test
     fun testAiCoach_BoundedMemoryWindow_ClampsAtMaxLimit() = runBlocking {
         val privacyService = SocialPrivacyService()
-        val aiGateway = BackendAiGateway()
+        val aiGateway = HttpBackendAiGateway()
         val aiCoach = SocialMasteryAiCoach(aiGateway, privacyService)
 
         // Send 25 messages through offline fallback
@@ -133,7 +214,7 @@ class SocialPhase3HardeningUnitTest {
     @Test
     fun testAiCoach_OfflineFallbackRespondsWhenBackendFails() = runBlocking {
         val privacyService = SocialPrivacyService()
-        val aiGateway = BackendAiGateway()
+        val aiGateway = HttpBackendAiGateway()
         val aiCoach = SocialMasteryAiCoach(aiGateway, privacyService)
 
         val result = aiCoach.sendMessage(
@@ -261,7 +342,7 @@ class SocialPhase3HardeningUnitTest {
     @Test
     fun testAiCoachingZeroProgressionGuarantee() = runBlocking {
         val privacyService = SocialPrivacyService()
-        val aiGateway = BackendAiGateway()
+        val aiGateway = HttpBackendAiGateway()
         val aiCoach = SocialMasteryAiCoach(aiGateway, privacyService)
 
         // Sending an AI coach prompt

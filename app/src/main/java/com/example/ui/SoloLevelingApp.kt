@@ -174,7 +174,7 @@ import com.example.ui.screens.shadow.ShadowExtractionScreen
 import com.example.ui.screens.shadow.ShadowArmyAnalyticsScreen
 import com.example.ui.screens.shadow.ShadowArchiveScreen
 import com.example.ui.screens.shadow.ShadowSettingsScreen
-import com.example.ui.screens.shadow.ShadowCollectionScreen
+import com.example.ui.screens.shadow.ShadowCollectionScreen as ShadowMonarchCollectionScreen
 import com.example.ui.screens.shadow.ShadowDetailScreen
 import com.example.ui.screens.shadow.ShadowEvolutionScreen
 import com.example.ui.screens.shadow.ShadowSkillTreeScreen
@@ -587,7 +587,8 @@ fun SoloLevelingApp(
                                 systemControlState = systemControlUiState,
                                 systemControlViewModel = systemControlViewModel,
                                 systemExperienceState = systemExperienceUiState,
-                                systemExperienceViewModel = systemExperienceViewModel
+                                systemExperienceViewModel = systemExperienceViewModel,
+                                shadowRealmViewModel = shadowRealmViewModel
                             )
                         }
                     }
@@ -693,7 +694,8 @@ private fun RealityOsNavHost(
     systemControlState: SystemControlUiState,
     systemControlViewModel: SystemControlViewModel,
     systemExperienceState: SystemExperienceUiState,
-    systemExperienceViewModel: SystemExperienceViewModel
+    systemExperienceViewModel: SystemExperienceViewModel,
+    shadowRealmViewModel: ShadowRealmViewModel
 ) {
     val context = LocalContext.current
     val academicSummary = (academicState as? AcademicUiState.Ready)?.summary ?: AcademicDashboardSummary()
@@ -1819,7 +1821,7 @@ private fun RealityOsNavHost(
             )
         }
         composable<ShadowCollectionListRoute> {
-            ShadowCollectionScreen(
+            ShadowMonarchCollectionScreen(
                 viewModel = shadowRealmViewModel,
                 onNavigateBack = { navController.popBackStack() },
                 onSelectShadow = { shadowId -> navController.navigate(ShadowDetailRoute(shadowId)) }
@@ -1900,7 +1902,8 @@ private fun RealityOsNavHost(
                     socialRepository = app.container.socialRepository,
                     analyticsEngine = app.container.socialAnalyticsEngine,
                     aiCoach = app.container.socialAiCoach,
-                    voiceCoachController = app.container.socialVoiceCoachController
+                    voiceCoachController = app.container.socialVoiceCoachController,
+                    accountOwnerIdFlow = app.container.activeAccountOwnerIdFlow
                 )
             }
             com.example.ui.screens.social.SocialMasteryDashboardScreen(
@@ -1920,7 +1923,8 @@ private fun RealityOsNavHost(
                     socialRepository = app.container.socialRepository,
                     analyticsEngine = app.container.socialAnalyticsEngine,
                     aiCoach = app.container.socialAiCoach,
-                    voiceCoachController = app.container.socialVoiceCoachController
+                    voiceCoachController = app.container.socialVoiceCoachController,
+                    accountOwnerIdFlow = app.container.activeAccountOwnerIdFlow
                 )
             }
             com.example.ui.screens.social.SocialPracticeArenaScreen(
@@ -1935,7 +1939,8 @@ private fun RealityOsNavHost(
                     socialRepository = app.container.socialRepository,
                     analyticsEngine = app.container.socialAnalyticsEngine,
                     aiCoach = app.container.socialAiCoach,
-                    voiceCoachController = app.container.socialVoiceCoachController
+                    voiceCoachController = app.container.socialVoiceCoachController,
+                    accountOwnerIdFlow = app.container.activeAccountOwnerIdFlow
                 )
             }
             com.example.ui.screens.social.SocialCoachScreen(
@@ -1950,7 +1955,8 @@ private fun RealityOsNavHost(
                     socialRepository = app.container.socialRepository,
                     analyticsEngine = app.container.socialAnalyticsEngine,
                     aiCoach = app.container.socialAiCoach,
-                    voiceCoachController = app.container.socialVoiceCoachController
+                    voiceCoachController = app.container.socialVoiceCoachController,
+                    accountOwnerIdFlow = app.container.activeAccountOwnerIdFlow
                 )
             }
             com.example.ui.screens.social.SocialAnalyticsScreen(
@@ -1965,7 +1971,8 @@ private fun RealityOsNavHost(
                     socialRepository = app.container.socialRepository,
                     analyticsEngine = app.container.socialAnalyticsEngine,
                     aiCoach = app.container.socialAiCoach,
-                    voiceCoachController = app.container.socialVoiceCoachController
+                    voiceCoachController = app.container.socialVoiceCoachController,
+                    accountOwnerIdFlow = app.container.activeAccountOwnerIdFlow
                 )
             }
             com.example.ui.screens.social.SocialMissionsScreen(
@@ -1983,7 +1990,8 @@ private fun RealityOsNavHost(
                     socialRepository = app.container.socialRepository,
                     analyticsEngine = app.container.socialAnalyticsEngine,
                     aiCoach = app.container.socialAiCoach,
-                    voiceCoachController = app.container.socialVoiceCoachController
+                    voiceCoachController = app.container.socialVoiceCoachController,
+                    accountOwnerIdFlow = app.container.activeAccountOwnerIdFlow
                 )
             }
             com.example.ui.screens.social.SocialMissionDetailScreen(
@@ -2001,7 +2009,8 @@ private fun RealityOsNavHost(
                     socialRepository = app.container.socialRepository,
                     analyticsEngine = app.container.socialAnalyticsEngine,
                     aiCoach = app.container.socialAiCoach,
-                    voiceCoachController = app.container.socialVoiceCoachController
+                    voiceCoachController = app.container.socialVoiceCoachController,
+                    accountOwnerIdFlow = app.container.activeAccountOwnerIdFlow
                 )
             }
             com.example.ui.screens.social.SocialMissionSubmissionScreen(
@@ -2018,7 +2027,8 @@ private fun RealityOsNavHost(
                     socialRepository = app.container.socialRepository,
                     analyticsEngine = app.container.socialAnalyticsEngine,
                     aiCoach = app.container.socialAiCoach,
-                    voiceCoachController = app.container.socialVoiceCoachController
+                    voiceCoachController = app.container.socialVoiceCoachController,
+                    accountOwnerIdFlow = app.container.activeAccountOwnerIdFlow
                 )
             }
             com.example.ui.screens.social.SocialSkillAssessmentScreen(

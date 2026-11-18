@@ -4,11 +4,13 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -17,13 +19,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Star
@@ -34,6 +37,8 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -43,6 +48,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -54,6 +60,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -61,22 +68,24 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.domain.model.AdaptiveDifficulty
 import com.example.domain.model.MasteryDevelopmentStage
+import com.example.domain.model.MasteryEvidenceClassification
 import com.example.domain.model.PersonalizedSocialRecommendation
 import com.example.domain.model.PersonalizedWeeklyTrainingPlan
-import com.example.domain.model.RecommendationCategory
-import com.example.domain.model.ScheduledTrainingActivity
+import com.example.domain.model.SocialCompetencyProgress
 import com.example.domain.model.SocialMasteryPathway
 import com.example.domain.model.SocialMasteryStage
 import com.example.domain.model.SocialModuleProgress
+import com.example.domain.model.SocialRecommendationCategory
+import com.example.domain.model.SocialRecommendationStatus
 import com.example.domain.model.SocialWeeklyDevelopmentReport
 import com.example.ui.viewmodel.SocialMasteryViewModel
 
-// Visual Design Tokens
-private val ObsidianBlack = Color(0xFF0A0C10)
-private val DeepNavy = Color(0xFF0F172A)
+// Visual Design Tokens (Aligned with Social Suite Dark-Fantasy Palette)
+private val ObsidianBlack = Color(0xFF070A13)
+private val DeepNavy = Color(0xFF0D1424)
 private val SurfaceNavy = Color(0xFF1E293B)
 private val ElectricCyan = Color(0xFF00E5FF)
-private val ArcaneViolet = Color(0xFF9D4EDD)
+private val ArcaneViolet = Color(0xFF8B5CF6)
 private val BorderCyan = Color(0x3300E5FF)
 private val TextWhite = Color(0xFFF8FAFC)
 private val TextMuted = Color(0xFF94A3B8)
@@ -173,7 +182,10 @@ fun SocialMasteryDashboardScreen(
                 item {
                     androidx.compose.material3.Button(
                         onClick = onOpenPracticeArena,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .defaultMinSize(minHeight = 48.dp)
+                            .testTag("social_open_practice_arena_button"),
                         colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = ElectricCyan),
                         shape = RoundedCornerShape(12.dp)
                     ) {
@@ -193,7 +205,10 @@ fun SocialMasteryDashboardScreen(
                     ) {
                         androidx.compose.material3.Button(
                             onClick = onOpenMissions,
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier
+                                .weight(1f)
+                                .defaultMinSize(minHeight = 48.dp)
+                                .testTag("social_open_missions_button"),
                             colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = DeepNavy),
                             border = androidx.compose.foundation.BorderStroke(1.dp, BorderCyan),
                             shape = RoundedCornerShape(10.dp)
@@ -203,7 +218,10 @@ fun SocialMasteryDashboardScreen(
 
                         androidx.compose.material3.Button(
                             onClick = onOpenAssessment,
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier
+                                .weight(1f)
+                                .defaultMinSize(minHeight = 48.dp)
+                                .testTag("social_open_assessment_button"),
                             colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = DeepNavy),
                             border = androidx.compose.foundation.BorderStroke(1.dp, ArcaneViolet),
                             shape = RoundedCornerShape(10.dp)
@@ -220,7 +238,10 @@ fun SocialMasteryDashboardScreen(
                     ) {
                         androidx.compose.material3.Button(
                             onClick = onOpenCoach,
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier
+                                .weight(1f)
+                                .defaultMinSize(minHeight = 48.dp)
+                                .testTag("social_open_coach_button"),
                             colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = ArcaneViolet),
                             shape = RoundedCornerShape(10.dp)
                         ) {
@@ -229,8 +250,11 @@ fun SocialMasteryDashboardScreen(
 
                         androidx.compose.material3.Button(
                             onClick = onOpenAnalytics,
-                            modifier = Modifier.weight(1f),
-                            colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = CardDefaults.cardColors().containerColor),
+                            modifier = Modifier
+                                .weight(1f)
+                                .defaultMinSize(minHeight = 48.dp)
+                                .testTag("social_open_analytics_button"),
+                            colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = DeepNavy),
                             border = androidx.compose.foundation.BorderStroke(1.dp, BorderCyan),
                             shape = RoundedCornerShape(10.dp)
                         ) {
@@ -261,6 +285,16 @@ fun SocialMasteryDashboardScreen(
                     )
                 }
 
+                // Milestone 12 — Phase 5.1: Competency Mastery Pathways Section
+                item {
+                    CompetencyMasteryPathwaysSection(
+                        pathways = state.masteryPathways,
+                        onOverrideDifficulty = { competencyId, diff ->
+                            viewModel.setCompetencyDifficultyOverride(competencyId, diff)
+                        }
+                    )
+                }
+
                 // Milestone 12 — Phase 5: Weekly Development Report Action Button
                 item {
                     Button(
@@ -268,7 +302,10 @@ fun SocialMasteryDashboardScreen(
                             viewModel.loadWeeklyReport()
                             showWeeklyReportDialog = true
                         },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .defaultMinSize(minHeight = 48.dp)
+                            .testTag("social_weekly_report_button"),
                         colors = ButtonDefaults.buttonColors(containerColor = DeepNavy),
                         border = androidx.compose.foundation.BorderStroke(1.dp, ArcaneViolet),
                         shape = RoundedCornerShape(10.dp)
@@ -703,8 +740,18 @@ fun AdaptiveRecommendationsDashboardSection(
                     )
                 }
 
-                IconButton(onClick = onRefresh, modifier = Modifier.size(28.dp)) {
-                    Icon(Icons.Default.Refresh, contentDescription = "Refresh", tint = ElectricCyan, modifier = Modifier.size(16.dp))
+                IconButton(
+                    onClick = onRefresh,
+                    modifier = Modifier
+                        .minimumInteractiveComponentSize()
+                        .testTag("adaptive_recommendations_refresh_button")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = "Refresh adaptive recommendations",
+                        tint = ElectricCyan,
+                        modifier = Modifier.size(18.dp)
+                    )
                 }
             }
 
@@ -721,7 +768,10 @@ fun AdaptiveRecommendationsDashboardSection(
                     onClick = onRefresh,
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = ElectricCyan),
                     shape = RoundedCornerShape(8.dp),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .defaultMinSize(minHeight = 48.dp)
+                        .testTag("adaptive_recommendations_generate_button")
                 ) {
                     Text("EVALUATE & GENERATE RECOMMENDATIONS", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 }
@@ -733,6 +783,7 @@ fun AdaptiveRecommendationsDashboardSection(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(vertical = 4.dp)
+                            .testTag("recommendation_card_${rec.recommendationId}")
                     ) {
                         Column(modifier = Modifier.padding(10.dp)) {
                             Row(
@@ -743,26 +794,63 @@ fun AdaptiveRecommendationsDashboardSection(
                                 Text(
                                     text = rec.category.label.uppercase(),
                                     color = when (rec.category) {
-                                        RecommendationCategory.IMPROVE_WEAKNESS -> GoldHighlight
-                                        RecommendationCategory.REAL_WORLD_APPLICATION -> ElectricCyan
-                                        RecommendationCategory.REVISIT_INACTIVE_SKILL -> ArcaneViolet
+                                        SocialRecommendationCategory.IMPROVE_WEAKNESS -> GoldHighlight
+                                        SocialRecommendationCategory.REAL_WORLD_APPLICATION -> ElectricCyan
+                                        SocialRecommendationCategory.REVISIT_INACTIVE_SKILL -> ArcaneViolet
                                         else -> TextWhite
                                     },
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold,
                                     fontFamily = FontFamily.Monospace
                                 )
-                                Text(
-                                    text = "${rec.estimatedDurationMinutes} MIN • ${rec.difficulty.label}",
-                                    color = TextMuted,
-                                    fontSize = 10.sp,
-                                    fontFamily = FontFamily.Monospace
-                                )
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(4.dp))
+                                            .background(
+                                                if (rec.status == SocialRecommendationStatus.ACCEPTED) {
+                                                    ElectricCyan.copy(alpha = 0.22f)
+                                                } else {
+                                                    ArcaneViolet.copy(alpha = 0.22f)
+                                                }
+                                            )
+                                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                                    ) {
+                                        Text(
+                                            text = rec.status.name,
+                                            color = if (rec.status == SocialRecommendationStatus.ACCEPTED) ElectricCyan else ArcaneViolet,
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            fontFamily = FontFamily.Monospace
+                                        )
+                                    }
+                                    Text(
+                                        text = "${rec.estimatedDurationMinutes}M • ${rec.difficulty.label}",
+                                        color = TextMuted,
+                                        fontSize = 10.sp,
+                                        fontFamily = FontFamily.Monospace
+                                    )
+                                }
                             }
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(rec.title, color = TextWhite, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(rec.explanation, color = TextMuted, fontSize = 11.sp)
+
+                            if (rec.supportingEvidenceReferences.isNotEmpty()) {
+                                Spacer(modifier = Modifier.height(6.dp))
+                                rec.supportingEvidenceReferences.forEach { evidence ->
+                                    Text(
+                                        text = "• $evidence",
+                                        color = ElectricCyan.copy(alpha = 0.85f),
+                                        fontSize = 10.sp,
+                                        lineHeight = 14.sp
+                                    )
+                                }
+                            }
 
                             Spacer(modifier = Modifier.height(8.dp))
                             Row(
@@ -771,23 +859,37 @@ fun AdaptiveRecommendationsDashboardSection(
                             ) {
                                 Button(
                                     onClick = { onAccept(rec.recommendationId) },
+                                    enabled = rec.status != SocialRecommendationStatus.ACCEPTED,
                                     colors = ButtonDefaults.buttonColors(containerColor = ElectricCyan, contentColor = ObsidianBlack),
                                     shape = RoundedCornerShape(6.dp),
-                                    modifier = Modifier.weight(1f)
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .defaultMinSize(minHeight = 48.dp)
+                                        .testTag("accept_rec_button_${rec.recommendationId}")
                                 ) {
-                                    Text("ACCEPT", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                    Text(
+                                        text = if (rec.status == SocialRecommendationStatus.ACCEPTED) "ACCEPTED" else "ACCEPT",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
                                 }
                                 OutlinedButton(
                                     onClick = { onAskAi(rec) },
                                     colors = ButtonDefaults.outlinedButtonColors(contentColor = ArcaneViolet),
                                     shape = RoundedCornerShape(6.dp),
-                                    modifier = Modifier.weight(1f)
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .defaultMinSize(minHeight = 48.dp)
+                                        .testTag("ask_ai_rec_button_${rec.recommendationId}")
                                 ) {
                                     Text("ASK AI WHY", fontSize = 10.sp)
                                 }
                                 TextButton(
                                     onClick = { onDismiss(rec.recommendationId) },
-                                    modifier = Modifier.weight(0.7f)
+                                    modifier = Modifier
+                                        .weight(0.75f)
+                                        .defaultMinSize(minHeight = 48.dp)
+                                        .testTag("dismiss_rec_button_${rec.recommendationId}")
                                 ) {
                                     Text("DISMISS", color = TextMuted, fontSize = 10.sp)
                                 }
@@ -795,6 +897,297 @@ fun AdaptiveRecommendationsDashboardSection(
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+// =========================================================================
+// PHASE 5.1: COMPETENCY MASTERY PATHWAYS DASHBOARD SECTION
+// =========================================================================
+
+@Composable
+fun CompetencyMasteryPathwaysSection(
+    pathways: List<SocialMasteryPathway>,
+    onOverrideDifficulty: (String, AdaptiveDifficulty) -> Unit
+) {
+    var expandedModuleCode by remember { mutableStateOf<String?>(null) }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, BorderCyan, RoundedCornerShape(14.dp))
+            .testTag("competency_mastery_pathways_section"),
+        colors = CardDefaults.cardColors(containerColor = DeepNavy),
+        shape = RoundedCornerShape(14.dp)
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "COMPETENCY MASTERY PATHWAYS",
+                    style = MaterialTheme.typography.titleSmall.copy(
+                        color = TextWhite,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace
+                    )
+                )
+                Text(
+                    text = "${pathways.size} MODULES",
+                    color = ElectricCyan,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace
+                )
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            if (pathways.isEmpty()) {
+                Text(
+                    text = "Evaluate sessions above to populate your 56 competency progression pathways and difficulty tuning.",
+                    color = TextMuted,
+                    fontSize = 12.sp
+                )
+            } else {
+                pathways.forEach { pathway ->
+                    val isExpanded = expandedModuleCode == pathway.module.code
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = SurfaceNavy),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp)
+                            .border(
+                                1.dp,
+                                if (pathway.maintenanceRequiredCount > 0) GoldHighlight.copy(alpha = 0.45f) else BorderCyan,
+                                RoundedCornerShape(10.dp)
+                            )
+                            .testTag("pathway_module_card_${pathway.module.code}")
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .defaultMinSize(minHeight = 48.dp)
+                                    .clickable {
+                                        expandedModuleCode = if (isExpanded) null else pathway.module.code
+                                    }
+                                    .testTag("pathway_module_toggle_${pathway.module.code}"),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = pathway.module.displayName,
+                                        color = TextWhite,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(4.dp))
+                                                .background(ElectricCyan.copy(alpha = 0.18f))
+                                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                                        ) {
+                                            Text(
+                                                text = pathway.currentDevelopmentStage.label.uppercase(),
+                                                color = ElectricCyan,
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                        if (pathway.maintenanceRequiredCount > 0) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .clip(RoundedCornerShape(4.dp))
+                                                    .background(GoldHighlight.copy(alpha = 0.2f))
+                                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                                            ) {
+                                                Text(
+                                                    text = "MAINTENANCE DUE (${pathway.maintenanceRequiredCount})",
+                                                    color = GoldHighlight,
+                                                    fontSize = 9.sp,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                                Icon(
+                                    imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                    contentDescription = if (isExpanded) "Collapse ${pathway.module.displayName} competencies" else "Expand ${pathway.module.displayName} competencies",
+                                    tint = ElectricCyan
+                                )
+                            }
+
+                            pathway.maintenanceSummary?.let { summary ->
+                                Text(
+                                    text = summary,
+                                    color = GoldHighlight.copy(alpha = 0.9f),
+                                    fontSize = 10.sp
+                                )
+                            }
+
+                            AnimatedVisibility(visible = isExpanded) {
+                                Column(
+                                    modifier = Modifier.padding(top = 8.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    pathway.competencies.forEach { comp ->
+                                        CompetencyPathwayDetailRow(
+                                            comp = comp,
+                                            onOverrideDifficulty = onOverrideDifficulty
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CompetencyPathwayDetailRow(
+    comp: SocialCompetencyProgress,
+    onOverrideDifficulty: (String, AdaptiveDifficulty) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(ObsidianBlack.copy(alpha = 0.55f))
+            .padding(10.dp)
+            .testTag("competency_row_${comp.competencyId}")
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = comp.competencyName,
+                color = TextWhite,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.weight(1f)
+            )
+            Text(
+                text = comp.masteryStage.label.uppercase(),
+                color = when (comp.masteryStage) {
+                    MasteryDevelopmentStage.MASTERY_CANDIDATE,
+                    MasteryDevelopmentStage.ADVANCED -> GoldHighlight
+                    MasteryDevelopmentStage.COMPETENT -> ElectricCyan
+                    else -> TextMuted
+                },
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace
+            )
+        }
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            val evidenceColor = when (comp.evidenceClassification) {
+                MasteryEvidenceClassification.ARTIFACT_SUPPORTED -> ElectricCyan
+                MasteryEvidenceClassification.SIMULATION_EVALUATED -> ArcaneViolet
+                MasteryEvidenceClassification.PRACTICE_OBSERVED -> GoldHighlight
+                MasteryEvidenceClassification.SELF_REPORTED,
+                MasteryEvidenceClassification.HUMAN_CONFIRMED -> TextMuted
+            }
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(evidenceColor.copy(alpha = 0.16f))
+                    .padding(horizontal = 6.dp, vertical = 2.dp)
+            ) {
+                Text(
+                    text = comp.evidenceClassification.label,
+                    color = evidenceColor,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+
+            val scoreLabel = comp.lastEvaluatedScore?.let { "$it%" } ?: "N/A"
+            Text(
+                text = "Reps: ${comp.practiceCount} • Score: $scoreLabel",
+                color = TextMuted,
+                fontSize = 10.sp,
+                fontFamily = FontFamily.Monospace
+            )
+        }
+
+        if (comp.maintenanceRequired && !comp.maintenanceReason.isNullOrBlank()) {
+            Spacer(modifier = Modifier.height(4.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(GoldHighlight.copy(alpha = 0.14f))
+                    .padding(horizontal = 6.dp, vertical = 4.dp)
+            ) {
+                Text(
+                    text = "MAINTENANCE DUE: ${comp.maintenanceReason}",
+                    color = GoldHighlight,
+                    fontSize = 9.sp,
+                    lineHeight = 13.sp
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = "Difficulty Override:",
+            color = TextMuted,
+            fontSize = 9.sp,
+            fontFamily = FontFamily.Monospace
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            AdaptiveDifficulty.entries.forEach { diff ->
+                val selected = comp.recommendedDifficulty == diff
+                FilterChip(
+                    selected = selected,
+                    onClick = { onOverrideDifficulty(comp.competencyId, diff) },
+                    label = {
+                        Text(
+                            text = diff.label,
+                            fontSize = 10.sp,
+                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
+                        )
+                    },
+                    modifier = Modifier
+                        .defaultMinSize(minHeight = 48.dp)
+                        .testTag("difficulty_chip_${comp.competencyId}_${diff.name}"),
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = ElectricCyan.copy(alpha = 0.22f),
+                        selectedLabelColor = ElectricCyan,
+                        labelColor = TextMuted
+                    )
+                )
             }
         }
     }

@@ -211,10 +211,10 @@ class CommunicationPracticeEngine(
         accountOwnerId: String,
         scenario: ConversationScenario,
         userTurns: List<String>,
-        score: Int = 85
+        score: Int = 85,
+        attemptId: String = UUID.randomUUID().toString(),
+        idempotencyKey: String = "sim_attempt_${accountOwnerId}_${scenario.scenarioId}_${attemptId}"
     ): Result<SocialScenarioAttempt> {
-        val attemptId = UUID.randomUUID().toString()
-        val idempotencyKey = "sim_attempt_${accountOwnerId}_${scenario.scenarioId}_${System.currentTimeMillis()}"
 
         val attempt = SocialScenarioAttempt(
             attemptId = attemptId,

@@ -6,8 +6,10 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.example.domain.model.DEFAULT_SHADOW_ACCOUNT_OWNER_ID
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -25,6 +27,14 @@ data class UserPreferences(
     val academicWeeklyGoalMinutes: Int = 360
 )
 
+data class ShadowRealmSettings(
+    val accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID,
+    val extractionAlertsEnabled: Boolean = true,
+    val evolutionAlertsEnabled: Boolean = true,
+    val autoRecallOnRest: Boolean = true,
+    val updatedAtEpochMs: Long = 0L
+)
+
 class UserPreferencesRepository(private val context: Context) {
 
     private object Keys {
@@ -37,6 +47,28 @@ class UserPreferencesRepository(private val context: Context) {
         val ACADEMIC_WEEKLY_GOAL_MINUTES = intPreferencesKey("academic_weekly_goal_minutes")
     }
 
+    private fun normalizeShadowOwner(accountOwnerId: String): String {
+        return accountOwnerId.trim().ifBlank { DEFAULT_SHADOW_ACCOUNT_OWNER_ID }
+    }
+
+    private fun shadowPrefix(accountOwnerId: String): String {
+        val normalized = normalizeShadowOwner(accountOwnerId)
+        val safe = normalized.replace(Regex("[^A-Za-z0-9_.-]"), "_")
+        return "shadow_${safe}"
+    }
+
+    private fun shadowExtractionAlertsKey(accountOwnerId: String) =
+        booleanPreferencesKey("${shadowPrefix(accountOwnerId)}_extraction_alerts")
+
+    private fun shadowEvolutionAlertsKey(accountOwnerId: String) =
+        booleanPreferencesKey("${shadowPrefix(accountOwnerId)}_evolution_alerts")
+
+    private fun shadowAutoRecallOnRestKey(accountOwnerId: String) =
+        booleanPreferencesKey("${shadowPrefix(accountOwnerId)}_auto_recall_on_rest")
+
+    private fun shadowSettingsUpdatedAtKey(accountOwnerId: String) =
+        longPreferencesKey("${shadowPrefix(accountOwnerId)}_settings_updated_at")
+
     val preferencesFlow: Flow<UserPreferences> = context.realityOsDataStore.data.map { prefs ->
         UserPreferences(
             hudGlowEnabled = prefs[Keys.HUD_GLOW_ENABLED] ?: true,
@@ -47,6 +79,43 @@ class UserPreferencesRepository(private val context: Context) {
             academicDailyGoalMinutes = prefs[Keys.ACADEMIC_DAILY_GOAL_MINUTES] ?: 60,
             academicWeeklyGoalMinutes = prefs[Keys.ACADEMIC_WEEKLY_GOAL_MINUTES] ?: 360
         )
+    }
+
+    fun observeShadowSettings(accountOwnerId: String): Flow<ShadowRealmSettings> {
+        val owner = normalizeShadowOwner(accountOwnerId)
+        return context.realityOsDataStore.data.map { prefs ->
+            ShadowRealmSettings(
+                accountOwnerId = owner,
+                extractionAlertsEnabled = prefs[shadowExtractionAlertsKey(owner)] ?: true,
+                evolutionAlertsEnabled = prefs[shadowEvolutionAlertsKey(owner)] ?: true,
+                autoRecallOnRest = prefs[shadowAutoRecallOnRestKey(owner)] ?: true,
+                updatedAtEpochMs = prefs[shadowSettingsUpdatedAtKey(owner)] ?: 0L
+            )
+        }
+    }
+
+    suspend fun setShadowExtractionAlerts(accountOwnerId: String, enabled: Boolean) {
+        val owner = normalizeShadowOwner(accountOwnerId)
+        context.realityOsDataStore.edit { prefs ->
+            prefs[shadowExtractionAlertsKey(owner)] = enabled
+            prefs[shadowSettingsUpdatedAtKey(owner)] = System.currentTimeMillis()
+        }
+    }
+
+    suspend fun setShadowEvolutionAlerts(accountOwnerId: String, enabled: Boolean) {
+        val owner = normalizeShadowOwner(accountOwnerId)
+        context.realityOsDataStore.edit { prefs ->
+            prefs[shadowEvolutionAlertsKey(owner)] = enabled
+            prefs[shadowSettingsUpdatedAtKey(owner)] = System.currentTimeMillis()
+        }
+    }
+
+    suspend fun setShadowAutoRecallOnRest(accountOwnerId: String, enabled: Boolean) {
+        val owner = normalizeShadowOwner(accountOwnerId)
+        context.realityOsDataStore.edit { prefs ->
+            prefs[shadowAutoRecallOnRestKey(owner)] = enabled
+            prefs[shadowSettingsUpdatedAtKey(owner)] = System.currentTimeMillis()
+        }
     }
 
     suspend fun setHudGlowEnabled(enabled: Boolean) {

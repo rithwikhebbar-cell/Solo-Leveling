@@ -127,7 +127,7 @@ fun ShadowRankBadge(rank: ShadowRank, modifier: Modifier = Modifier) {
         modifier = modifier
     ) {
         Text(
-            text = rank.displayName,
+            text = rank.label,
             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace),
             color = color,
             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
@@ -145,7 +145,7 @@ fun ShadowClassBadge(shadowClass: ShadowClass, modifier: Modifier = Modifier) {
         modifier = modifier
     ) {
         Text(
-            text = shadowClass.displayName.uppercase(),
+            text = shadowClass.label.uppercase(),
             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
             color = color,
             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
@@ -163,7 +163,7 @@ fun ShadowRarityBadge(rarity: ShadowRarity, modifier: Modifier = Modifier) {
         modifier = modifier
     ) {
         Text(
-            text = rarity.displayName,
+            text = rarity.label,
             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Normal),
             color = color,
             modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
@@ -191,7 +191,7 @@ fun MonarchRankBadge(rank: MonarchRank, modifier: Modifier = Modifier) {
             )
             Spacer(modifier = Modifier.width(4.dp))
             Text(
-                text = rank.title.uppercase(),
+                text = rank.label.uppercase(),
                 style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                 color = ShadowColors.PureIce
             )
@@ -230,7 +230,7 @@ fun ResourcePill(
             )
             Spacer(modifier = Modifier.width(4.dp))
             Text(
-                text = type.displayName,
+                text = type.label,
                 style = MaterialTheme.typography.labelSmall,
                 color = ShadowColors.Muted
             )
@@ -321,7 +321,7 @@ fun ShadowCard(
                     .border(1.dp, ShadowColors.rankColor(shadow.currentRank).copy(alpha = 0.5f), RoundedCornerShape(8.dp))
             ) {
                 Text(
-                    text = shadow.currentRank.displayName.take(1),
+                    text = shadow.currentRank.label.take(1),
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace),
                     color = ShadowColors.rankColor(shadow.currentRank)
                 )
@@ -376,7 +376,7 @@ fun ShadowCard(
                     color = ShadowColors.Gold
                 )
                 Text(
-                    text = shadow.evolutionStage.displayName,
+                    text = shadow.evolutionStage.label,
                     style = MaterialTheme.typography.labelSmall,
                     color = ShadowColors.Muted
                 )

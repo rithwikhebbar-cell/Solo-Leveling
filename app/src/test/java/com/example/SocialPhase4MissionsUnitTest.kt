@@ -103,7 +103,7 @@ class SocialPhase4MissionsUnitTest {
     fun testValidLifecycleTransitions() {
         // AVAILABLE -> ACCEPTED
         assertTrue(SocialMissionLifecycleStatus.AVAILABLE.canTransitionTo(SocialMissionLifecycleStatus.ACCEPTED))
-        assertTrue(SocialMissionLifecycleStatus.AVAILABLE.canTransitionTo(SocialMissionLifecycleStatus.IN_PROGRESS))
+        assertFalse(SocialMissionLifecycleStatus.AVAILABLE.canTransitionTo(SocialMissionLifecycleStatus.IN_PROGRESS))
         assertTrue(SocialMissionLifecycleStatus.AVAILABLE.canTransitionTo(SocialMissionLifecycleStatus.CANCELLED))
 
         // ACCEPTED -> IN_PROGRESS, POSTPONED, CANCELLED
@@ -121,10 +121,10 @@ class SocialPhase4MissionsUnitTest {
         assertTrue(SocialMissionLifecycleStatus.SUBMITTED.canTransitionTo(SocialMissionLifecycleStatus.COMPLETED))
         assertTrue(SocialMissionLifecycleStatus.SUBMITTED.canTransitionTo(SocialMissionLifecycleStatus.NEEDS_IMPROVEMENT))
 
-        // UNDER_REVIEW -> COMPLETED, NEEDS_IMPROVEMENT, CANCELLED
+        // UNDER_REVIEW -> COMPLETED, NEEDS_IMPROVEMENT, APPROVED (cannot cancel under review)
         assertTrue(SocialMissionLifecycleStatus.UNDER_REVIEW.canTransitionTo(SocialMissionLifecycleStatus.COMPLETED))
         assertTrue(SocialMissionLifecycleStatus.UNDER_REVIEW.canTransitionTo(SocialMissionLifecycleStatus.NEEDS_IMPROVEMENT))
-        assertTrue(SocialMissionLifecycleStatus.UNDER_REVIEW.canTransitionTo(SocialMissionLifecycleStatus.CANCELLED))
+        assertFalse(SocialMissionLifecycleStatus.UNDER_REVIEW.canTransitionTo(SocialMissionLifecycleStatus.CANCELLED))
 
         // NEEDS_IMPROVEMENT -> RETRY, CANCELLED
         assertTrue(SocialMissionLifecycleStatus.NEEDS_IMPROVEMENT.canTransitionTo(SocialMissionLifecycleStatus.RETRY))
@@ -321,9 +321,7 @@ class SocialPhase4MissionsUnitTest {
             level = 1,
             currentLevelXp = 50,
             xpToNextLevel = 100,
-            totalXp = 50,
-            cha = 10,
-            wis = 10
+            totalXp = 50L
         )
 
         val rewardCalc = ActivityRewardCalculation(
@@ -351,8 +349,8 @@ class SocialPhase4MissionsUnitTest {
         ).getOrThrow()
 
         assertEquals(75, outcome.updatedProfile.currentLevelXp)
-        assertEquals(75, outcome.updatedProfile.totalXp)
-        assertEquals(25, outcome.xpGained)
+        assertEquals(75L, outcome.updatedProfile.totalXp)
+        assertEquals(25L, outcome.updatedProfile.totalXp - initialProfile.totalXp)
         assertEquals(1, outcome.updatedProfile.selfReportedActivitiesCount)
     }
 }

@@ -1,43 +1,37 @@
 package com.example.domain.engine
 
+import androidx.room.withTransaction
+import com.example.data.local.SoloLevelingDatabase
 import com.example.data.local.dao.ShadowDao
 import com.example.data.local.dao.ShadowDeploymentDao
 import com.example.data.local.dao.ShadowFormationDao
-import com.example.data.local.entity.ShadowDeploymentEntity
-import com.example.data.local.entity.ShadowFormationEntity
 import com.example.data.local.entity.toDomain
 import com.example.data.local.entity.toEntity
-import com.example.data.local.entity.toEntity
-import com.example.domain.model.Shadow
+import com.example.domain.model.DEFAULT_SHADOW_ACCOUNT_OWNER_ID
 import com.example.domain.model.ShadowClass
 import com.example.domain.model.ShadowDeploymentCategory
 import com.example.domain.model.ShadowDeploymentRecord
 import com.example.domain.model.ShadowDeploymentStatus
 import com.example.domain.model.ShadowFormation
 import com.example.domain.model.ShadowFormationType
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.util.UUID
 
 // ============================================================================
-// SHADOW DEPLOYMENT ENGINE
-//
-// SAFETY GUARANTEES:
-//  - Shadows cannot perform real-world activities on behalf of the player.
-//  - Deployment to Physical Development cannot override recovery restrictions.
-//  - Deployment to Academic Development cannot complete study sessions.
-//  - Deployment to Recovery Support cannot override REST_RECOMMENDED status.
-//  - All deployments are logged with timestamps and are auditable.
-//  - Recalls are persistent and tracked.
+// SHADOW DEPLOYMENT ENGINE (Account-Isolated & Transactionally Hardened)
 // ============================================================================
 
 class ShadowDeploymentEngine(
     private val shadowDao: ShadowDao,
     private val deploymentDao: ShadowDeploymentDao,
-    private val formationDao: ShadowFormationDao
+    private val formationDao: ShadowFormationDao,
+    private val monarchProgressionEngine: MonarchProgressionEngine? = null,
+    private val database: SoloLevelingDatabase? = null,
+    private val mutex: Mutex = Mutex()
 ) {
 
     companion object {
-        // Class compatibility per deployment category
-        // Returns preferred classes (not exclusive — any class can deploy, these are primary fits)
         val PREFERRED_CLASSES: Map<ShadowDeploymentCategory, List<ShadowClass>> = mapOf(
             ShadowDeploymentCategory.PHYSICAL_DEVELOPMENT to listOf(ShadowClass.VANGUARD, ShadowClass.GUARDIAN),
             ShadowDeploymentCategory.ACADEMIC_DEVELOPMENT to listOf(ShadowClass.RANGER, ShadowClass.ARCANIST),
@@ -48,50 +42,67 @@ class ShadowDeploymentEngine(
         )
     }
 
+    private suspend fun <T> withLockedTransaction(block: suspend () -> T): T {
+        return mutex.withLock {
+            val db = database
+            if (db != null) {
+                db.withTransaction { block() }
+            } else {
+                block()
+            }
+        }
+    }
+
     // -------------------------------------------------------------------------
     // DEPLOY A SHADOW
     // -------------------------------------------------------------------------
 
-    /**
-     * Deploys a shadow to a strategic support role.
-     * Returns the deployment record on success, or a failure with reason.
-     *
-     * SAFETY: This function only records strategic support assignment.
-     * It cannot complete workouts, study sessions, or override recovery.
-     */
     suspend fun deployShadow(
         shadowId: String,
         category: ShadowDeploymentCategory,
-        role: String
+        role: String,
+        accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID
     ): Result<ShadowDeploymentRecord> {
         return runCatching {
-            val shadow = shadowDao.getShadowById(shadowId)?.toDomain()
-                ?: throw IllegalArgumentException("Shadow not found: $shadowId")
+            val owner = accountOwnerId.trim()
+            require(owner.isNotBlank()) { "accountOwnerId must not be blank" }
+            require(shadowId.isNotBlank()) { "shadowId must not be blank" }
 
-            if (shadow.isRetired) throw IllegalStateException("Cannot deploy retired shadow")
+            withLockedTransaction {
+                val shadow = shadowDao.getShadowByIdForOwner(shadowId, owner)?.toDomain()
+                    ?: throw IllegalArgumentException("Shadow not found for account: $shadowId")
 
-            // Check if shadow is already deployed
-            val existingDeployment = deploymentDao.getActiveDeploymentForShadow(shadowId)
-            if (existingDeployment != null) {
-                throw IllegalStateException("Shadow is already deployed to ${existingDeployment.categoryName}. Recall first.")
+                if (shadow.isRetired) throw IllegalStateException("Cannot deploy retired shadow")
+
+                val existingDeployment = deploymentDao.getActiveDeploymentForShadow(owner, shadowId)
+                if (existingDeployment != null) {
+                    throw IllegalStateException("Shadow is already deployed to ${existingDeployment.categoryName}. Recall first.")
+                }
+
+                val deploymentId = UUID.randomUUID().toString()
+                val record = ShadowDeploymentRecord(
+                    deploymentId = deploymentId,
+                    accountOwnerId = owner,
+                    shadowId = shadowId,
+                    shadowName = shadow.name,
+                    category = category,
+                    role = role.take(100),
+                    assignedAtEpochMs = System.currentTimeMillis(),
+                    recalledAtEpochMs = null,
+                    status = ShadowDeploymentStatus.DEPLOYED
+                )
+
+                val inserted = deploymentDao.insertDeployment(record.toEntity())
+                if (inserted <= 0L) {
+                    throw IllegalStateException("Failed to record deployment $deploymentId")
+                }
+                val updated = shadowDao.updateDeploymentStatusForOwner(shadowId, owner, ShadowDeploymentStatus.DEPLOYED.name)
+                if (updated <= 0) {
+                    throw IllegalStateException("Shadow ownership check failed during deploy: $shadowId")
+                }
+
+                record
             }
-
-            val deploymentId = UUID.randomUUID().toString()
-            val record = ShadowDeploymentRecord(
-                deploymentId = deploymentId,
-                shadowId = shadowId,
-                shadowName = shadow.name,
-                category = category,
-                role = role.take(100),
-                assignedAtEpochMs = System.currentTimeMillis(),
-                recalledAtEpochMs = null,
-                status = ShadowDeploymentStatus.DEPLOYED
-            )
-
-            deploymentDao.insertDeployment(record.toEntity())
-            shadowDao.updateDeploymentStatus(shadowId, ShadowDeploymentStatus.DEPLOYED.name)
-
-            record
         }
     }
 
@@ -99,18 +110,32 @@ class ShadowDeploymentEngine(
     // RECALL A SHADOW
     // -------------------------------------------------------------------------
 
-    suspend fun recallShadow(deploymentId: String): Result<Unit> {
+    suspend fun recallShadow(
+        deploymentId: String,
+        accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID
+    ): Result<Unit> {
         return runCatching {
-            val deployment = deploymentDao.getDeploymentById(deploymentId)
-                ?: throw IllegalArgumentException("Deployment not found: $deploymentId")
+            val owner = accountOwnerId.trim()
+            require(owner.isNotBlank()) { "accountOwnerId must not be blank" }
+            withLockedTransaction {
+                val deployment = deploymentDao.getDeploymentByIdForOwner(deploymentId, owner)
+                    ?: throw IllegalArgumentException("Deployment not found for account: $deploymentId")
 
-            if (deployment.statusName == ShadowDeploymentStatus.RECALLED.name) {
-                throw IllegalStateException("Shadow already recalled")
+                if (deployment.statusName == ShadowDeploymentStatus.RECALLED.name) {
+                    throw IllegalStateException("Shadow already recalled")
+                }
+
+                val recalledAtMs = System.currentTimeMillis()
+                val updatedRows = deploymentDao.recallDeploymentForOwner(deploymentId, owner, recalledAtMs)
+                if (updatedRows <= 0) {
+                    throw IllegalStateException("Deployment recall conflicted or unauthorized: $deploymentId")
+                }
+                shadowDao.updateDeploymentStatusForOwner(
+                    deployment.shadowId,
+                    owner,
+                    ShadowDeploymentStatus.IDLE.name
+                )
             }
-
-            val recalledAtMs = System.currentTimeMillis()
-            deploymentDao.recallDeployment(deploymentId, recalledAtMs)
-            shadowDao.updateDeploymentStatus(deployment.shadowId, ShadowDeploymentStatus.IDLE.name)
         }
     }
 
@@ -118,89 +143,140 @@ class ShadowDeploymentEngine(
     // FORMATION MANAGEMENT
     // -------------------------------------------------------------------------
 
-    /**
-     * Creates a new formation.
-     */
     suspend fun createFormation(
         name: String,
         type: ShadowFormationType,
         description: String,
-        memberShadowIds: List<String>
+        memberShadowIds: List<String>,
+        accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID
     ): Result<ShadowFormation> {
         return runCatching {
-            val formationId = UUID.randomUUID().toString()
-            val formation = ShadowFormation(
-                formationId = formationId,
-                name = name.take(50),
-                formationType = type,
-                description = description.take(200),
-                maxSlots = type.maxSlots,
-                memberShadowIds = memberShadowIds.take(type.maxSlots),
-                isActive = false,
-                createdAtEpochMs = System.currentTimeMillis(),
-                updatedAtEpochMs = System.currentTimeMillis()
-            )
-            formationDao.upsertFormation(formation.toEntity())
-            formation
+            val owner = accountOwnerId.trim()
+            require(owner.isNotBlank()) { "accountOwnerId must not be blank" }
+            require(name.isNotBlank()) { "Formation name must not be blank" }
+
+            withLockedTransaction {
+                monarchProgressionEngine?.getOrCreateProfileLocked(owner)
+
+                val requestedMembers = memberShadowIds.distinct().take(type.maxSlots)
+                for (shadowId in requestedMembers) {
+                    val member = shadowDao.getShadowByIdForOwner(shadowId, owner)
+                        ?: throw IllegalArgumentException("Member shadow $shadowId does not belong to account $owner")
+                    if (member.isRetired) {
+                        throw IllegalStateException("Cannot add retired shadow $shadowId to formation")
+                    }
+                }
+
+                val now = System.currentTimeMillis()
+                val formationId = UUID.randomUUID().toString()
+                val formation = ShadowFormation(
+                    formationId = formationId,
+                    accountOwnerId = owner,
+                    name = name.trim().take(50),
+                    formationType = type,
+                    description = description.take(200),
+                    maxSlots = type.maxSlots,
+                    memberShadowIds = requestedMembers,
+                    isActive = false,
+                    createdAtEpochMs = now,
+                    updatedAtEpochMs = now
+                )
+                val inserted = formationDao.insertFormationIgnore(formation.toEntity())
+                if (inserted <= 0L) {
+                    throw IllegalStateException("Formation creation conflict for $formationId")
+                }
+                requestedMembers.forEach { shadowId ->
+                    shadowDao.setFormationForOwner(shadowId, owner, formationId)
+                }
+                formation
+            }
         }
     }
 
-    /**
-     * Updates an existing formation's members.
-     */
     suspend fun updateFormationMembers(
         formationId: String,
-        memberShadowIds: List<String>
+        memberShadowIds: List<String>,
+        accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID
     ): Result<ShadowFormation> {
         return runCatching {
-            val existing = formationDao.getFormationById(formationId)?.toDomain()
-                ?: throw IllegalArgumentException("Formation not found: $formationId")
+            val owner = accountOwnerId.trim()
+            require(owner.isNotBlank()) { "accountOwnerId must not be blank" }
 
-            val validMembers = memberShadowIds.take(existing.maxSlots)
-            val updated = existing.copy(
-                memberShadowIds = validMembers,
-                updatedAtEpochMs = System.currentTimeMillis()
-            )
-            formationDao.upsertFormation(updated.toEntity())
+            withLockedTransaction {
+                val existing = formationDao.getFormationByIdForOwner(formationId, owner)?.toDomain()
+                    ?: throw IllegalArgumentException("Formation not found for account: $formationId")
 
-            // Update each shadow's formation reference
-            for (shadowId in validMembers) {
-                shadowDao.setFormation(shadowId, formationId)
+                val validMembers = memberShadowIds.distinct().take(existing.maxSlots)
+                for (shadowId in validMembers) {
+                    val member = shadowDao.getShadowByIdForOwner(shadowId, owner)
+                        ?: throw IllegalArgumentException("Member shadow $shadowId does not belong to account $owner")
+                    if (member.isRetired) {
+                        throw IllegalStateException("Cannot add retired shadow $shadowId to formation")
+                    }
+                }
+
+                val updated = existing.copy(
+                    accountOwnerId = owner,
+                    memberShadowIds = validMembers,
+                    updatedAtEpochMs = System.currentTimeMillis()
+                )
+                val rowsUpdated = formationDao.updateFormation(updated.toEntity())
+                if (rowsUpdated <= 0) {
+                    throw IllegalStateException("Formation update rejected for $formationId")
+                }
+
+                for (shadowId in validMembers) {
+                    shadowDao.setFormationForOwner(shadowId, owner, formationId)
+                }
+                val removed = existing.memberShadowIds - validMembers.toSet()
+                for (shadowId in removed) {
+                    shadowDao.setFormationForOwner(shadowId, owner, null)
+                }
+
+                updated
             }
-            // Clear formation from shadows that were removed
-            val removed = existing.memberShadowIds - validMembers.toSet()
-            for (shadowId in removed) {
-                shadowDao.setFormation(shadowId, null)
-            }
-
-            updated
         }
     }
 
-    /**
-     * Sets a formation as the active formation (only one active at a time).
-     */
-    suspend fun setActiveFormation(formationId: String): Result<Unit> {
+    suspend fun setActiveFormation(
+        formationId: String,
+        accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID
+    ): Result<Unit> {
         return runCatching {
-            formationDao.getFormationById(formationId)
-                ?: throw IllegalArgumentException("Formation not found: $formationId")
+            val owner = accountOwnerId.trim()
+            require(owner.isNotBlank()) { "accountOwnerId must not be blank" }
 
-            formationDao.clearAllActiveFormations()
-            formationDao.setActiveFormation(formationId)
+            withLockedTransaction {
+                formationDao.getFormationByIdForOwner(formationId, owner)
+                    ?: throw IllegalArgumentException("Formation not found for account: $formationId")
+
+                formationDao.clearAllActiveFormationsForOwner(owner)
+                val updated = formationDao.setActiveFormationForOwner(formationId, owner, System.currentTimeMillis())
+                if (updated <= 0) {
+                    throw IllegalStateException("Failed to activate formation $formationId")
+                }
+            }
         }
     }
 
-    suspend fun deleteFormation(formationId: String): Result<Unit> {
+    suspend fun deleteFormation(
+        formationId: String,
+        accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID
+    ): Result<Unit> {
         return runCatching {
-            val formation = formationDao.getFormationById(formationId)?.toDomain()
-                ?: throw IllegalArgumentException("Formation not found: $formationId")
+            val owner = accountOwnerId.trim()
+            require(owner.isNotBlank()) { "accountOwnerId must not be blank" }
 
-            // Clear formation reference from member shadows
-            for (shadowId in formation.memberShadowIds) {
-                shadowDao.setFormation(shadowId, null)
+            withLockedTransaction {
+                val formation = formationDao.getFormationByIdForOwner(formationId, owner)?.toDomain()
+                    ?: throw IllegalArgumentException("Formation not found for account: $formationId")
+
+                for (shadowId in formation.memberShadowIds) {
+                    shadowDao.setFormationForOwner(shadowId, owner, null)
+                }
+
+                formationDao.deleteFormationForOwner(formationId, owner)
             }
-
-            formationDao.deleteFormation(formationId)
         }
     }
 
@@ -208,8 +284,10 @@ class ShadowDeploymentEngine(
     // QUERIES
     // -------------------------------------------------------------------------
 
-    suspend fun getActiveDeployments(): List<ShadowDeploymentRecord> {
-        return deploymentDao.getActiveDeploymentsOnce().map { it.toDomain() }
+    suspend fun getActiveDeployments(
+        accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID
+    ): List<ShadowDeploymentRecord> {
+        return deploymentDao.getActiveDeploymentsForOwnerOnce(accountOwnerId).map { it.toDomain() }
     }
 
     fun getCompatibilityNote(shadowClass: ShadowClass, category: ShadowDeploymentCategory): String {
@@ -221,4 +299,3 @@ class ShadowDeploymentEngine(
         }
     }
 }
-

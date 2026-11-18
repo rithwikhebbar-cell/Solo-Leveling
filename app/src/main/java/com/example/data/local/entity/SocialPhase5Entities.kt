@@ -9,11 +9,11 @@ import com.example.domain.model.MasteryDevelopmentStage
 import com.example.domain.model.MasteryEvidenceClassification
 import com.example.domain.model.PersonalizedSocialRecommendation
 import com.example.domain.model.PersonalizedWeeklyTrainingPlan
-import com.example.domain.model.RecommendationCategory
-import com.example.domain.model.RecommendationStatus
 import com.example.domain.model.ScheduledTrainingActivity
 import com.example.domain.model.SocialCompetencyProgress
 import com.example.domain.model.SocialModuleIdentifier
+import com.example.domain.model.SocialRecommendationCategory
+import com.example.domain.model.SocialRecommendationStatus
 import com.example.domain.model.TrainingActivityType
 
 // =========================================================================
@@ -69,7 +69,7 @@ fun SocialAdaptiveRecommendationEntity.toDomain(): PersonalizedSocialRecommendat
         title = title,
         targetModule = SocialModuleIdentifier.fromCode(targetModule),
         targetCompetency = targetCompetency,
-        category = RecommendationCategory.fromString(category),
+        category = SocialRecommendationCategory.fromString(category),
         explanation = explanation,
         supportingEvidenceReferences = evidenceList,
         recommendedActivityId = recommendedActivityId,
@@ -77,7 +77,7 @@ fun SocialAdaptiveRecommendationEntity.toDomain(): PersonalizedSocialRecommendat
         estimatedDurationMinutes = estimatedDurationMinutes,
         difficulty = AdaptiveDifficulty.fromString(difficulty),
         expectedLearningOutcome = expectedLearningOutcome,
-        status = RecommendationStatus.fromString(status),
+        status = SocialRecommendationStatus.fromString(status),
         createdAtEpochMs = createdAtEpochMs,
         updatedAtEpochMs = updatedAtEpochMs
     )
@@ -275,22 +275,36 @@ data class SocialCompetencyProgressEntity(
     val lastPracticedEpochMs: Long?,
     val lastEvaluatedScore: Int?,
     val evidenceClassification: String,
-    val updatedAtEpochMs: Long
+    val updatedAtEpochMs: Long,
+    val maintenanceRequired: Boolean = false,
+    val maintenanceReason: String? = null
 )
 
-fun SocialCompetencyProgressEntity.toDomain() = SocialCompetencyProgress(
-    competencyId = competencyId,
-    accountOwnerId = accountOwnerId,
-    module = SocialModuleIdentifier.fromCode(moduleName),
-    competencyName = competencyName,
-    masteryStage = MasteryDevelopmentStage.fromString(masteryStage),
-    recommendedDifficulty = AdaptiveDifficulty.fromString(recommendedDifficulty),
-    practiceCount = practiceCount,
-    lastPracticedEpochMs = lastPracticedEpochMs,
-    lastEvaluatedScore = lastEvaluatedScore,
-    evidenceClassification = MasteryEvidenceClassification.fromString(evidenceClassification),
-    updatedAtEpochMs = updatedAtEpochMs
-)
+fun SocialCompetencyProgressEntity.toDomain(): SocialCompetencyProgress {
+    val isLegacyMaint = MasteryDevelopmentStage.isLegacyMaintenance(masteryStage)
+    val safeStage = MasteryDevelopmentStage.fromString(masteryStage)
+    val preservedMaintenance = maintenanceRequired || isLegacyMaint
+    val preservedReason = maintenanceReason ?: if (isLegacyMaint) {
+        "Legacy MAINTENANCE status safely downgraded; historical mastery will be recovered from verified activity logs."
+    } else {
+        null
+    }
+    return SocialCompetencyProgress(
+        competencyId = competencyId,
+        accountOwnerId = accountOwnerId,
+        module = SocialModuleIdentifier.fromCode(moduleName),
+        competencyName = competencyName,
+        masteryStage = safeStage,
+        recommendedDifficulty = AdaptiveDifficulty.fromString(recommendedDifficulty),
+        practiceCount = practiceCount,
+        lastPracticedEpochMs = lastPracticedEpochMs,
+        lastEvaluatedScore = lastEvaluatedScore,
+        evidenceClassification = MasteryEvidenceClassification.fromString(evidenceClassification),
+        updatedAtEpochMs = updatedAtEpochMs,
+        maintenanceRequired = preservedMaintenance,
+        maintenanceReason = preservedReason
+    )
+}
 
 fun SocialCompetencyProgress.toEntity() = SocialCompetencyProgressEntity(
     competencyId = competencyId,
@@ -303,5 +317,7 @@ fun SocialCompetencyProgress.toEntity() = SocialCompetencyProgressEntity(
     lastPracticedEpochMs = lastPracticedEpochMs,
     lastEvaluatedScore = lastEvaluatedScore,
     evidenceClassification = evidenceClassification.name,
-    updatedAtEpochMs = updatedAtEpochMs
+    updatedAtEpochMs = updatedAtEpochMs,
+    maintenanceRequired = maintenanceRequired,
+    maintenanceReason = maintenanceReason
 )

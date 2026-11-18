@@ -75,6 +75,9 @@ import com.example.data.local.dao.ShadowMonarchProfileDao
 import com.example.data.local.dao.ShadowQuestProgressDao
 import com.example.data.local.dao.ShadowResourceDao
 import com.example.data.local.dao.ShadowSkillUnlockDao
+import com.example.data.local.dao.ShadowXpTraceDao
+import com.example.data.local.dao.ShadowEvidenceClaimDao
+import com.example.data.local.dao.ShadowResonanceDao
 import com.example.data.local.dao.SkillDao
 import com.example.data.local.dao.StudySessionDao
 import com.example.data.local.dao.SyncConflictDao
@@ -99,6 +102,9 @@ import com.example.data.local.entity.ShadowMonarchProfileEntity
 import com.example.data.local.entity.ShadowQuestProgressEntity
 import com.example.data.local.entity.ShadowResourceTransactionEntity
 import com.example.data.local.entity.ShadowSkillUnlockEntity
+import com.example.data.local.entity.ShadowXpTraceEntity
+import com.example.data.local.entity.ShadowEvidenceClaimEntity
+import com.example.data.local.entity.ShadowResonanceEntity
 import com.example.data.local.entity.AcademicChapterEntity
 import com.example.data.local.entity.AcademicExamEntity
 import com.example.data.local.entity.AcademicModuleEntity
@@ -312,6 +318,7 @@ import com.example.domain.model.VerificationStatus
         MonarchSkillUnlockEntity::class,
         ShadowQuestProgressEntity::class,
         ShadowResourceTransactionEntity::class,
+        ShadowXpTraceEntity::class,
         // Milestone 12 — Social Mastery
         SocialProfileEntity::class,
         SocialModuleProgressEntity::class,
@@ -323,9 +330,11 @@ import com.example.domain.model.VerificationStatus
         SocialAdaptiveRecommendationEntity::class,
         SocialWeeklyTrainingPlanEntity::class,
         SocialPlannedActivityEntity::class,
-        SocialCompetencyProgressEntity::class
+        SocialCompetencyProgressEntity::class,
+        ShadowEvidenceClaimEntity::class,
+        ShadowResonanceEntity::class
     ],
-    version = 14,
+    version = 17,
     exportSchema = false
 )
 abstract class SoloLevelingDatabase : RoomDatabase() {
@@ -390,6 +399,9 @@ abstract class SoloLevelingDatabase : RoomDatabase() {
     abstract fun monarchSkillUnlockDao(): MonarchSkillUnlockDao
     abstract fun shadowQuestProgressDao(): ShadowQuestProgressDao
     abstract fun shadowResourceDao(): ShadowResourceDao
+    abstract fun shadowXpTraceDao(): ShadowXpTraceDao
+    abstract fun shadowEvidenceClaimDao(): ShadowEvidenceClaimDao
+    abstract fun shadowResonanceDao(): ShadowResonanceDao
 
     // Milestone 12 — Social Mastery DAOs
     abstract fun socialProfileDao(): SocialProfileDao
@@ -2427,6 +2439,7 @@ abstract class SoloLevelingDatabase : RoomDatabase() {
                     )
                     """.trimIndent()
                 )
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_shadows_shadowId` ON `shadows` (`shadowId`)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_shadows_shadowClassName` ON `shadows` (`shadowClassName`)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_shadows_currentRankName` ON `shadows` (`currentRankName`)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_shadows_rarityName` ON `shadows` (`rarityName`)")
@@ -2888,6 +2901,534 @@ abstract class SoloLevelingDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_14_15: Migration = object : Migration(14, 15) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // 1. Add explicit accountOwnerId + composite index to rpg_reward_audit
+                db.execSQL(
+                    "ALTER TABLE `rpg_reward_audit` ADD COLUMN `accountOwnerId` TEXT NOT NULL DEFAULT 'local_vault_player_1'"
+                )
+                db.execSQL(
+                    """
+                    UPDATE `rpg_reward_audit`
+                    SET `accountOwnerId` = substr(
+                        `notes`,
+                        16,
+                        CASE
+                            WHEN instr(`notes`, '|') > 16 THEN instr(`notes`, '|') - 16
+                            ELSE length(`notes`) - 15
+                        END
+                    )
+                    WHERE `sourceType` = 'SOCIAL_MASTERY'
+                      AND `notes` LIKE 'accountOwnerId=%|%'
+                      AND instr(`notes`, '|') > 16
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_rpg_reward_audit_accountOwnerId_sourceType_timestampEpochMs` ON `rpg_reward_audit` (`accountOwnerId`, `sourceType`, `timestampEpochMs`)"
+                )
+
+                // 2. Add artifact validation metadata columns to social_mission_records; preserve note-only history as ARTIFACT_DESCRIBED
+                db.execSQL("ALTER TABLE `social_mission_records` ADD COLUMN `artifactUri` TEXT")
+                db.execSQL("ALTER TABLE `social_mission_records` ADD COLUMN `artifactOwnerId` TEXT")
+                db.execSQL("ALTER TABLE `social_mission_records` ADD COLUMN `artifactContentHash` TEXT")
+                db.execSQL("ALTER TABLE `social_mission_records` ADD COLUMN `artifactStateName` TEXT NOT NULL DEFAULT 'NONE'")
+                db.execSQL(
+                    """
+                    UPDATE `social_mission_records`
+                    SET `artifactStateName` = 'ARTIFACT_DESCRIBED',
+                        `evidenceType` = CASE
+                            WHEN UPPER(`evidenceType`) IN ('ARTIFACT_ATTACHED', 'OPTIONAL_ARTIFACT') THEN 'ARTIFACT_DESCRIBED'
+                            ELSE `evidenceType`
+                        END
+                    WHERE `artifactNote` IS NOT NULL
+                      AND trim(`artifactNote`) != ''
+                      AND `artifactUri` IS NULL
+                    """.trimIndent()
+                )
+
+                // 3. Preserve maintenance flags separately on social_competency_progress and remove legacy MAINTENANCE stage without granting unearned mastery
+                db.execSQL("ALTER TABLE `social_competency_progress` ADD COLUMN `maintenanceRequired` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `social_competency_progress` ADD COLUMN `maintenanceReason` TEXT")
+                db.execSQL(
+                    """
+                    UPDATE `social_competency_progress`
+                    SET `masteryStage` = 'UNEXPLORED',
+                        `maintenanceRequired` = 1,
+                        `maintenanceReason` = COALESCE(
+                            `maintenanceReason`,
+                            'Legacy MAINTENANCE status safely downgraded; historical mastery will be recovered from verified activity logs.'
+                        )
+                    WHERE UPPER(trim(`masteryStage`)) = 'MAINTENANCE'
+                    """.trimIndent()
+                )
+            }
+        }
+
+        // =====================================================================
+        // MIGRATION 15 → 16: Milestone 12 Phase 6.1 Shadow Foundation Hardening
+        // - Isolates all Shadow tables under explicit accountOwnerId
+        // - Replaces global singleton profile PK (id = 1) with multi-account PK (accountOwnerId)
+        // - Preserves legacy Milestone 11 rows strictly under 'local_vault_player_1'
+        // - Adds relational foreign keys, per-account unique constraints, and shadow_xp_traces
+        // =====================================================================
+        val MIGRATION_15_16: Migration = object : Migration(15, 16) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                val legacyOwner = "local_vault_player_1"
+
+                // 1. Rebuild shadow_monarch_profile with accountOwnerId primary key
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `shadow_monarch_profile_new` (
+                        `accountOwnerId` TEXT NOT NULL,
+                        `monarchLevel` INTEGER NOT NULL,
+                        `monarchXp` INTEGER NOT NULL,
+                        `monarchRankName` TEXT NOT NULL,
+                        `monarchAuthority` INTEGER NOT NULL,
+                        `armyCapacity` INTEGER NOT NULL,
+                        `activeShadowCount` INTEGER NOT NULL,
+                        `totalShadowsRecruited` INTEGER NOT NULL,
+                        `highestShadowRankName` TEXT NOT NULL,
+                        `totalEvolutions` INTEGER NOT NULL,
+                        `shadowArmyPowerRating` INTEGER NOT NULL,
+                        `unlockedMonarchSkillIdsJson` TEXT NOT NULL,
+                        `updatedAtEpochMs` INTEGER NOT NULL,
+                        PRIMARY KEY(`accountOwnerId`)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    """
+                    INSERT OR IGNORE INTO `shadow_monarch_profile_new` (
+                        `accountOwnerId`, `monarchLevel`, `monarchXp`, `monarchRankName`,
+                        `monarchAuthority`, `armyCapacity`, `activeShadowCount`, `totalShadowsRecruited`,
+                        `highestShadowRankName`, `totalEvolutions`, `shadowArmyPowerRating`,
+                        `unlockedMonarchSkillIdsJson`, `updatedAtEpochMs`
+                    )
+                    SELECT
+                        '$legacyOwner', `monarchLevel`, MAX(0, `monarchXp`), `monarchRankName`,
+                        MAX(0, `monarchAuthority`), MAX(1, `armyCapacity`), MAX(0, `activeShadowCount`),
+                        MAX(0, `totalShadowsRecruited`), `highestShadowRankName`, MAX(0, `totalEvolutions`),
+                        MAX(0, `shadowArmyPowerRating`), `unlockedMonarchSkillIdsJson`, `updatedAtEpochMs`
+                    FROM `shadow_monarch_profile`
+                    ORDER BY `id` ASC
+                    LIMIT 1
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    """
+                    INSERT OR IGNORE INTO `shadow_monarch_profile_new` VALUES (
+                        '$legacyOwner', 1, 0, 'AWAKENING', 0, 10, 0, 0, 'E_RANK', 0, 0, '["monarch_shadow_extraction"]', 0
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("DROP TABLE `shadow_monarch_profile`")
+                db.execSQL("ALTER TABLE `shadow_monarch_profile_new` RENAME TO `shadow_monarch_profile`")
+
+                // 2. Rebuild shadows with accountOwnerId + FK
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `shadows_new` (
+                        `shadowId` TEXT NOT NULL,
+                        `accountOwnerId` TEXT NOT NULL,
+                        `name` TEXT NOT NULL,
+                        `shadowClassName` TEXT NOT NULL,
+                        `rarityName` TEXT NOT NULL,
+                        `currentRankName` TEXT NOT NULL,
+                        `level` INTEGER NOT NULL,
+                        `shadowXp` INTEGER NOT NULL,
+                        `statPower` INTEGER NOT NULL,
+                        `statEndurance` INTEGER NOT NULL,
+                        `statFocus` INTEGER NOT NULL,
+                        `statDiscipline` INTEGER NOT NULL,
+                        `statWisdom` INTEGER NOT NULL,
+                        `statAdaptability` INTEGER NOT NULL,
+                        `evolutionStageName` TEXT NOT NULL,
+                        `passiveAbility` TEXT NOT NULL,
+                        `activeSkillIdsJson` TEXT NOT NULL,
+                        `recruitmentSource` TEXT NOT NULL,
+                        `extractionEventId` TEXT NOT NULL,
+                        `extractedAtEpochMs` INTEGER NOT NULL,
+                        `evolutionHistoryJson` TEXT NOT NULL,
+                        `deploymentStatusName` TEXT NOT NULL,
+                        `equippedFormationId` TEXT,
+                        `isRetired` INTEGER NOT NULL,
+                        `notes` TEXT NOT NULL,
+                        PRIMARY KEY(`shadowId`),
+                        FOREIGN KEY(`accountOwnerId`) REFERENCES `shadow_monarch_profile`(`accountOwnerId`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    """
+                    INSERT INTO `shadows_new` (
+                        `shadowId`, `accountOwnerId`, `name`, `shadowClassName`, `rarityName`,
+                        `currentRankName`, `level`, `shadowXp`, `statPower`, `statEndurance`,
+                        `statFocus`, `statDiscipline`, `statWisdom`, `statAdaptability`,
+                        `evolutionStageName`, `passiveAbility`, `activeSkillIdsJson`,
+                        `recruitmentSource`, `extractionEventId`, `extractedAtEpochMs`,
+                        `evolutionHistoryJson`, `deploymentStatusName`, `equippedFormationId`,
+                        `isRetired`, `notes`
+                    )
+                    SELECT
+                        `shadowId`, '$legacyOwner', `name`, `shadowClassName`, `rarityName`,
+                        `currentRankName`, MAX(1, `level`), MAX(0, `shadowXp`), `statPower`, `statEndurance`,
+                        `statFocus`, `statDiscipline`, `statWisdom`, `statAdaptability`,
+                        `evolutionStageName`, `passiveAbility`, `activeSkillIdsJson`,
+                        `recruitmentSource`, `extractionEventId`, `extractedAtEpochMs`,
+                        `evolutionHistoryJson`, `deploymentStatusName`, `equippedFormationId`,
+                        `isRetired`, `notes`
+                    FROM `shadows`
+                    """.trimIndent()
+                )
+                db.execSQL("DROP TABLE `shadows`")
+                db.execSQL("ALTER TABLE `shadows_new` RENAME TO `shadows`")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_shadows_shadowId` ON `shadows` (`shadowId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_shadows_accountOwnerId` ON `shadows` (`accountOwnerId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_shadows_accountOwnerId_isRetired` ON `shadows` (`accountOwnerId`, `isRetired`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_shadows_accountOwnerId_shadowClassName` ON `shadows` (`accountOwnerId`, `shadowClassName`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_shadows_accountOwnerId_currentRankName` ON `shadows` (`accountOwnerId`, `currentRankName`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_shadows_rarityName` ON `shadows` (`rarityName`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_shadows_deploymentStatusName` ON `shadows` (`deploymentStatusName`)")
+
+                // 3. Rebuild shadow_extractions with accountOwnerId + per-owner composite unique index
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `shadow_extractions_new` (
+                        `extractionId` TEXT NOT NULL,
+                        `accountOwnerId` TEXT NOT NULL,
+                        `sourceTypeName` TEXT NOT NULL,
+                        `sourceEventId` TEXT NOT NULL,
+                        `outcomeName` TEXT NOT NULL,
+                        `extractedShadowId` TEXT,
+                        `shadowName` TEXT,
+                        `shadowClassName` TEXT,
+                        `shadowRarityName` TEXT,
+                        `determinismSeed` INTEGER NOT NULL,
+                        `evidenceSummary` TEXT NOT NULL,
+                        `timestampEpochMs` INTEGER NOT NULL,
+                        `isConfirmed` INTEGER NOT NULL,
+                        `monarchXpAwarded` INTEGER NOT NULL,
+                        PRIMARY KEY(`extractionId`),
+                        FOREIGN KEY(`accountOwnerId`) REFERENCES `shadow_monarch_profile`(`accountOwnerId`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    """
+                    INSERT INTO `shadow_extractions_new` (
+                        `extractionId`, `accountOwnerId`, `sourceTypeName`, `sourceEventId`,
+                        `outcomeName`, `extractedShadowId`, `shadowName`, `shadowClassName`,
+                        `shadowRarityName`, `determinismSeed`, `evidenceSummary`,
+                        `timestampEpochMs`, `isConfirmed`, `monarchXpAwarded`
+                    )
+                    SELECT
+                        `extractionId`, '$legacyOwner', `sourceTypeName`, `sourceEventId`,
+                        `outcomeName`, `extractedShadowId`, `shadowName`, `shadowClassName`,
+                        `shadowRarityName`, `determinismSeed`, `evidenceSummary`,
+                        `timestampEpochMs`, `isConfirmed`, MAX(0, `monarchXpAwarded`)
+                    FROM `shadow_extractions`
+                    """.trimIndent()
+                )
+                db.execSQL("DROP TABLE `shadow_extractions`")
+                db.execSQL("ALTER TABLE `shadow_extractions_new` RENAME TO `shadow_extractions`")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_shadow_extractions_extractionId` ON `shadow_extractions` (`extractionId`)")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_shadow_extractions_accountOwnerId_sourceTypeName_sourceEventId` ON `shadow_extractions` (`accountOwnerId`, `sourceTypeName`, `sourceEventId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_shadow_extractions_accountOwnerId_timestampEpochMs` ON `shadow_extractions` (`accountOwnerId`, `timestampEpochMs`)")
+
+                // 4. Rebuild shadow_skill_unlocks with accountOwnerId + FKs to shadow_monarch_profile & shadows
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `shadow_skill_unlocks_new` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `accountOwnerId` TEXT NOT NULL,
+                        `shadowId` TEXT NOT NULL,
+                        `skillId` TEXT NOT NULL,
+                        `unlockedAtEpochMs` INTEGER NOT NULL,
+                        `evidenceNote` TEXT NOT NULL,
+                        FOREIGN KEY(`accountOwnerId`) REFERENCES `shadow_monarch_profile`(`accountOwnerId`) ON UPDATE NO ACTION ON DELETE CASCADE,
+                        FOREIGN KEY(`shadowId`) REFERENCES `shadows`(`shadowId`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    """
+                    INSERT INTO `shadow_skill_unlocks_new` (
+                        `id`, `accountOwnerId`, `shadowId`, `skillId`, `unlockedAtEpochMs`, `evidenceNote`
+                    )
+                    SELECT
+                        u.`id`, '$legacyOwner', u.`shadowId`, u.`skillId`, u.`unlockedAtEpochMs`, u.`evidenceNote`
+                    FROM `shadow_skill_unlocks` u
+                    INNER JOIN `shadows` s ON s.`shadowId` = u.`shadowId`
+                    """.trimIndent()
+                )
+                db.execSQL("DROP TABLE `shadow_skill_unlocks`")
+                db.execSQL("ALTER TABLE `shadow_skill_unlocks_new` RENAME TO `shadow_skill_unlocks`")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_shadow_skill_unlocks_accountOwnerId_shadowId_skillId` ON `shadow_skill_unlocks` (`accountOwnerId`, `shadowId`, `skillId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_shadow_skill_unlocks_shadowId` ON `shadow_skill_unlocks` (`shadowId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_shadow_skill_unlocks_accountOwnerId` ON `shadow_skill_unlocks` (`accountOwnerId`)")
+
+                // 5. Rebuild shadow_deployments with accountOwnerId + FKs to shadow_monarch_profile & shadows
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `shadow_deployments_new` (
+                        `deploymentId` TEXT NOT NULL,
+                        `accountOwnerId` TEXT NOT NULL,
+                        `shadowId` TEXT NOT NULL,
+                        `shadowName` TEXT NOT NULL,
+                        `categoryName` TEXT NOT NULL,
+                        `role` TEXT NOT NULL,
+                        `assignedAtEpochMs` INTEGER NOT NULL,
+                        `recalledAtEpochMs` INTEGER,
+                        `statusName` TEXT NOT NULL,
+                        `notes` TEXT NOT NULL,
+                        PRIMARY KEY(`deploymentId`),
+                        FOREIGN KEY(`accountOwnerId`) REFERENCES `shadow_monarch_profile`(`accountOwnerId`) ON UPDATE NO ACTION ON DELETE CASCADE,
+                        FOREIGN KEY(`shadowId`) REFERENCES `shadows`(`shadowId`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    """
+                    INSERT INTO `shadow_deployments_new` (
+                        `deploymentId`, `accountOwnerId`, `shadowId`, `shadowName`, `categoryName`,
+                        `role`, `assignedAtEpochMs`, `recalledAtEpochMs`, `statusName`, `notes`
+                    )
+                    SELECT
+                        d.`deploymentId`, '$legacyOwner', d.`shadowId`, d.`shadowName`, d.`categoryName`,
+                        d.`role`, d.`assignedAtEpochMs`, d.`recalledAtEpochMs`, d.`statusName`, d.`notes`
+                    FROM `shadow_deployments` d
+                    INNER JOIN `shadows` s ON s.`shadowId` = d.`shadowId`
+                    """.trimIndent()
+                )
+                db.execSQL("DROP TABLE `shadow_deployments`")
+                db.execSQL("ALTER TABLE `shadow_deployments_new` RENAME TO `shadow_deployments`")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_shadow_deployments_deploymentId` ON `shadow_deployments` (`deploymentId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_shadow_deployments_accountOwnerId_statusName` ON `shadow_deployments` (`accountOwnerId`, `statusName`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_shadow_deployments_shadowId` ON `shadow_deployments` (`shadowId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_shadow_deployments_categoryName` ON `shadow_deployments` (`categoryName`)")
+
+                // 6. Rebuild shadow_formations with accountOwnerId + FK
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `shadow_formations_new` (
+                        `formationId` TEXT NOT NULL,
+                        `accountOwnerId` TEXT NOT NULL,
+                        `name` TEXT NOT NULL,
+                        `formationTypeName` TEXT NOT NULL,
+                        `description` TEXT NOT NULL,
+                        `maxSlots` INTEGER NOT NULL,
+                        `memberShadowIdsJson` TEXT NOT NULL,
+                        `isActive` INTEGER NOT NULL,
+                        `createdAtEpochMs` INTEGER NOT NULL,
+                        `updatedAtEpochMs` INTEGER NOT NULL,
+                        PRIMARY KEY(`formationId`),
+                        FOREIGN KEY(`accountOwnerId`) REFERENCES `shadow_monarch_profile`(`accountOwnerId`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    """
+                    INSERT INTO `shadow_formations_new` (
+                        `formationId`, `accountOwnerId`, `name`, `formationTypeName`, `description`,
+                        `maxSlots`, `memberShadowIdsJson`, `isActive`, `createdAtEpochMs`, `updatedAtEpochMs`
+                    )
+                    SELECT
+                        `formationId`, '$legacyOwner', `name`, `formationTypeName`, `description`,
+                        `maxSlots`, `memberShadowIdsJson`, `isActive`, `createdAtEpochMs`, `updatedAtEpochMs`
+                    FROM `shadow_formations`
+                    """.trimIndent()
+                )
+                db.execSQL("DROP TABLE `shadow_formations`")
+                db.execSQL("ALTER TABLE `shadow_formations_new` RENAME TO `shadow_formations`")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_shadow_formations_formationId` ON `shadow_formations` (`formationId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_shadow_formations_accountOwnerId_isActive` ON `shadow_formations` (`accountOwnerId`, `isActive`)")
+
+                // 7. Rebuild monarch_skill_unlocks with accountOwnerId + per-owner unique index
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `monarch_skill_unlocks_new` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `accountOwnerId` TEXT NOT NULL,
+                        `skillId` TEXT NOT NULL,
+                        `unlockedAtEpochMs` INTEGER NOT NULL,
+                        `evidenceNote` TEXT NOT NULL,
+                        FOREIGN KEY(`accountOwnerId`) REFERENCES `shadow_monarch_profile`(`accountOwnerId`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    """
+                    INSERT INTO `monarch_skill_unlocks_new` (
+                        `id`, `accountOwnerId`, `skillId`, `unlockedAtEpochMs`, `evidenceNote`
+                    )
+                    SELECT
+                        `id`, '$legacyOwner', `skillId`, `unlockedAtEpochMs`, `evidenceNote`
+                    FROM `monarch_skill_unlocks`
+                    """.trimIndent()
+                )
+                db.execSQL("DROP TABLE `monarch_skill_unlocks`")
+                db.execSQL("ALTER TABLE `monarch_skill_unlocks_new` RENAME TO `monarch_skill_unlocks`")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_monarch_skill_unlocks_accountOwnerId_skillId` ON `monarch_skill_unlocks` (`accountOwnerId`, `skillId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_monarch_skill_unlocks_accountOwnerId` ON `monarch_skill_unlocks` (`accountOwnerId`)")
+
+                // 8. Rebuild shadow_quest_progress with accountOwnerId + per-owner unique index
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `shadow_quest_progress_new` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `accountOwnerId` TEXT NOT NULL,
+                        `questId` TEXT NOT NULL,
+                        `currentValue` INTEGER NOT NULL,
+                        `isCompleted` INTEGER NOT NULL,
+                        `rewardClaimedAtEpochMs` INTEGER,
+                        `completedAtEpochMs` INTEGER,
+                        FOREIGN KEY(`accountOwnerId`) REFERENCES `shadow_monarch_profile`(`accountOwnerId`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    """
+                    INSERT INTO `shadow_quest_progress_new` (
+                        `id`, `accountOwnerId`, `questId`, `currentValue`, `isCompleted`,
+                        `rewardClaimedAtEpochMs`, `completedAtEpochMs`
+                    )
+                    SELECT
+                        `id`, '$legacyOwner', `questId`, MAX(0, `currentValue`), `isCompleted`,
+                        `rewardClaimedAtEpochMs`, `completedAtEpochMs`
+                    FROM `shadow_quest_progress`
+                    """.trimIndent()
+                )
+                db.execSQL("DROP TABLE `shadow_quest_progress`")
+                db.execSQL("ALTER TABLE `shadow_quest_progress_new` RENAME TO `shadow_quest_progress`")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_shadow_quest_progress_accountOwnerId_questId` ON `shadow_quest_progress` (`accountOwnerId`, `questId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_shadow_quest_progress_accountOwnerId` ON `shadow_quest_progress` (`accountOwnerId`)")
+
+                // 9. Create dedicated shadow_xp_traces table and migrate legacy '_monarch_xp_trace_' rows
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `shadow_xp_traces` (
+                        `traceId` TEXT NOT NULL,
+                        `accountOwnerId` TEXT NOT NULL,
+                        `traceType` TEXT NOT NULL,
+                        `sourceTag` TEXT NOT NULL,
+                        `targetEntityId` TEXT NOT NULL,
+                        `xpAmount` INTEGER NOT NULL,
+                        `description` TEXT NOT NULL,
+                        `timestampEpochMs` INTEGER NOT NULL,
+                        PRIMARY KEY(`traceId`),
+                        FOREIGN KEY(`accountOwnerId`) REFERENCES `shadow_monarch_profile`(`accountOwnerId`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    """
+                    INSERT OR IGNORE INTO `shadow_xp_traces` (
+                        `traceId`, `accountOwnerId`, `traceType`, `sourceTag`, `targetEntityId`,
+                        `xpAmount`, `description`, `timestampEpochMs`
+                    )
+                    SELECT
+                        `transactionId`,
+                        '$legacyOwner',
+                        'MONARCH_XP',
+                        CASE
+                            WHEN `sourceEventId` LIKE 'monarch_xp_%' THEN substr(`sourceEventId`, 12)
+                            ELSE `sourceEventId`
+                        END,
+                        '',
+                        MAX(0, `amount`),
+                        `sourceDescription`,
+                        `timestampEpochMs`
+                    FROM `shadow_resource_transactions`
+                    WHERE `resourceTypeName` = '_monarch_xp_trace_'
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_shadow_xp_traces_traceId` ON `shadow_xp_traces` (`traceId`)")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_shadow_xp_traces_accountOwnerId_traceType_sourceTag` ON `shadow_xp_traces` (`accountOwnerId`, `traceType`, `sourceTag`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_shadow_xp_traces_accountOwnerId` ON `shadow_xp_traces` (`accountOwnerId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_shadow_xp_traces_timestampEpochMs` ON `shadow_xp_traces` (`timestampEpochMs`)")
+
+                // 10. Rebuild shadow_resource_transactions with accountOwnerId + FK (excluding migrated XP trace rows)
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `shadow_resource_transactions_new` (
+                        `transactionId` TEXT NOT NULL,
+                        `accountOwnerId` TEXT NOT NULL,
+                        `resourceTypeName` TEXT NOT NULL,
+                        `amount` INTEGER NOT NULL,
+                        `transactionTypeName` TEXT NOT NULL,
+                        `sourceEventId` TEXT NOT NULL,
+                        `sourceDescription` TEXT NOT NULL,
+                        `balanceAfter` INTEGER NOT NULL,
+                        `timestampEpochMs` INTEGER NOT NULL,
+                        PRIMARY KEY(`transactionId`),
+                        FOREIGN KEY(`accountOwnerId`) REFERENCES `shadow_monarch_profile`(`accountOwnerId`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    """
+                    INSERT INTO `shadow_resource_transactions_new` (
+                        `transactionId`, `accountOwnerId`, `resourceTypeName`, `amount`,
+                        `transactionTypeName`, `sourceEventId`, `sourceDescription`,
+                        `balanceAfter`, `timestampEpochMs`
+                    )
+                    SELECT
+                        `transactionId`, '$legacyOwner', `resourceTypeName`, `amount`,
+                        `transactionTypeName`, `sourceEventId`, `sourceDescription`,
+                        MAX(0, `balanceAfter`), `timestampEpochMs`
+                    FROM `shadow_resource_transactions`
+                    WHERE `resourceTypeName` != '_monarch_xp_trace_'
+                    """.trimIndent()
+                )
+                db.execSQL("DROP TABLE `shadow_resource_transactions`")
+                db.execSQL("ALTER TABLE `shadow_resource_transactions_new` RENAME TO `shadow_resource_transactions`")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_shadow_resource_transactions_transactionId` ON `shadow_resource_transactions` (`transactionId`)")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_shadow_resource_transactions_accountOwnerId_sourceEventId_resourceTypeName_transactionTypeName` ON `shadow_resource_transactions` (`accountOwnerId`, `sourceEventId`, `resourceTypeName`, `transactionTypeName`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_shadow_resource_transactions_accountOwnerId_resourceTypeName_timestampEpochMs` ON `shadow_resource_transactions` (`accountOwnerId`, `resourceTypeName`, `timestampEpochMs`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_shadow_resource_transactions_sourceEventId` ON `shadow_resource_transactions` (`sourceEventId`)")
+            }
+        }
+
+        // =====================================================================
+        // MIGRATION 16 → 17: Milestone 12 Phase 6.2 Shadow Recruitment & Resonance
+        // =====================================================================
+        val MIGRATION_16_17: Migration = object : Migration(16, 17) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `shadow_evidence_claims` (
+                        `claimId` TEXT NOT NULL,
+                        `accountOwnerId` TEXT NOT NULL,
+                        `sourceType` TEXT NOT NULL,
+                        `sourceRecordId` TEXT NOT NULL,
+                        `claimedAtEpochMs` INTEGER NOT NULL,
+                        PRIMARY KEY(`claimId`),
+                        FOREIGN KEY(`accountOwnerId`) REFERENCES `shadow_monarch_profile`(`accountOwnerId`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_shadow_evidence_claims_accountOwnerId_sourceType_sourceRecordId` ON `shadow_evidence_claims` (`accountOwnerId`, `sourceType`, `sourceRecordId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_shadow_evidence_claims_accountOwnerId` ON `shadow_evidence_claims` (`accountOwnerId`)")
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `shadow_resonance_records` (
+                        `resonanceId` TEXT NOT NULL,
+                        `accountOwnerId` TEXT NOT NULL,
+                        `archetypeId` TEXT NOT NULL,
+                        `resonanceLevel` INTEGER NOT NULL,
+                        `resonanceShards` INTEGER NOT NULL,
+                        `lastResonanceEpochMs` INTEGER NOT NULL,
+                        PRIMARY KEY(`resonanceId`),
+                        FOREIGN KEY(`accountOwnerId`) REFERENCES `shadow_monarch_profile`(`accountOwnerId`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_shadow_resonance_records_accountOwnerId_archetypeId` ON `shadow_resonance_records` (`accountOwnerId`, `archetypeId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_shadow_resonance_records_accountOwnerId` ON `shadow_resonance_records` (`accountOwnerId`)")
+            }
+        }
+
         fun getInstance(context: Context): SoloLevelingDatabase {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
@@ -2908,7 +3449,10 @@ abstract class SoloLevelingDatabase : RoomDatabase() {
                         MIGRATION_10_11,
                         MIGRATION_11_12,
                         MIGRATION_12_13,
-                        MIGRATION_13_14
+                        MIGRATION_13_14,
+                        MIGRATION_14_15,
+                        MIGRATION_15_16,
+                        MIGRATION_16_17
                     )
                     .build()
                     .also { INSTANCE = it }
@@ -3065,29 +3609,37 @@ object DatabaseInitializer {
                 ).toEntity()
             )
 
-            // Milestone 11: Ensure Shadow Monarch profile is seeded on fresh install
-            if (db.shadowMonarchProfileDao().getProfileOnce() == null) {
-                db.shadowMonarchProfileDao().insertProfile(
+            val defaultOwner = "local_vault_player_1"
+            // Milestone 11 + Phase 6.1: Ensure default local Shadow Monarch profile exists on fresh install
+            if (db.shadowMonarchProfileDao().getProfileForOwnerOnce(defaultOwner) == null) {
+                db.shadowMonarchProfileDao().upsertProfile(
                     ShadowMonarchProfileEntity(
-                        id = 1,
+                        accountOwnerId = defaultOwner,
                         monarchLevel = 1,
                         monarchXp = 0L,
                         monarchRankName = "AWAKENING",
-                        monarchAuthority = 10,
-                        armyCapacity = 5,
+                        monarchAuthority = 0,
+                        armyCapacity = 10,
                         activeShadowCount = 0,
                         totalShadowsRecruited = 0,
                         highestShadowRankName = "E_RANK",
                         totalEvolutions = 0,
                         shadowArmyPowerRating = 0L,
-                        unlockedMonarchSkillIdsJson = "[]",
+                        unlockedMonarchSkillIdsJson = "[\"monarch_shadow_extraction\"]",
                         updatedAtEpochMs = now
+                    )
+                )
+                db.monarchSkillUnlockDao().insertMonarchSkillUnlock(
+                    MonarchSkillUnlockEntity(
+                        accountOwnerId = defaultOwner,
+                        skillId = com.example.domain.model.MonarchSkillIds.SHADOW_EXTRACTION,
+                        unlockedAtEpochMs = now,
+                        evidenceNote = "Shadow Extraction unlocked at Monarch Level 1"
                     )
                 )
             }
 
             // Milestone 12: Ensure default local social profile and 8 modules exist on fresh install
-            val defaultOwner = "local_vault_player_1"
             if (db.socialProfileDao().getProfile(defaultOwner) == null) {
                 db.socialProfileDao().insertOrUpdateProfile(
                     SocialProfileEntity(

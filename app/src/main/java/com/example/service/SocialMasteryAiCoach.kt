@@ -2,9 +2,9 @@ package com.example.service
 
 import com.example.data.integration.BackendAiGateway
 import com.example.data.integration.BackendAiProxyRequest
+import com.example.data.integration.OpenRouterMessage
 import com.example.domain.model.AiCoachingMessage
 import com.example.domain.model.AiCoachingMode
-import com.example.domain.model.OpenRouterMessage
 import com.example.domain.model.PersonalizedSocialRecommendation
 import com.example.domain.model.PersonalizedWeeklyTrainingPlan
 import com.example.domain.model.SocialProfile

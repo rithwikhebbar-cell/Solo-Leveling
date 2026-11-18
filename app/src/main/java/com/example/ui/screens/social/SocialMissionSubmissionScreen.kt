@@ -1,6 +1,8 @@
 package com.example.ui.screens.social
 
-import androidx.compose.animation.AnimatedVisibility
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -12,6 +14,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -20,6 +23,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.Button
@@ -47,6 +51,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -83,6 +88,15 @@ fun SocialMissionSubmissionScreen(
     var reflectionText by remember { mutableStateOf("") }
     var humanConfirmingRole by remember { mutableStateOf("") }
     var artifactNote by remember { mutableStateOf("") }
+    var attachedArtifactUri by remember { mutableStateOf<Uri?>(null) }
+
+    val documentPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            attachedArtifactUri = uri
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -178,9 +192,11 @@ fun SocialMissionSubmissionScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .heightIn(min = 48.dp)
                             .clip(RoundedCornerShape(8.dp))
                             .background(if (isSelected) DeepNavy else SurfaceNavy)
                             .border(1.dp, if (isSelected) ElectricCyan else Color.Transparent, RoundedCornerShape(8.dp))
+                            .testTag("evidence_type_${type.name.lowercase()}")
                             .clickable { selectedEvidenceType = type }
                             .padding(12.dp),
                         verticalAlignment = Alignment.CenterVertically
@@ -201,7 +217,7 @@ fun SocialMissionSubmissionScreen(
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = type.description,
+                                text = type.explanation,
                                 color = TextMuted,
                                 fontSize = 11.sp
                             )
@@ -223,7 +239,35 @@ fun SocialMissionSubmissionScreen(
                         value = humanConfirmingRole,
                         onValueChange = { humanConfirmingRole = it },
                         label = { Text("Confirming Person's Role (e.g. Mentor, Teammate)") },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("human_confirming_role_input"),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = ElectricCyan,
+                            unfocusedBorderColor = BorderCyan,
+                            focusedTextColor = TextWhite,
+                            unfocusedTextColor = TextWhite
+                        )
+                    )
+                }
+
+                if (selectedEvidenceType == SocialMissionEvidenceType.ARTIFACT_DESCRIBED ||
+                    selectedEvidenceType == SocialMissionEvidenceType.ARTIFACT_ATTACHED) {
+                    OutlinedTextField(
+                        value = artifactNote,
+                        onValueChange = { artifactNote = it },
+                        label = {
+                            Text(
+                                if (selectedEvidenceType == SocialMissionEvidenceType.ARTIFACT_DESCRIBED) {
+                                    "Artifact Note / Title (History only — does not unlock ADVANCED)"
+                                } else {
+                                    "Artifact Description (Optional context for attached file)"
+                                }
+                            )
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("artifact_note_input"),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = ElectricCyan,
                             unfocusedBorderColor = BorderCyan,
@@ -234,18 +278,39 @@ fun SocialMissionSubmissionScreen(
                 }
 
                 if (selectedEvidenceType == SocialMissionEvidenceType.ARTIFACT_ATTACHED) {
-                    OutlinedTextField(
-                        value = artifactNote,
-                        onValueChange = { artifactNote = it },
-                        label = { Text("Artifact Title / Summary (e.g. Slide deck title, PR description)") },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = ElectricCyan,
-                            unfocusedBorderColor = BorderCyan,
-                            focusedTextColor = TextWhite,
-                            unfocusedTextColor = TextWhite
+                    OutlinedButton(
+                        onClick = {
+                            documentPickerLauncher.launch(arrayOf("*/*"))
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 48.dp)
+                            .testTag("artifact_attach_button"),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = ElectricCyan)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AttachFile,
+                            contentDescription = "Attach real-world evidence file",
+                            modifier = Modifier.size(18.dp)
                         )
-                    )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = if (attachedArtifactUri != null) {
+                                "FILE SELECTED: ${attachedArtifactUri?.lastPathSegment ?: "Document"} ✓"
+                            } else {
+                                "SELECT & ATTACH EVIDENCE FILE (REQUIRED)"
+                            },
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    if (attachedArtifactUri == null) {
+                        Text(
+                            text = "Note-only descriptions cannot qualify as attached evidence. Attach a readable local file or switch to ARTIFACT_DESCRIBED.",
+                            color = GoldHighlight,
+                            fontSize = 11.sp
+                        )
+                    }
                 }
 
                 // Written Reflection
@@ -298,7 +363,22 @@ fun SocialMissionSubmissionScreen(
                     }
                 }
 
+                uiState.missionSubmissionMessage?.let { statusMessage ->
+                    Text(
+                        text = statusMessage,
+                        color = if (statusMessage.startsWith("Submission failed", ignoreCase = true)) GoldHighlight else ElectricCyan,
+                        fontSize = 12.sp,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
                 Spacer(modifier = Modifier.height(12.dp))
+
+                val hasRequiredEvidenceInputs = when (selectedEvidenceType) {
+                    SocialMissionEvidenceType.ARTIFACT_ATTACHED -> attachedArtifactUri != null
+                    SocialMissionEvidenceType.ARTIFACT_DESCRIBED -> artifactNote.trim().isNotEmpty()
+                    else -> true
+                }
 
                 Button(
                     onClick = {
@@ -307,12 +387,16 @@ fun SocialMissionSubmissionScreen(
                             evidenceType = selectedEvidenceType,
                             reflectionText = reflectionText,
                             humanConfirmingRole = humanConfirmingRole.ifBlank { null },
-                            artifactNote = artifactNote.ifBlank { null }
+                            artifactNote = artifactNote.ifBlank { null },
+                            artifactAttachmentUri = attachedArtifactUri?.toString(),
+                            onSuccess = onSubmissionSuccess
                         )
-                        onSubmissionSuccess()
                     },
-                    enabled = reflectionText.length >= 20 && !uiState.isSubmittingMission,
-                    modifier = Modifier.fillMaxWidth(),
+                    enabled = reflectionText.trim().length >= 20 && hasRequiredEvidenceInputs && !uiState.isSubmittingMission,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 48.dp)
+                        .testTag("submit_mission_reflection_button"),
                     colors = ButtonDefaults.buttonColors(containerColor = ElectricCyan, contentColor = ObsidianBlack)
                 ) {
                     if (uiState.isSubmittingMission) {

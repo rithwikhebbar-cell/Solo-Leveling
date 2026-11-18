@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.example.data.local.SoloLevelingDatabase
+import com.example.data.local.entity.toDomain
+import com.example.data.local.entity.toEntity
 import com.example.data.repository.ShadowArmyRepository
 import com.example.domain.engine.MonarchProgressionEngine
 import com.example.domain.engine.ShadowDeploymentEngine
@@ -21,6 +23,7 @@ import com.example.domain.model.ShadowFormationType
 import com.example.domain.model.ShadowRank
 import com.example.domain.model.ShadowResourceType
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -51,29 +54,40 @@ class ShadowMonarchRepositoryRobolectricTest {
             .allowMainThreadQueries()
             .build()
 
+        val sharedMutex = Mutex()
         monarchProgressionEngine = MonarchProgressionEngine(
             monarchProfileDao = database.shadowMonarchProfileDao(),
             monarchSkillUnlockDao = database.monarchSkillUnlockDao(),
             shadowDao = database.shadowDao(),
             shadowResourceDao = database.shadowResourceDao(),
-            shadowQuestProgressDao = database.shadowQuestProgressDao()
+            shadowQuestProgressDao = database.shadowQuestProgressDao(),
+            shadowXpTraceDao = database.shadowXpTraceDao(),
+            database = database,
+            mutex = sharedMutex
         )
         extractionEngine = ShadowExtractionEngine(
             database = database,
             shadowDao = database.shadowDao(),
             extractionDao = database.shadowExtractionDao(),
             monarchProfileDao = database.shadowMonarchProfileDao(),
-            monarchProgressionEngine = monarchProgressionEngine
+            monarchProgressionEngine = monarchProgressionEngine,
+            mutex = sharedMutex
         )
         evolutionEngine = ShadowEvolutionEngine(
             shadowDao = database.shadowDao(),
             shadowSkillUnlockDao = database.shadowSkillUnlockDao(),
-            monarchProgressionEngine = monarchProgressionEngine
+            monarchProgressionEngine = monarchProgressionEngine,
+            shadowXpTraceDao = database.shadowXpTraceDao(),
+            database = database,
+            mutex = sharedMutex
         )
         deploymentEngine = ShadowDeploymentEngine(
             shadowDao = database.shadowDao(),
             deploymentDao = database.shadowDeploymentDao(),
-            formationDao = database.shadowFormationDao()
+            formationDao = database.shadowFormationDao(),
+            monarchProgressionEngine = monarchProgressionEngine,
+            database = database,
+            mutex = sharedMutex
         )
 
         repository = ShadowArmyRepository(
@@ -89,7 +103,58 @@ class ShadowMonarchRepositoryRobolectricTest {
             monarchProgressionEngine = monarchProgressionEngine,
             extractionEngine = extractionEngine,
             evolutionEngine = evolutionEngine,
-            deploymentEngine = deploymentEngine
+            deploymentEngine = deploymentEngine,
+            database = database,
+            mutex = sharedMutex
+        )
+
+        database.dungeonDao().insertDefinition(
+            com.example.data.local.entity.DungeonDefinitionEntity(
+                id = 1L,
+                code = "TEST_DUNGEON_01",
+                title = "Frost Dungeon",
+                description = "Test dungeon definition",
+                categoryName = "PHYSICAL",
+                difficultyName = "C_RANK",
+                requiredRankName = "E_RANK",
+                requiredLevel = 1,
+                requiredAttributeCode = null,
+                requiredAttributeValue = 0,
+                timeLimitHours = 24,
+                baseXpReward = 200,
+                primaryAttrName = "STR",
+                primaryAttrXp = 20,
+                secondaryAttrName = "VIT",
+                secondaryAttrXp = 10,
+                rewardTitleId = null,
+                rewardItemId = null,
+                rewardShadowId = null,
+                isRepeatable = true,
+                creationSourceName = "SYSTEM",
+                isActiveCatalog = true
+            )
+        )
+        database.bossBattleDao().insertBossDefinition(
+            com.example.data.local.entity.BossDefinitionEntity(
+                id = 1L,
+                code = "TEST_BOSS_01",
+                title = "Commander Igris",
+                subtitle = "Blood-Red Knight",
+                description = "Test boss definition",
+                categoryName = "COMBAT",
+                difficultyName = "B_RANK",
+                requiredRankName = "E_RANK",
+                requiredLevel = 1,
+                xpReward = 500,
+                primaryAttrName = "STR",
+                primaryAttrXp = 40,
+                secondaryAttrName = "AGI",
+                secondaryAttrXp = 20,
+                rewardTitleId = null,
+                rewardItemId = null,
+                rewardShadowId = null,
+                totalEstimatedDays = 7
+            )
         )
     }
 
@@ -136,8 +201,8 @@ class ShadowMonarchRepositoryRobolectricTest {
         assertEquals(1, profile.monarchLevel)
         assertEquals(0L, profile.monarchXp)
         assertEquals(MonarchRank.AWAKENING, profile.monarchRank)
-        assertEquals(10, profile.monarchAuthority)
-        assertEquals(5, profile.armyCapacity)
+        assertEquals(0, profile.monarchAuthority)
+        assertEquals(10, profile.armyCapacity)
         assertEquals(0, profile.activeShadowCount)
         assertEquals(0, profile.totalShadowsRecruited)
     }
@@ -147,16 +212,16 @@ class ShadowMonarchRepositoryRobolectricTest {
         monarchProgressionEngine.getOrCreateProfile()
 
         val firstAward = monarchProgressionEngine.awardMonarchXp(
-            xpAmount = 150,
             sourceTag = "quest_first_blood_01",
+            xpAmount = 150,
             sourceDescription = "First extraction quest"
         )
         assertTrue(firstAward)
 
         // Awarding again with the exact same sourceTag should be ignored by idempotency guard
         val secondAward = monarchProgressionEngine.awardMonarchXp(
-            xpAmount = 150,
             sourceTag = "quest_first_blood_01",
+            xpAmount = 150,
             sourceDescription = "First extraction quest"
         )
         assertFalse(secondAward)
@@ -325,8 +390,8 @@ class ShadowMonarchRepositoryRobolectricTest {
     fun armyCapacityLimit_blocksExtractionWhenFull() = runTest {
         monarchProgressionEngine.getOrCreateProfile()
 
-        // Recruit shadows up to default capacity of 5
-        for (i in 1..5) {
+        // Recruit shadows up to default capacity of 10
+        for (i in 1..10) {
             val eventId = (500L + i)
             seedClearedDungeon(eventId)
             val pending = extractionEngine.evaluateExtractionEligibility(
@@ -338,15 +403,15 @@ class ShadowMonarchRepositoryRobolectricTest {
         }
 
         val profile = monarchProgressionEngine.getOrCreateProfile()
-        assertEquals(5, profile.activeShadowCount)
-        assertEquals(5, profile.armyCapacity)
+        assertEquals(10, profile.activeShadowCount)
+        assertEquals(10, profile.armyCapacity)
 
-        // Attempt 6th extraction when army is full
-        seedClearedDungeon(506L)
+        // Attempt 11th extraction when army is full
+        seedClearedDungeon(511L)
         val blockedAttempt = extractionEngine.evaluateExtractionEligibility(
             sourceType = ShadowExtractionSourceType.DUNGEON_COMPLETION,
-            sourceEventId = "506",
-            evidenceSummary = "Dungeon Clear #6"
+            sourceEventId = "511",
+            evidenceSummary = "Dungeon Clear #11"
         )
 
         assertEquals(ShadowExtractionOutcome.ARMY_CAPACITY_REACHED, blockedAttempt.outcome)
@@ -360,8 +425,6 @@ class ShadowMonarchRepositoryRobolectricTest {
         val pending = extractionEngine.evaluateExtractionEligibility(
             sourceType = ShadowExtractionSourceType.DUNGEON_COMPLETION,
             sourceEventId = "601",
-            evidenceSummary = "Clear"
-        )
             evidenceSummary = "Clear"
         )
         val event = extractionEngine.confirmExtraction(pending).getOrThrow()
@@ -379,10 +442,11 @@ class ShadowMonarchRepositoryRobolectricTest {
     @Test
     fun shadowSkillUnlock_persistedAndVerified() = runTest {
         monarchProgressionEngine.getOrCreateProfile()
+        seedClearedDungeon(702L)
 
         val pending = extractionEngine.evaluateExtractionEligibility(
             sourceType = ShadowExtractionSourceType.DUNGEON_COMPLETION,
-            sourceEventId = "dungeon_skill_test",
+            sourceEventId = "702",
             evidenceSummary = "Clear"
         )
         val event = extractionEngine.confirmExtraction(pending).getOrThrow()
@@ -390,39 +454,54 @@ class ShadowMonarchRepositoryRobolectricTest {
 
         val unlockResult = evolutionEngine.unlockShadowSkill(
             shadowId = shadowId,
-            skillId = "shadow_stealth",
-            evidenceNote = "Unlocked shadow stealth"
+            skillId = "shadow_tactical_insight",
+            evidenceNote = "Unlocked tactical insight"
         )
 
-        assertTrue(unlockResult.isSuccess)
-        val unlocksInDb = database.shadowSkillUnlockDao().getSkillUnlocksForShadowOnce(shadowId)
+        assertTrue(unlockResult)
+        val unlocksInDb = database.shadowSkillUnlockDao().getUnlocksForShadowOnce(shadowId)
         assertEquals(1, unlocksInDb.size)
-        assertEquals("shadow_stealth", unlocksInDb[0].skillId)
+        assertEquals("shadow_tactical_insight", unlocksInDb[0].skillId)
     }
 
     @Test
     fun monarchSkillUnlock_requiresAuthorityAndPersists() = runTest {
         monarchProgressionEngine.getOrCreateProfile()
+        monarchProgressionEngine.awardMonarchXp(
+            sourceTag = "test_unlock_xp",
+            xpAmount = 3000,
+            sourceDescription = "Reach Monarch Lv 5 and Authority 12"
+        )
+        val currentProfile = monarchProgressionEngine.getOrCreateProfile()
 
-        // Unlocking ARISE (MonarchSkillIds.EXTRACTION_AUTHORITY) requires Lv 1 and Authority 10
-        val result = monarchProgressionEngine.tryUnlockMonarchSkill(MonarchSkillIds.EXTRACTION_AUTHORITY)
-        assertTrue(result.isSuccess)
+        // Unlocking Army Expansion requires Lv 3, Authority 10, and SHADOW_EXTRACTION
+        val result = monarchProgressionEngine.tryUnlockMonarchSkill(
+            skillId = MonarchSkillIds.ARMY_EXPANSION,
+            profile = currentProfile,
+            evidenceNote = "Unlocked Army Expansion"
+        )
+        assertTrue(result)
 
         val profile = monarchProgressionEngine.getOrCreateProfile()
-        assertTrue(profile.unlockedMonarchSkillIds.contains(MonarchSkillIds.EXTRACTION_AUTHORITY))
+        assertTrue(profile.unlockedMonarchSkillIds.contains(MonarchSkillIds.ARMY_EXPANSION))
 
         // Attempting to unlock higher tier skill without authority fails
-        val highTierResult = monarchProgressionEngine.tryUnlockMonarchSkill(MonarchSkillIds.MONARCHS_TERRITORY)
-        assertFalse(highTierResult.isSuccess)
+        val highTierResult = monarchProgressionEngine.tryUnlockMonarchSkill(
+            skillId = MonarchSkillIds.ABSOLUTE_AUTHORITY,
+            profile = profile,
+            evidenceNote = "Too high"
+        )
+        assertFalse(highTierResult)
     }
 
     @Test
     fun shadowDeployment_lifecycleIdleToDeployedToIdle() = runTest {
         monarchProgressionEngine.getOrCreateProfile()
+        seedClearedDungeon(703L)
 
         val pending = extractionEngine.evaluateExtractionEligibility(
             sourceType = ShadowExtractionSourceType.DUNGEON_COMPLETION,
-            sourceEventId = "dungeon_deploy_test",
+            sourceEventId = "703",
             evidenceSummary = "Clear"
         )
         val event = extractionEngine.confirmExtraction(pending).getOrThrow()
@@ -452,7 +531,7 @@ class ShadowMonarchRepositoryRobolectricTest {
     fun formationManager_createAndActivate() = runTest {
         val createResult = deploymentEngine.createFormation(
             name = "Iron Wall Formation",
-            formationType = ShadowFormationType.DEFENSIVE_RECOVERY,
+            type = ShadowFormationType.DEFENSIVE_FORMATION,
             description = "Defensive recovery focus",
             memberShadowIds = emptyList()
         )
@@ -504,18 +583,21 @@ class ShadowMonarchRepositoryRobolectricTest {
         monarchProgressionEngine.getOrCreateProfile()
 
         for (i in 1..3) {
+            val eventId = 1000L + i
+            seedClearedDungeon(eventId)
             val pending = extractionEngine.evaluateExtractionEligibility(
                 sourceType = ShadowExtractionSourceType.DUNGEON_COMPLETION,
-                sourceEventId = "analytics_dungeon_$i",
+                sourceEventId = eventId.toString(),
                 evidenceSummary = "Clear #$i"
             )
             extractionEngine.confirmExtraction(pending)
         }
 
         val analytics = repository.buildShadowArmyAnalytics()
-        assertEquals(3, analytics.totalShadows)
-        assertEquals(0, analytics.deployedCount)
-        assertTrue(analytics.totalArmyPowerRating > 0)
+        assertEquals(3, analytics.totalRecruited)
+        assertEquals(3, analytics.activeShadows)
+        assertEquals(0, deploymentEngine.getActiveDeployments().size)
+        assertTrue(analytics.monarchProfile.shadowArmyPowerRating > 0)
         assertEquals(3, analytics.distributionByClass.values.sum())
         assertEquals(3, analytics.distributionByRank.values.sum())
     }
@@ -524,30 +606,24 @@ class ShadowMonarchRepositoryRobolectricTest {
     fun playerBoundary_monarchProgressionNeverMutatesPlayerEntity() = runTest {
         // Initialize player in PlayerDao
         val playerDao = database.playerDao()
-        val player = com.example.data.local.entity.PlayerEntity(
+        val player = com.example.domain.model.PlayerProfile(
             codename = "SungJinWoo",
             level = 1,
-            rankName = "E_RANK",
             currentLevelXp = 50,
             xpToNextLevel = 100,
-            totalXp = 50,
-            attributePointsAvailable = 0,
+            totalXp = 50L,
             verifiedActivitiesCount = 1,
-            selfReportedActivitiesCount = 0,
-            streakDays = 1,
-            statStr = 10,
-            statVit = 10,
-            statAgi = 10,
-            statInt = 10,
-            statDis = 10,
-            statWis = 10,
-            statCha = 10
+            streakDays = 1
         )
-        playerDao.insertPlayer(player)
+        playerDao.upsertPlayer(player.toEntity())
 
         // Perform aggressive Monarch & Shadow operations
         monarchProgressionEngine.getOrCreateProfile()
-        monarchProgressionEngine.awardMonarchXp(1000, "test_boundary", "Testing boundary")
+        monarchProgressionEngine.awardMonarchXp(
+            sourceTag = "test_boundary",
+            xpAmount = 1000,
+            sourceDescription = "Testing boundary"
+        )
         seedDefeatedBoss(701L)
         val pending = extractionEngine.evaluateExtractionEligibility(
             sourceType = ShadowExtractionSourceType.BOSS_BATTLE_COMPLETION,
@@ -557,15 +633,15 @@ class ShadowMonarchRepositoryRobolectricTest {
         extractionEngine.confirmExtraction(pending)
 
         // Verify PlayerEntity remains completely untouched
-        val playerAfter = playerDao.getPlayerProfileOnce()
+        val playerAfter = playerDao.getPlayerOnce()?.toDomain()
         assertNotNull(playerAfter)
         assertEquals(1, playerAfter?.level)
         assertEquals(50, playerAfter?.currentLevelXp)
-        assertEquals(50, playerAfter?.totalXp)
-        assertEquals("E_RANK", playerAfter?.rankName)
-        assertEquals(10, playerAfter?.statStr)
-        assertEquals(10, playerAfter?.statVit)
-        assertEquals(10, playerAfter?.statInt)
+        assertEquals(50L, playerAfter?.totalXp)
+        assertEquals(com.example.domain.model.HunterRank.E_RANK, playerAfter?.rank)
+        assertEquals(10, playerAfter?.attributes?.str?.totalValue)
+        assertEquals(10, playerAfter?.attributes?.vit?.totalValue)
+        assertEquals(10, playerAfter?.attributes?.intel?.totalValue)
     }
 
     @Test
@@ -616,7 +692,7 @@ class ShadowMonarchRepositoryRobolectricTest {
                 evidenceSummary = "Pre-existing conflict",
                 isConfirmed = true,
                 monarchXpAwarded = 100,
-                extractedAtEpochMs = System.currentTimeMillis()
+                timestampEpochMs = System.currentTimeMillis()
             )
         )
 
@@ -637,9 +713,8 @@ class ShadowMonarchRepositoryRobolectricTest {
         val awardResult = repository.awardResource(
             resourceType = ShadowResourceType.SHADOW_ESSENCE,
             amount = 100,
-            transactionType = ShadowResourceTransactionType.EARNED,
             sourceEventId = eventId,
-            description = "Earned from milestone"
+            sourceDescription = "Earned from milestone"
         )
         assertTrue(awardResult.isSuccess)
         assertEquals(100, awardResult.getOrThrow())

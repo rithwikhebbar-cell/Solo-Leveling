@@ -8,6 +8,7 @@ import com.example.domain.engine.SyncConflictResolver
 import com.example.domain.engine.SyncRetryPolicy
 import com.example.domain.model.AuthValidator
 import com.example.domain.model.CloudProgressionEventPayload
+import com.example.domain.model.DEFAULT_SHADOW_ACCOUNT_OWNER_ID
 import com.example.domain.model.SyncEntityType
 import com.example.domain.model.SyncOperationType
 import com.example.domain.model.SyncState
@@ -17,6 +18,24 @@ class SyncQueueManager(private val database: SoloLevelingDatabase) {
 
     private val queueDao = database.syncQueueDao()
     private val metaDao = database.syncMetaDao()
+
+    companion object {
+        private val SHADOW_SYNC_TYPES = setOf(
+            SyncEntityType.SHADOW_MONARCH_PROFILE,
+            SyncEntityType.SHADOW,
+            SyncEntityType.SHADOW_EXTRACTION,
+            SyncEntityType.SHADOW_SKILL_UNLOCK,
+            SyncEntityType.SHADOW_DEPLOYMENT,
+            SyncEntityType.SHADOW_FORMATION,
+            SyncEntityType.MONARCH_SKILL_UNLOCK,
+            SyncEntityType.SHADOW_QUEST_PROGRESS,
+            SyncEntityType.SHADOW_RESOURCE_TRANSACTION
+        )
+
+        fun isShadowEntityType(entityType: SyncEntityType): Boolean = entityType in SHADOW_SYNC_TYPES
+
+        fun scopedShadowLocalKey(userId: String, rawKey: String): String = "${userId}::$rawKey"
+    }
 
     suspend fun enqueueChange(
         userId: String,
@@ -164,29 +183,166 @@ class SyncQueueManager(private val database: SoloLevelingDatabase) {
             )
         }
 
-        // 5. Immutable RPG & Life & Academic progression events (idempotency-keyed)
-        database.rpgAuditDao().getAllOnce().forEach { audit ->
-            val ev = CloudProgressionEventPayload(
-                idempotencyKey = audit.rewardKey,
-                sourceModule = "RPG",
-                sourceRecordId = audit.sourceId,
-                title = audit.title,
-                verificationStatus = audit.verificationProvenance,
-                xpAwarded = audit.xpAwarded,
-                primaryAttribute = audit.primaryAttrName,
-                primaryAttrXp = audit.primaryAttrXp,
-                secondaryAttribute = audit.secondaryAttrName,
-                secondaryAttrXp = audit.secondaryAttrXp,
-                wasCapped = audit.wasCapped,
-                occurredAtEpochMs = audit.timestampEpochMs
-            )
+        // 5. Immutable RPG, Life, Academic & Social progression events (account-scoped, idempotency-keyed)
+        database.rpgAuditDao().getAllOnce()
+            .filter { it.accountOwnerId == userId || it.accountOwnerId == com.example.AppContainer.DEFAULT_LOCAL_ACCOUNT_OWNER_ID }
+            .forEach { audit ->
+                val resolvedModule = if (audit.sourceType == "SOCIAL_MASTERY") "SOCIAL_MASTERY" else "RPG"
+                val ev = CloudProgressionEventPayload(
+                    idempotencyKey = audit.rewardKey,
+                    sourceModule = resolvedModule,
+                    sourceRecordId = audit.sourceId,
+                    title = audit.title,
+                    verificationStatus = audit.verificationProvenance,
+                    xpAwarded = audit.xpAwarded,
+                    primaryAttribute = audit.primaryAttrName,
+                    primaryAttrXp = audit.primaryAttrXp,
+                    secondaryAttribute = audit.secondaryAttrName,
+                    secondaryAttrXp = audit.secondaryAttrXp,
+                    wasCapped = audit.wasCapped,
+                    occurredAtEpochMs = audit.timestampEpochMs
+                )
+                enqueueChange(
+                    userId = userId,
+                    entityType = SyncEntityType.PROGRESSION_EVENT,
+                    localKey = audit.rewardKey,
+                    operation = SyncOperationType.UPSERT,
+                    payloadJson = CloudDataMapper.json.encodeToString(ev),
+                    idempotencyKey = "PROG:${audit.rewardKey}",
+                    nowEpochMs = nowEpochMs
+                )
+            }
+
+        // 6. Shadow Monarch System (Strictly account-isolated: NEVER scan or upload local_vault_player_1 rows)
+        val cleanUserId = userId.trim()
+        if (cleanUserId.isNotBlank() && cleanUserId != DEFAULT_SHADOW_ACCOUNT_OWNER_ID) {
+            scanShadowEntitiesForAccount(cleanUserId, nowEpochMs)
+        }
+    }
+
+    private suspend fun scanShadowEntitiesForAccount(userId: String, nowEpochMs: Long) {
+        database.shadowMonarchProfileDao().getProfileForOwnerOnce(userId)?.let { profile ->
+            val key = scopedShadowLocalKey(userId, profile.accountOwnerId)
+            val cloudUuid = resolveOrAssignUuid(userId, SyncEntityType.SHADOW_MONARCH_PROFILE, key)
+            val payload = CloudDataMapper.shadowMonarchProfileToPayload(profile, cloudUuid)
             enqueueChange(
                 userId = userId,
-                entityType = SyncEntityType.PROGRESSION_EVENT,
-                localKey = audit.rewardKey,
+                entityType = SyncEntityType.SHADOW_MONARCH_PROFILE,
+                localKey = key,
                 operation = SyncOperationType.UPSERT,
-                payloadJson = CloudDataMapper.json.encodeToString(ev),
-                idempotencyKey = "PROG:${audit.rewardKey}",
+                payloadJson = CloudDataMapper.json.encodeToString(payload),
+                nowEpochMs = nowEpochMs
+            )
+        }
+
+        database.shadowDao().getAllShadowsForOwnerOnce(userId).forEach { shadow ->
+            val key = scopedShadowLocalKey(userId, shadow.shadowId)
+            val cloudUuid = resolveOrAssignUuid(userId, SyncEntityType.SHADOW, key)
+            val payload = CloudDataMapper.shadowToPayload(shadow, cloudUuid)
+            enqueueChange(
+                userId = userId,
+                entityType = SyncEntityType.SHADOW,
+                localKey = key,
+                operation = SyncOperationType.UPSERT,
+                payloadJson = CloudDataMapper.json.encodeToString(payload),
+                nowEpochMs = nowEpochMs
+            )
+        }
+
+        database.shadowExtractionDao().getAllExtractionsForOwnerOnce(userId).forEach { extraction ->
+            val key = scopedShadowLocalKey(userId, extraction.extractionId)
+            val cloudUuid = resolveOrAssignUuid(userId, SyncEntityType.SHADOW_EXTRACTION, key)
+            val payload = CloudDataMapper.shadowExtractionToPayload(extraction, cloudUuid)
+            enqueueChange(
+                userId = userId,
+                entityType = SyncEntityType.SHADOW_EXTRACTION,
+                localKey = key,
+                operation = SyncOperationType.UPSERT,
+                payloadJson = CloudDataMapper.json.encodeToString(payload),
+                nowEpochMs = nowEpochMs
+            )
+        }
+
+        database.shadowSkillUnlockDao().getAllUnlocksForOwnerOnce(userId).forEach { unlock ->
+            val key = scopedShadowLocalKey(userId, "${unlock.shadowId}::${unlock.skillId}")
+            val cloudUuid = resolveOrAssignUuid(userId, SyncEntityType.SHADOW_SKILL_UNLOCK, key)
+            val payload = CloudDataMapper.shadowSkillUnlockToPayload(unlock, cloudUuid)
+            enqueueChange(
+                userId = userId,
+                entityType = SyncEntityType.SHADOW_SKILL_UNLOCK,
+                localKey = key,
+                operation = SyncOperationType.UPSERT,
+                payloadJson = CloudDataMapper.json.encodeToString(payload),
+                nowEpochMs = nowEpochMs
+            )
+        }
+
+        database.shadowDeploymentDao().getAllDeploymentsForOwnerOnce(userId).forEach { deployment ->
+            val key = scopedShadowLocalKey(userId, deployment.deploymentId)
+            val cloudUuid = resolveOrAssignUuid(userId, SyncEntityType.SHADOW_DEPLOYMENT, key)
+            val payload = CloudDataMapper.shadowDeploymentToPayload(deployment, cloudUuid)
+            enqueueChange(
+                userId = userId,
+                entityType = SyncEntityType.SHADOW_DEPLOYMENT,
+                localKey = key,
+                operation = SyncOperationType.UPSERT,
+                payloadJson = CloudDataMapper.json.encodeToString(payload),
+                nowEpochMs = nowEpochMs
+            )
+        }
+
+        database.shadowFormationDao().getAllFormationsForOwnerOnce(userId).forEach { formation ->
+            val key = scopedShadowLocalKey(userId, formation.formationId)
+            val cloudUuid = resolveOrAssignUuid(userId, SyncEntityType.SHADOW_FORMATION, key)
+            val payload = CloudDataMapper.shadowFormationToPayload(formation, cloudUuid)
+            enqueueChange(
+                userId = userId,
+                entityType = SyncEntityType.SHADOW_FORMATION,
+                localKey = key,
+                operation = SyncOperationType.UPSERT,
+                payloadJson = CloudDataMapper.json.encodeToString(payload),
+                nowEpochMs = nowEpochMs
+            )
+        }
+
+        database.monarchSkillUnlockDao().getAllMonarchSkillUnlocksForOwnerOnce(userId).forEach { unlock ->
+            val key = scopedShadowLocalKey(userId, unlock.skillId)
+            val cloudUuid = resolveOrAssignUuid(userId, SyncEntityType.MONARCH_SKILL_UNLOCK, key)
+            val payload = CloudDataMapper.monarchSkillUnlockToPayload(unlock, cloudUuid)
+            enqueueChange(
+                userId = userId,
+                entityType = SyncEntityType.MONARCH_SKILL_UNLOCK,
+                localKey = key,
+                operation = SyncOperationType.UPSERT,
+                payloadJson = CloudDataMapper.json.encodeToString(payload),
+                nowEpochMs = nowEpochMs
+            )
+        }
+
+        database.shadowQuestProgressDao().getAllQuestProgressForOwnerOnce(userId).forEach { quest ->
+            val key = scopedShadowLocalKey(userId, quest.questId)
+            val cloudUuid = resolveOrAssignUuid(userId, SyncEntityType.SHADOW_QUEST_PROGRESS, key)
+            val payload = CloudDataMapper.shadowQuestProgressToPayload(quest, cloudUuid)
+            enqueueChange(
+                userId = userId,
+                entityType = SyncEntityType.SHADOW_QUEST_PROGRESS,
+                localKey = key,
+                operation = SyncOperationType.UPSERT,
+                payloadJson = CloudDataMapper.json.encodeToString(payload),
+                nowEpochMs = nowEpochMs
+            )
+        }
+
+        database.shadowResourceDao().getAllTransactionsForOwnerOnce(userId).forEach { tx ->
+            val key = scopedShadowLocalKey(userId, tx.transactionId)
+            val cloudUuid = resolveOrAssignUuid(userId, SyncEntityType.SHADOW_RESOURCE_TRANSACTION, key)
+            val payload = CloudDataMapper.shadowResourceTransactionToPayload(tx, cloudUuid)
+            enqueueChange(
+                userId = userId,
+                entityType = SyncEntityType.SHADOW_RESOURCE_TRANSACTION,
+                localKey = key,
+                operation = SyncOperationType.UPSERT,
+                payloadJson = CloudDataMapper.json.encodeToString(payload),
                 nowEpochMs = nowEpochMs
             )
         }
@@ -203,6 +359,36 @@ class SyncQueueManager(private val database: SoloLevelingDatabase) {
 
     suspend fun getReadyBatch(nowEpochMs: Long, limit: Int = 50): List<SyncQueueEntity> =
         queueDao.getReadyBatch(nowEpochMs, limit)
+
+    /**
+     * Returns ready queue items scoped to userId so queued Shadow records from another account
+     * or local vault can never be uploaded under the wrong session.
+     */
+    suspend fun getReadyBatchForUser(
+        userId: String,
+        nowEpochMs: Long,
+        limit: Int = 50
+    ): List<SyncQueueEntity> {
+        val candidates = queueDao.getReadyBatch(nowEpochMs, (limit * 3).coerceAtLeast(limit))
+        val filtered = mutableListOf<SyncQueueEntity>()
+        for (item in candidates) {
+            val type = runCatching { SyncEntityType.valueOf(item.entityTypeName) }.getOrNull()
+            val meta = metaDao.getByCompositeKey("${item.entityTypeName}:${item.localKey}")
+            val owned = if (type != null && isShadowEntityType(type)) {
+                userId.isNotBlank() &&
+                    userId != DEFAULT_SHADOW_ACCOUNT_OWNER_ID &&
+                    item.localKey.startsWith("${userId}::") &&
+                    meta?.userId == userId
+            } else {
+                (meta?.userId ?: userId) == userId
+            }
+            if (owned) {
+                filtered.add(item)
+                if (filtered.size >= limit) break
+            }
+        }
+        return filtered
+    }
 
     suspend fun markUploading(item: SyncQueueEntity, nowEpochMs: Long = System.currentTimeMillis()) {
         queueDao.update(item.copy(syncStateName = SyncState.UPLOADING.name, updatedAtEpochMs = nowEpochMs))

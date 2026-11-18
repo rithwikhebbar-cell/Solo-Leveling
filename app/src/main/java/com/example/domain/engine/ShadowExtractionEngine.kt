@@ -5,11 +5,9 @@ import com.example.data.local.SoloLevelingDatabase
 import com.example.data.local.dao.ShadowDao
 import com.example.data.local.dao.ShadowExtractionDao
 import com.example.data.local.dao.ShadowMonarchProfileDao
-import com.example.data.local.entity.ShadowEntity
-import com.example.data.local.entity.ShadowExtractionEntity
 import com.example.data.local.entity.toDomain
 import com.example.data.local.entity.toEntity
-import com.example.data.local.entity.toEntity
+import com.example.domain.model.DEFAULT_SHADOW_ACCOUNT_OWNER_ID
 import com.example.domain.model.Shadow
 import com.example.domain.model.ShadowClass
 import com.example.domain.model.ShadowDeploymentStatus
@@ -17,29 +15,15 @@ import com.example.domain.model.ShadowEvolutionStage
 import com.example.domain.model.ShadowExtractionEvent
 import com.example.domain.model.ShadowExtractionOutcome
 import com.example.domain.model.ShadowExtractionSourceType
-import com.example.domain.model.ShadowMonarchProfile
 import com.example.domain.model.ShadowRank
 import com.example.domain.model.ShadowRarity
 import com.example.domain.model.ShadowStats
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.util.UUID
 
 // ============================================================================
-// SHADOW EXTRACTION ENGINE
-// ============================================================================
-//
-// SAFETY GUARANTEES:
-//  - Source evidence validated against actual persisted records in originating DAOs.
-//  - Each source event ID may only produce ONE extraction (composite unique index on DB level).
-//  - Extraction uses a deterministic algorithm seeded from source event data.
-//  - No randomness in rarity/class determination for the same event.
-//  - Army capacity is validated before extraction and within the transaction.
-//  - Extraction occurs inside an atomic Room database transaction (database.withTransaction).
-//  - Extraction never awards player XP or modifies player attributes.
-//  - Extraction requires explicit player confirmation before persisting the shadow.
-//
-// DETERMINISM RULE:
-//  Given the same sourceType + sourceEventId, the algorithm ALWAYS produces
-//  the same shadow class, rarity, and name. No uncontrolled entropy.
+// SHADOW EXTRACTION ENGINE (Account-Isolated & Transactionally Hardened)
 // ============================================================================
 
 class ShadowExtractionEngine(
@@ -47,17 +31,13 @@ class ShadowExtractionEngine(
     private val shadowDao: ShadowDao = database.shadowDao(),
     private val extractionDao: ShadowExtractionDao = database.shadowExtractionDao(),
     private val monarchProfileDao: ShadowMonarchProfileDao = database.shadowMonarchProfileDao(),
-    private val monarchProgressionEngine: MonarchProgressionEngine
+    private val monarchProgressionEngine: MonarchProgressionEngine,
+    private val mutex: Mutex = Mutex()
 ) {
 
     companion object {
-        // XP awarded to Monarch for successful extraction confirmation
         const val MONARCH_XP_PER_EXTRACTION = 100
 
-        /**
-         * Deterministic seed from source event identifiers.
-         * Same inputs always produce the same seed.
-         */
         fun buildDeterminismSeed(sourceType: ShadowExtractionSourceType, sourceEventId: String): Long {
             val raw = "${sourceType.name}::$sourceEventId"
             var seed = 0L
@@ -65,29 +45,22 @@ class ShadowExtractionEngine(
             return seed.let { if (it < 0) -it else it }
         }
 
-        /**
-         * Deterministic class selection from seed.
-         */
         fun selectClass(seed: Long): ShadowClass {
             val classes = ShadowClass.entries
             return classes[(seed % classes.size).toInt()]
         }
 
-        /**
-         * Deterministic rarity selection based on source type and seed.
-         * Higher-difficulty sources have higher probability of better rarity.
-         */
         fun selectRarity(seed: Long, sourceType: ShadowExtractionSourceType): ShadowRarity {
             val rarityIndex = when (sourceType) {
                 ShadowExtractionSourceType.DUNGEON_COMPLETION -> {
                     val r = seed % 100
                     when {
-                        r < 40 -> 0 // COMMON
-                        r < 65 -> 1 // UNCOMMON
-                        r < 82 -> 2 // RARE
-                        r < 93 -> 3 // EPIC
-                        r < 99 -> 4 // LEGENDARY
-                        else -> 5    // MYTHIC
+                        r < 40 -> 0
+                        r < 65 -> 1
+                        r < 82 -> 2
+                        r < 93 -> 3
+                        r < 99 -> 4
+                        else -> 5
                     }
                 }
                 ShadowExtractionSourceType.BOSS_BATTLE_COMPLETION -> {
@@ -111,7 +84,7 @@ class ShadowExtractionEngine(
                         else -> 4
                     }
                 }
-                else -> { // PHYSICAL, ACADEMIC, DISCIPLINE, CONSISTENCY, MONARCH milestones
+                else -> {
                     val r = seed % 100
                     when {
                         r < 55 -> 0
@@ -125,10 +98,6 @@ class ShadowExtractionEngine(
             return ShadowRarity.entries[rarityIndex.toInt().coerceIn(0, ShadowRarity.entries.size - 1)]
         }
 
-        /**
-         * Deterministic shadow name generation.
-         * Names are assigned from a fixed catalog based on class + seed.
-         */
         fun selectName(shadowClass: ShadowClass, seed: Long): String {
             val names = when (shadowClass) {
                 ShadowClass.VANGUARD -> listOf(
@@ -160,9 +129,6 @@ class ShadowExtractionEngine(
             return names[idx]
         }
 
-        /**
-         * Deterministic initial stats based on class, rarity, and seed.
-         */
         fun calculateInitialStats(shadowClass: ShadowClass, rarity: ShadowRarity, seed: Long): ShadowStats {
             val base = 8
             val rarityBonus = ((rarity.baseStatMultiplier - 1f) * 10).toInt()
@@ -225,15 +191,12 @@ class ShadowExtractionEngine(
     // SOURCE EVIDENCE VALIDATION
     // -------------------------------------------------------------------------
 
-    /**
-     * Validates that the source record genuinely exists in the originating database tables
-     * and represents a verified, completed achievement.
-     */
     suspend fun validateOriginatingSourceRecord(
         sourceType: ShadowExtractionSourceType,
-        sourceEventId: String
+        sourceEventId: String,
+        accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID
     ): Boolean {
-        if (sourceEventId.isBlank()) return false
+        if (sourceEventId.isBlank() || accountOwnerId.isBlank()) return false
         return try {
             when (sourceType) {
                 ShadowExtractionSourceType.DUNGEON_COMPLETION -> {
@@ -243,7 +206,7 @@ class ShadowExtractionEngine(
                     if (completionMatch) return true
                     database.dungeonDao().getAllInstancesOnce().any {
                         (it.id.toString() == sourceEventId || it.dungeonId.toString() == sourceEventId) &&
-                                it.statusName.equals("CLEARED", ignoreCase = true)
+                            it.statusName.equals("CLEARED", ignoreCase = true)
                     }
                 }
                 ShadowExtractionSourceType.BOSS_BATTLE_COMPLETION -> {
@@ -256,7 +219,7 @@ class ShadowExtractionEngine(
                     }
                     database.bossBattleDao().getAllBossInstancesOnce().any {
                         it.id.toString() == sourceEventId &&
-                                (it.statusName == "DEFEATED" || it.statusName == "COMPLETED")
+                            (it.statusName == "DEFEATED" || it.statusName == "COMPLETED")
                     }
                 }
                 ShadowExtractionSourceType.ACHIEVEMENT_UNLOCK -> {
@@ -285,7 +248,8 @@ class ShadowExtractionEngine(
                     }
                 }
                 ShadowExtractionSourceType.MONARCH_QUEST -> {
-                    database.shadowQuestProgressDao().getQuestProgress(sourceEventId)?.isCompleted == true
+                    database.shadowQuestProgressDao()
+                        .getQuestProgressForOwner(accountOwnerId, sourceEventId)?.isCompleted == true
                 }
             }
         } catch (_: Exception) {
@@ -294,25 +258,27 @@ class ShadowExtractionEngine(
     }
 
     // -------------------------------------------------------------------------
-    // EVALUATE EXTRACTION ELIGIBILITY
+    // EVALUATE EXTRACTION ELIGIBILITY (Account-Isolated)
     // -------------------------------------------------------------------------
 
-    /**
-     * Evaluates whether extraction is available for the given source event.
-     * Returns a pending extraction event (not yet persisted or confirmed).
-     */
     suspend fun evaluateExtractionEligibility(
         sourceType: ShadowExtractionSourceType,
         sourceEventId: String,
-        evidenceSummary: String
+        evidenceSummary: String,
+        accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID
     ): ShadowExtractionEvent {
+        val owner = accountOwnerId.trim().ifBlank { DEFAULT_SHADOW_ACCOUNT_OWNER_ID }
         val extractionId = UUID.randomUUID().toString()
         val seed = buildDeterminismSeed(sourceType, sourceEventId)
 
-        // Check: valid non-blank source evidence AND genuine persisted record in originating table
-        if (sourceEventId.isBlank() || evidenceSummary.isBlank() || !validateOriginatingSourceRecord(sourceType, sourceEventId)) {
+        if (accountOwnerId.isBlank() ||
+            sourceEventId.isBlank() ||
+            evidenceSummary.isBlank() ||
+            !validateOriginatingSourceRecord(sourceType, sourceEventId, owner)
+        ) {
             return ShadowExtractionEvent(
                 extractionId = extractionId,
+                accountOwnerId = owner,
                 sourceType = sourceType,
                 sourceEventId = sourceEventId,
                 outcome = ShadowExtractionOutcome.SOURCE_INVALID,
@@ -325,11 +291,11 @@ class ShadowExtractionEngine(
             )
         }
 
-        // Check: already extracted from this composite source event
-        val existing = extractionDao.getExtractionBySource(sourceType.name, sourceEventId)
+        val existing = extractionDao.getExtractionBySourceForOwner(owner, sourceType.name, sourceEventId)
         if (existing != null) {
             return ShadowExtractionEvent(
                 extractionId = existing.extractionId,
+                accountOwnerId = owner,
                 sourceType = sourceType,
                 sourceEventId = sourceEventId,
                 outcome = ShadowExtractionOutcome.ALREADY_CLAIMED,
@@ -342,12 +308,12 @@ class ShadowExtractionEngine(
             )
         }
 
-        // Check: army capacity
-        val profile = monarchProgressionEngine.getOrCreateProfile()
-        val activeShadows = shadowDao.getActiveShadowCount()
+        val profile = monarchProgressionEngine.getOrCreateProfile(owner)
+        val activeShadows = shadowDao.getActiveShadowCountForOwner(owner)
         if (activeShadows >= profile.armyCapacity) {
             return ShadowExtractionEvent(
                 extractionId = extractionId,
+                accountOwnerId = owner,
                 sourceType = sourceType,
                 sourceEventId = sourceEventId,
                 outcome = ShadowExtractionOutcome.ARMY_CAPACITY_REACHED,
@@ -360,17 +326,17 @@ class ShadowExtractionEngine(
             )
         }
 
-        // All checks passed: determine extraction result deterministically
         val shadowClass = selectClass(seed)
         val shadowRarity = selectRarity(seed, sourceType)
         val shadowName = selectName(shadowClass, seed)
 
         return ShadowExtractionEvent(
             extractionId = extractionId,
+            accountOwnerId = owner,
             sourceType = sourceType,
             sourceEventId = sourceEventId,
             outcome = ShadowExtractionOutcome.PENDING_CONFIRMATION,
-            extractedShadowId = null, // null until confirmed
+            extractedShadowId = null,
             shadowName = shadowName,
             shadowClass = shadowClass,
             shadowRarity = shadowRarity,
@@ -380,17 +346,19 @@ class ShadowExtractionEngine(
     }
 
     // -------------------------------------------------------------------------
-    // CONFIRM EXTRACTION (player confirmation required, atomic Room transaction)
+    // CONFIRM EXTRACTION (Player Confirmation, Atomic & Owner-Verified)
     // -------------------------------------------------------------------------
 
-    /**
-     * Confirms and persists a pending extraction within an atomic database transaction.
-     * This is the ONLY path that creates a new Shadow entity.
-     * If extraction insertion fails, the entire transaction is rolled back.
-     * Returns the confirmed extraction event with the shadow ID populated.
-     */
-    suspend fun confirmExtraction(pendingEvent: ShadowExtractionEvent): Result<ShadowExtractionEvent> {
+    suspend fun confirmExtraction(
+        pendingEvent: ShadowExtractionEvent,
+        accountOwnerId: String = pendingEvent.accountOwnerId
+    ): Result<ShadowExtractionEvent> {
         return runCatching {
+            val owner = accountOwnerId.trim()
+            require(owner.isNotBlank()) { "accountOwnerId must not be blank" }
+            require(pendingEvent.accountOwnerId == owner) {
+                "Cross-account extraction confirmation rejected for owner $owner"
+            }
             if (pendingEvent.outcome != ShadowExtractionOutcome.PENDING_CONFIRMATION) {
                 throw IllegalStateException("Cannot confirm extraction with outcome ${pendingEvent.outcome}")
             }
@@ -398,80 +366,83 @@ class ShadowExtractionEngine(
                 throw IllegalStateException("Missing shadow parameters in pending event")
             }
 
-            database.withTransaction {
-                // 1. Re-validate persisted source evidence inside transaction
-                if (!validateOriginatingSourceRecord(pendingEvent.sourceType, pendingEvent.sourceEventId)) {
-                    return@withTransaction pendingEvent.copy(outcome = ShadowExtractionOutcome.SOURCE_INVALID)
-                }
+            mutex.withLock {
+                database.withTransaction {
+                    if (!validateOriginatingSourceRecord(pendingEvent.sourceType, pendingEvent.sourceEventId, owner)) {
+                        return@withTransaction pendingEvent.copy(outcome = ShadowExtractionOutcome.SOURCE_INVALID)
+                    }
 
-                // 2. Double-check capacity inside transaction
-                val profile = monarchProgressionEngine.getOrCreateProfile()
-                val activeShadows = shadowDao.getActiveShadowCount()
-                if (activeShadows >= profile.armyCapacity) {
-                    return@withTransaction pendingEvent.copy(outcome = ShadowExtractionOutcome.ARMY_CAPACITY_REACHED)
-                }
+                    val profile = monarchProgressionEngine.getOrCreateProfileLocked(owner)
+                    val activeShadows = shadowDao.getActiveShadowCountForOwner(owner)
+                    if (activeShadows >= profile.armyCapacity) {
+                        return@withTransaction pendingEvent.copy(outcome = ShadowExtractionOutcome.ARMY_CAPACITY_REACHED)
+                    }
 
-                // 3. Double-check idempotency on composite key inside transaction
-                val alreadyExtracted = extractionDao.getExtractionBySource(pendingEvent.sourceType.name, pendingEvent.sourceEventId)
-                if (alreadyExtracted != null) {
-                    return@withTransaction pendingEvent.copy(
-                        outcome = ShadowExtractionOutcome.ALREADY_CLAIMED,
-                        extractedShadowId = alreadyExtracted.extractedShadowId
+                    val alreadyExtracted = extractionDao.getExtractionBySourceForOwner(
+                        owner,
+                        pendingEvent.sourceType.name,
+                        pendingEvent.sourceEventId
                     )
+                    if (alreadyExtracted != null) {
+                        return@withTransaction pendingEvent.copy(
+                            outcome = ShadowExtractionOutcome.ALREADY_CLAIMED,
+                            extractedShadowId = alreadyExtracted.extractedShadowId
+                        )
+                    }
+
+                    val shadowId = "shadow_${pendingEvent.extractionId.take(12)}_${UUID.randomUUID().toString().take(4)}"
+                    val seed = pendingEvent.determinismSeed
+                    val stats = calculateInitialStats(pendingEvent.shadowClass, pendingEvent.shadowRarity, seed)
+
+                    val newShadow = Shadow(
+                        shadowId = shadowId,
+                        accountOwnerId = owner,
+                        name = pendingEvent.shadowName,
+                        shadowClass = pendingEvent.shadowClass,
+                        rarity = pendingEvent.shadowRarity,
+                        currentRank = ShadowRank.E_RANK,
+                        level = 1,
+                        shadowXp = 0L,
+                        stats = stats,
+                        evolutionStage = ShadowEvolutionStage.NEWLY_EXTRACTED,
+                        passiveAbility = pendingEvent.shadowClass.passiveAbilityName,
+                        activeSkillIds = emptyList(),
+                        recruitmentSource = pendingEvent.evidenceSummary,
+                        extractionEventId = pendingEvent.extractionId,
+                        extractedAtEpochMs = System.currentTimeMillis(),
+                        evolutionHistoryJson = "[]",
+                        deploymentStatus = ShadowDeploymentStatus.IDLE,
+                        equippedFormationId = null,
+                        isRetired = false
+                    )
+
+                    val shadowInsertRow = shadowDao.insertShadow(newShadow.toEntity())
+                    if (shadowInsertRow <= 0L) {
+                        throw IllegalStateException("Failed to insert extracted shadow (duplicate shadowId conflict)")
+                    }
+
+                    val confirmedEvent = pendingEvent.copy(
+                        accountOwnerId = owner,
+                        extractedShadowId = shadowId,
+                        outcome = ShadowExtractionOutcome.SUCCESS,
+                        isConfirmed = true,
+                        monarchXpAwarded = MONARCH_XP_PER_EXTRACTION
+                    )
+                    val insertedRow = extractionDao.insertExtraction(confirmedEvent.toEntity())
+                    if (insertedRow <= 0L) {
+                        throw IllegalStateException("Failed to insert extraction record: unique index conflict. Rolling back transaction.")
+                    }
+
+                    monarchProgressionEngine.awardMonarchXpLocked(
+                        accountOwnerId = owner,
+                        sourceTag = "extraction_${pendingEvent.extractionId}",
+                        xpAmount = MONARCH_XP_PER_EXTRACTION,
+                        sourceDescription = "Shadow extracted: ${pendingEvent.shadowName}"
+                    )
+                    monarchProgressionEngine.refreshMonarchProfileLocked(owner)
+
+                    confirmedEvent
                 }
-
-                val shadowId = "shadow_${pendingEvent.extractionId.take(12)}"
-                val seed = pendingEvent.determinismSeed
-                val stats = calculateInitialStats(pendingEvent.shadowClass, pendingEvent.shadowRarity, seed)
-
-                val newShadow = Shadow(
-                    shadowId = shadowId,
-                    name = pendingEvent.shadowName,
-                    shadowClass = pendingEvent.shadowClass,
-                    rarity = pendingEvent.shadowRarity,
-                    currentRank = ShadowRank.E_RANK,
-                    level = 1,
-                    shadowXp = 0L,
-                    stats = stats,
-                    evolutionStage = ShadowEvolutionStage.NEWLY_EXTRACTED,
-                    passiveAbility = pendingEvent.shadowClass.passiveAbilityName,
-                    activeSkillIds = emptyList(),
-                    recruitmentSource = pendingEvent.evidenceSummary,
-                    extractionEventId = pendingEvent.extractionId,
-                    extractedAtEpochMs = System.currentTimeMillis(),
-                    evolutionHistoryJson = "[]",
-                    deploymentStatus = ShadowDeploymentStatus.IDLE,
-                    equippedFormationId = null,
-                    isRetired = false
-                )
-
-                // Persist shadow entity inside transaction
-                shadowDao.insertShadow(newShadow.toEntity())
-
-                // Record extraction event as confirmed inside transaction
-                val confirmedEvent = pendingEvent.copy(
-                    extractedShadowId = shadowId,
-                    outcome = ShadowExtractionOutcome.SUCCESS,
-                    isConfirmed = true,
-                    monarchXpAwarded = MONARCH_XP_PER_EXTRACTION
-                )
-                val insertedRow = extractionDao.insertExtraction(confirmedEvent.toEntity())
-                if (insertedRow <= 0) {
-                    // Trigger Room transaction rollback so staged shadow is discarded
-                    throw IllegalStateException("Failed to insert extraction record: unique index constraint conflict. Rolling back transaction.")
-                }
-
-                // Award Monarch XP (idempotent) inside transaction
-                monarchProgressionEngine.awardMonarchXp(
-                    sourceTag = "extraction_${pendingEvent.extractionId}",
-                    xpAmount = MONARCH_XP_PER_EXTRACTION,
-                    sourceDescription = "Shadow extracted: ${pendingEvent.shadowName}"
-                )
-
-                // Refresh monarch profile computed fields inside transaction
-                monarchProgressionEngine.refreshMonarchProfile()
-
-                confirmedEvent
             }
         }
     }
@@ -480,12 +451,15 @@ class ShadowExtractionEngine(
     // QUERY HELPERS
     // -------------------------------------------------------------------------
 
-    suspend fun getExtractionHistory(): List<ShadowExtractionEvent> {
-        return extractionDao.getAllExtractionsOnce().map { it.toDomain() }
+    suspend fun getExtractionHistory(
+        accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID
+    ): List<ShadowExtractionEvent> {
+        return extractionDao.getAllExtractionsForOwnerOnce(accountOwnerId).map { it.toDomain() }
     }
 
-    suspend fun getConfirmedExtractionCount(): Int {
-        return extractionDao.getConfirmedExtractionCount()
+    suspend fun getConfirmedExtractionCount(
+        accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID
+    ): Int {
+        return extractionDao.getConfirmedExtractionCountForOwner(accountOwnerId)
     }
 }
-

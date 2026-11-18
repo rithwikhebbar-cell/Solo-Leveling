@@ -31,6 +31,7 @@ import com.example.domain.model.PlayerProfile
 import com.example.domain.model.RealWorldSocialMission
 import com.example.domain.model.SkillAssessmentSubmission
 import com.example.domain.model.SocialAssessment
+import com.example.domain.model.SocialDifficultyTier
 import com.example.domain.model.SocialEvidenceSource
 import com.example.domain.model.SocialMasteryStage
 import com.example.domain.model.SocialMissionEvidenceType
@@ -510,7 +511,7 @@ class SocialRepositoryImpl(
                 difficultyRank = mission.difficulty,
                 lifecycleStatus = SocialMissionLifecycleStatus.IN_PROGRESS,
                 startedEpochMs = now,
-                evidenceType = SocialMissionEvidenceType.SELF_REFLECTION,
+                evidenceType = SocialMissionEvidenceType.SELF_REPORTED,
                 verificationStatus = VerificationStatus.SELF_REPORTED,
                 idempotencyKey = "msn_${accountOwnerId}_${missionId}_$now",
                 updatedAtEpochMs = now

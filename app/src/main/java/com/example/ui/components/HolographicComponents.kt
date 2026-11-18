@@ -262,16 +262,20 @@ fun ProvenanceChip(
     val isVerified = status.isVerified
     val color = when (status) {
         VerificationStatus.VERIFIED_HEALTH_CONNECT,
-        VerificationStatus.VERIFIED_ASSESSMENT -> SystemColors.VerifiedEmerald
+        VerificationStatus.VERIFIED_ASSESSMENT,
+        VerificationStatus.VERIFIED_AI_RUBRIC -> SystemColors.VerifiedEmerald
         VerificationStatus.VERIFIED_SYSTEM_TIMER -> SystemColors.ElectricCyan
-        VerificationStatus.SELF_REPORTED -> SystemColors.WarningAmber
+        VerificationStatus.SELF_REPORTED,
+        VerificationStatus.PENDING_REVIEW -> SystemColors.WarningAmber
     }
     val icon = if (isVerified) Icons.Rounded.VerifiedUser else Icons.Rounded.EditNote
     val label = when (status) {
         VerificationStatus.VERIFIED_HEALTH_CONNECT -> "VERIFIED"
         VerificationStatus.VERIFIED_ASSESSMENT -> "ASSESSMENT VERIFIED"
+        VerificationStatus.VERIFIED_AI_RUBRIC -> "RUBRIC VERIFIED"
         VerificationStatus.VERIFIED_SYSTEM_TIMER -> "TIMER VERIFIED"
         VerificationStatus.SELF_REPORTED -> "SELF-REPORTED"
+        VerificationStatus.PENDING_REVIEW -> "PENDING REVIEW"
     }
 
     Surface(

@@ -90,7 +90,7 @@ enum class SocialMissionEvidenceType(
     ),
     HUMAN_CONFIRMED(
         label = "Independently Human-Confirmed (Unsupported)",
-        verificationTier = VerificationStatus.SELF_REPORTED,
+        verificationTier = VerificationStatus.PENDING_REVIEW,
         isIndependentlyVerified = false,
         explanation = "Direct cryptographic or authorized third-party human confirmation is unsupported in current standalone local vault architecture."
     );

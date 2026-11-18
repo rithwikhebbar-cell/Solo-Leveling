@@ -181,9 +181,11 @@ object ProgressionEngine {
 
     fun multiplierFor(verificationStatus: VerificationStatus): Float = when (verificationStatus) {
         VerificationStatus.VERIFIED_HEALTH_CONNECT,
-        VerificationStatus.VERIFIED_ASSESSMENT -> VERIFIED_MULTIPLIER
+        VerificationStatus.VERIFIED_ASSESSMENT,
+        VerificationStatus.VERIFIED_AI_RUBRIC -> VERIFIED_MULTIPLIER
         VerificationStatus.VERIFIED_SYSTEM_TIMER -> SYSTEM_TIMER_MULTIPLIER
-        VerificationStatus.SELF_REPORTED -> SELF_REPORTED_MULTIPLIER
+        VerificationStatus.SELF_REPORTED,
+        VerificationStatus.PENDING_REVIEW -> SELF_REPORTED_MULTIPLIER
     }
 
     fun calculateAcademicReward(
@@ -246,10 +248,14 @@ object ProgressionEngine {
                 "System timer verified elapsed app duration (not verified learning)."
             VerificationStatus.VERIFIED_ASSESSMENT ->
                 "Assessment evidence verified."
+            VerificationStatus.VERIFIED_AI_RUBRIC ->
+                "AI rubric evidence verified."
             VerificationStatus.VERIFIED_HEALTH_CONNECT ->
                 "Health Connect verified."
             VerificationStatus.SELF_REPORTED ->
                 "Self-reported study record (0.65x weight)."
+            VerificationStatus.PENDING_REVIEW ->
+                "Pending review (0.65x provisional weight)."
         }
         val capNote = if (wasCapped) " Daily academic XP cap ($DAILY_ACADEMIC_XP_CAP XP) applied." else ""
 
@@ -647,8 +653,10 @@ object ProgressionEngine {
         val provenanceNote = when (verificationStatus) {
             VerificationStatus.VERIFIED_SYSTEM_TIMER -> "System timer verified in-app rehearsal."
             VerificationStatus.VERIFIED_ASSESSMENT -> "Assessment evidence evaluated."
+            VerificationStatus.VERIFIED_AI_RUBRIC -> "AI rubric evaluated in-app practice."
             VerificationStatus.VERIFIED_HEALTH_CONNECT -> "Health Connect verified."
             VerificationStatus.SELF_REPORTED -> "Self-reported social action (0.65x weight)."
+            VerificationStatus.PENDING_REVIEW -> "Pending independent review."
         }
         val capNote = if (wasCapped) " Daily social XP cap ($DAILY_SOCIAL_XP_CAP XP) reached." else ""
 

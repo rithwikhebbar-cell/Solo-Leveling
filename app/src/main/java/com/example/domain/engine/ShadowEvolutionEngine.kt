@@ -4,11 +4,14 @@ import com.example.data.local.dao.ShadowDao
 import com.example.data.local.dao.ShadowSkillUnlockDao
 import com.example.data.local.entity.ShadowSkillUnlockEntity
 import com.example.data.local.entity.toDomain
+import com.example.data.local.entity.toEntity
 import com.example.domain.model.Shadow
 import com.example.domain.model.ShadowEvolutionStage
 import com.example.domain.model.ShadowRank
 import com.example.domain.model.ShadowSkillCatalog
 import com.example.domain.model.ShadowSkillUnlock
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 
 // ============================================================================
 // SHADOW EVOLUTION ENGINE
@@ -67,6 +70,10 @@ class ShadowEvolutionEngine(
         fun xpToNextLevel(currentLevel: Int): Long {
             return (50L * currentLevel * currentLevel + 25L * currentLevel).coerceAtLeast(100L)
         }
+
+        fun calculateNextLevelXp(currentLevel: Int): Long {
+            return Shadow.shadowXpRequired(currentLevel + 1)
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -95,12 +102,10 @@ class ShadowEvolutionEngine(
         // Update evolution history if stage changed
         val evolutionHistory = if (newEvolutionStage != oldEvolutionStage) {
             val existing = try {
-                kotlinx.serialization.json.Json.decodeFromString<List<String>>(domain.evolutionHistoryJson)
+                Json.decodeFromString<List<String>>(domain.evolutionHistoryJson)
             } catch (e: Exception) { emptyList() }
             (existing + "${newEvolutionStage.name}:${System.currentTimeMillis()}").let {
-                kotlinx.serialization.json.Json.encodeToString(
-                    kotlinx.serialization.builtins.ListSerializer(kotlinx.serialization.builtins.serializer()), it
-                )
+                Json.encodeToString(it)
             }
         } else {
             domain.evolutionHistoryJson
@@ -191,10 +196,6 @@ class ShadowEvolutionEngine(
 
         // Update shadow's active skill list
         val updatedSkills = (shadow.activeSkillIds + skillId).distinct()
-        val skillJson = kotlinx.serialization.json.Json.encodeToString(
-            kotlinx.serialization.builtins.ListSerializer(kotlinx.serialization.builtins.serializer()),
-            updatedSkills
-        )
         shadowDao.updateShadow(shadow.copy(activeSkillIds = updatedSkills).toEntity())
 
         return true

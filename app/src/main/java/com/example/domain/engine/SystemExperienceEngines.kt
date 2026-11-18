@@ -233,7 +233,7 @@ object SystemAnnouncementEngine {
                 priority = TtsSpeechPriority.NORMAL,
                 createdAtEpochMs = event.timestampEpochMs
             )
-            SystemEventType.SHADOW_EXTRACTED -> SystemAnnouncementRecord(
+            SystemEventType.SHADOW_RECRUITED -> SystemAnnouncementRecord(
                 announcementKey = "EVENT|${event.eventId}",
                 eventId = event.eventId,
                 category = SystemAnnouncementCategory.DUNGEON,
@@ -246,7 +246,7 @@ object SystemAnnouncementEngine {
                 priority = TtsSpeechPriority.HIGH,
                 createdAtEpochMs = event.timestampEpochMs
             )
-            SystemEventType.SHADOW_EVOLVED -> SystemAnnouncementRecord(
+            SystemEventType.SHADOW_RANK_INCREASED -> SystemAnnouncementRecord(
                 announcementKey = "EVENT|${event.eventId}",
                 eventId = event.eventId,
                 category = SystemAnnouncementCategory.LEVEL_UP,

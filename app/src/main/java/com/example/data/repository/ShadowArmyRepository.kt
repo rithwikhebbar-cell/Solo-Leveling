@@ -191,7 +191,7 @@ class ShadowArmyRepository(
             // Idempotency check: already awarded for this source event
             val existingTx = resourceDao.getTransactionBySourceEvent(sourceEventId, resourceType.name)
             if (existingTx != null) {
-                return@runCatching existingTx.balanceAfter
+                return@runCatching getCurrentBalance(resourceType)
             }
 
             val currentBalance = getCurrentBalance(resourceType)
@@ -272,6 +272,27 @@ class ShadowArmyRepository(
 
     suspend fun getUnlockedMonarchSkillIds(): List<String> {
         return monarchSkillUnlockDao.getAllMonarchSkillUnlocksOnce().map { it.skillId }
+    }
+
+    suspend fun syncShadowQuestProgress(dungeonCompletions: Int = 0) {
+        val allShadows = shadowDao.getAllShadowsOnce().map { it.toDomain() }
+        val activeShadows = allShadows.filter { !it.isRetired }
+        val deployedCount = deploymentDao.getActiveDeploymentsOnce().size
+        val evolutionCount = allShadows.sumOf { shadow ->
+            try {
+                kotlinx.serialization.json.Json.decodeFromString<List<String>>(shadow.evolutionHistoryJson).size
+            } catch (_: Exception) { 0 }
+        }
+        val aRankShadows = activeShadows.count { it.currentRank.order >= ShadowRank.A_RANK.order }
+        val commanderShadows = activeShadows.count { it.evolutionStage.order >= ShadowEvolutionStage.COMMANDER.order }
+        monarchProgressionEngine.checkAndUpdateQuestProgress(
+            shadowCount = activeShadows.size,
+            deployedCount = deployedCount,
+            evolutionCount = evolutionCount,
+            aRankShadows = aRankShadows,
+            commanderShadows = commanderShadows,
+            dungeonCompletions = dungeonCompletions
+        )
     }
 }
 

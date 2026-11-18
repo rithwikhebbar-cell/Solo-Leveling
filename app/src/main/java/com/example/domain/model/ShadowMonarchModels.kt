@@ -303,6 +303,10 @@ data class Shadow(
     val xpForNextLevel: Long get() = shadowXpRequired(level + 1)
     val xpIntoLevel: Long get() = shadowXp - xpForCurrentLevel
 
+    fun calculatePowerRating(): Long = stats.total.toLong() * level
+
+    fun calculatePowerRating(): Long = stats.total.toLong() * level
+
     companion object {
         fun shadowXpRequired(level: Int): Long {
             if (level <= 1) return 0L

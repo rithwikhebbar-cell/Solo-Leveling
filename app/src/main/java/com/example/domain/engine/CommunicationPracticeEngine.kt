@@ -1,7 +1,7 @@
 package com.example.domain.engine
 
 import com.example.data.repository.SocialRepository
-import com.example.domain.model.ActivityRewardCalculation
+import com.example.domain.engine.ActivityRewardCalculation
 import com.example.domain.model.ConversationDialogueTurn
 import com.example.domain.model.ConversationScenario
 import com.example.domain.model.ListeningExercise

@@ -44,6 +44,10 @@ class MonarchProgressionEngine(
         const val ARMY_EXPANSION_PER_UNLOCK = 5
         const val BASE_AUTHORITY_PER_LEVEL = 3
 
+        fun calculateNextLevelXp(currentLevel: Int): Long {
+            return ShadowMonarchProfile.monarchXpRequired(currentLevel + 1)
+        }
+
         // Idempotency guard: Monarch XP events are keyed to prevent double-award
         private fun monarchXpKey(sourceTag: String): String = "monarch_xp_$sourceTag"
     }

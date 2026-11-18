@@ -8,6 +8,8 @@ import com.example.data.local.dao.ShadowMonarchProfileDao
 import com.example.data.local.entity.ShadowEntity
 import com.example.data.local.entity.ShadowExtractionEntity
 import com.example.data.local.entity.toDomain
+import com.example.data.local.entity.toEntity
+import com.example.data.local.entity.toEntity
 import com.example.domain.model.Shadow
 import com.example.domain.model.ShadowClass
 import com.example.domain.model.ShadowDeploymentStatus
@@ -240,7 +242,7 @@ class ShadowExtractionEngine(
                     }
                     if (completionMatch) return true
                     database.dungeonDao().getAllInstancesOnce().any {
-                        (it.id.toString() == sourceEventId || it.instanceId == sourceEventId) &&
+                        (it.id.toString() == sourceEventId || it.dungeonId.toString() == sourceEventId) &&
                                 it.statusName.equals("CLEARED", ignoreCase = true)
                     }
                 }

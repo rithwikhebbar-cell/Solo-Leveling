@@ -6,6 +6,8 @@ import com.example.data.local.dao.ShadowFormationDao
 import com.example.data.local.entity.ShadowDeploymentEntity
 import com.example.data.local.entity.ShadowFormationEntity
 import com.example.data.local.entity.toDomain
+import com.example.data.local.entity.toEntity
+import com.example.data.local.entity.toEntity
 import com.example.domain.model.Shadow
 import com.example.domain.model.ShadowClass
 import com.example.domain.model.ShadowDeploymentCategory

@@ -17,8 +17,10 @@ enum class QuestCategory(val label: String) {
 enum class VerificationStatus(val label: String, val isVerified: Boolean) {
     VERIFIED_HEALTH_CONNECT("Health Connect Verified", true),
     VERIFIED_ASSESSMENT("Assessment Verified", true),
+    VERIFIED_AI_RUBRIC("AI Rubric Verified", true),
     VERIFIED_SYSTEM_TIMER("System Timer Verified", true),
-    SELF_REPORTED("Self-Reported", false)
+    SELF_REPORTED("Self-Reported", false),
+    PENDING_REVIEW("Pending Review", false)
 }
 
 data class Quest(

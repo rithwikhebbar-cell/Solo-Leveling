@@ -178,7 +178,7 @@ object ShadowArchetypeCatalog {
         // ---------------------------------------------------------------------
         ShadowArchetype(
             archetypeId = "arch_kaisel_ranger",
-            name = "Kaisel the Sky Sovereign",
+            name = "Obsidian Wyvern Sovereign",
             shadowClass = ShadowClass.RANGER,
             combatRole = "Aerial Recon & Strike",
             rarity = ShadowRarity.EPIC,
@@ -190,7 +190,7 @@ object ShadowArchetypeCatalog {
             baseWisdom = 18,
             baseAdaptability = 24,
             visualDescription = "A majestic skeletal wyvern wreathed in blue flame with wings of absolute darkness.",
-            recruitmentRequirement = "Complete Dungeon: Demon Castle Floor 50",
+            recruitmentRequirement = "Complete Dungeon: Sky Citadel Pinnacle",
             loreDescription = "Soars above administrative bottlenecks to survey the broader strategic landscape.",
             passiveTrait = "Aerial Vantage: Highlights high-priority tasks and long-term milestones."
         ),
@@ -254,7 +254,7 @@ object ShadowArchetypeCatalog {
         // ---------------------------------------------------------------------
         ShadowArchetype(
             archetypeId = "arch_tusk_mage",
-            name = "Tusk the Arcanist",
+            name = "High Shaman Arcanist",
             shadowClass = ShadowClass.ARCANIST,
             combatRole = "Arcane Artillery Specialist",
             rarity = ShadowRarity.EPIC,
@@ -265,9 +265,9 @@ object ShadowArchetypeCatalog {
             baseDiscipline = 18,
             baseWisdom = 24,
             baseAdaptability = 20,
-            visualDescription = "A robed high-orc sorcerer crackling with violet lightning and floating runic tomes.",
+            visualDescription = "A robed elder sorcerer crackling with violet lightning and floating runic tomes.",
             recruitmentRequirement = "Complete Academic Quest: Advanced Calculus Mastery",
-            loreDescription = "Master of destructive arcane formulae and intellectual focus.",
+            loreDescription = "Master of destructive arcane formulae and deep intellectual focus.",
             passiveTrait = "Arcane Analysis: Provides deep analytical breakdowns of study and research output."
         ),
         ShadowArchetype(
@@ -330,7 +330,7 @@ object ShadowArchetypeCatalog {
         // ---------------------------------------------------------------------
         ShadowArchetype(
             archetypeId = "arch_fang_assassin",
-            name = "Fang the Silent Stalker",
+            name = "Silent Nightstalker",
             shadowClass = ShadowClass.TACTICIAN,
             combatRole = "Precision Eliminator",
             rarity = ShadowRarity.RARE,
@@ -348,7 +348,7 @@ object ShadowArchetypeCatalog {
         ),
         ShadowArchetype(
             archetypeId = "arch_beru_marshal",
-            name = "Beru the Ant Marshal",
+            name = "Chitinous Royal Marshal",
             shadowClass = ShadowClass.TACTICIAN,
             combatRole = "Elite Royal Guard",
             rarity = ShadowRarity.LEGENDARY,
@@ -359,9 +359,9 @@ object ShadowArchetypeCatalog {
             baseDiscipline = 26,
             baseWisdom = 20,
             baseAdaptability = 27,
-            visualDescription = "A humanoid chitinous ant monarch exhibiting aristocratic menace and razor-sharp claws.",
-            recruitmentRequirement = "Earn Achievement: Ant King Subjugation",
-            loreDescription = "Devoted entirely to the Monarch's absolute supremacy and elite efficiency.",
+            visualDescription = "A humanoid chitinous sovereign commander exhibiting aristocratic menace and razor-sharp blades.",
+            recruitmentRequirement = "Earn Achievement: Hive Tyrant Subjugation",
+            loreDescription = "Devoted entirely to the Monarch's absolute supremacy and ruthless task efficiency.",
             passiveTrait = "Royal Command: Boosts overall system productivity and quest completion rewards."
         ),
         ShadowArchetype(

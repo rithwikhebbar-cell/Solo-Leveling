@@ -31,50 +31,50 @@ val RealityOsTypography = Typography(
     displayLarge = TextStyle(
         fontFamily = RajdhaniFontFamily,
         fontWeight = FontWeight.Bold,
-        fontSize = 34.sp,
-        lineHeight = 38.sp,
+        fontSize = 32.sp,
+        lineHeight = 36.sp,
         letterSpacing = 1.0.sp
     ),
     headlineLarge = TextStyle(
         fontFamily = RajdhaniFontFamily,
         fontWeight = FontWeight.Bold,
-        fontSize = 25.sp,
-        lineHeight = 30.sp,
+        fontSize = 24.sp,
+        lineHeight = 28.sp,
         letterSpacing = 0.6.sp
     ),
     headlineMedium = TextStyle(
         fontFamily = RajdhaniFontFamily,
         fontWeight = FontWeight.SemiBold,
-        fontSize = 21.sp,
-        lineHeight = 26.sp,
+        fontSize = 20.sp,
+        lineHeight = 24.sp,
         letterSpacing = 0.5.sp
     ),
     titleLarge = TextStyle(
         fontFamily = RajdhaniFontFamily,
         fontWeight = FontWeight.SemiBold,
-        fontSize = 18.sp,
-        lineHeight = 23.sp,
+        fontSize = 17.sp,
+        lineHeight = 22.sp,
         letterSpacing = 0.5.sp
     ),
     titleMedium = TextStyle(
         fontFamily = RajdhaniFontFamily,
         fontWeight = FontWeight.Medium,
-        fontSize = 16.sp,
-        lineHeight = 21.sp,
+        fontSize = 15.sp,
+        lineHeight = 20.sp,
         letterSpacing = 0.3.sp
     ),
     titleSmall = TextStyle(
         fontFamily = RajdhaniFontFamily,
         fontWeight = FontWeight.SemiBold,
-        fontSize = 14.sp,
+        fontSize = 13.5.sp,
         lineHeight = 18.sp,
         letterSpacing = 0.3.sp
     ),
     bodyLarge = TextStyle(
         fontFamily = InterFontFamily,
         fontWeight = FontWeight.Normal,
-        fontSize = 16.sp,
-        lineHeight = 23.sp,
+        fontSize = 15.sp,
+        lineHeight = 22.sp,
         letterSpacing = 0.15.sp
     ),
     bodyMedium = TextStyle(
@@ -101,14 +101,14 @@ val RealityOsTypography = Typography(
     labelMedium = TextStyle(
         fontFamily = JetBrainsMonoFontFamily,
         fontWeight = FontWeight.Medium,
-        fontSize = 12.sp,
+        fontSize = 11.5.sp,
         lineHeight = 15.sp,
         letterSpacing = 0.4.sp
     ),
     labelSmall = TextStyle(
         fontFamily = JetBrainsMonoFontFamily,
         fontWeight = FontWeight.Normal,
-        fontSize = 11.sp,
+        fontSize = 10.5.sp,
         lineHeight = 14.sp,
         letterSpacing = 0.3.sp
     )

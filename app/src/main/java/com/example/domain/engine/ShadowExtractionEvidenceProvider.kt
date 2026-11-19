@@ -80,7 +80,7 @@ class ShadowExtractionEvidenceProvider(
                 ShadowEvidenceEligibility.INCOMPLETE -> "Boss battle not yet won"
                 else -> "Unavailable"
             }
-            val bossTitle = bossDefs[boss.bossId]?.name ?: "Boss #${boss.bossId}"
+            val bossTitle = bossDefs[boss.bossId]?.title ?: "Boss #${boss.bossId}"
             items.add(
                 ShadowExtractionEvidenceItem(
                     sourceRecordId = sourceId,
@@ -113,7 +113,7 @@ class ShadowExtractionEvidenceProvider(
                 ShadowEvidenceEligibility.ALREADY_EXTRACTED -> "Achievement source already claimed"
                 else -> "Unavailable"
             }
-            val achTitle = achDefs[ach.achievementId]?.name ?: "Achievement: ${ach.achievementId}"
+            val achTitle = achDefs[ach.achievementId]?.title ?: "Achievement: ${ach.achievementId}"
             items.add(
                 ShadowExtractionEvidenceItem(
                     sourceRecordId = sourceId,

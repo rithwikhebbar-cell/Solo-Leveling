@@ -26,6 +26,7 @@ import com.example.domain.model.ShadowClass
 import com.example.domain.model.ShadowDeploymentRecord
 import com.example.domain.model.ShadowEvolutionStage
 import com.example.domain.model.ShadowExtractionEvent
+import com.example.domain.model.ShadowExtractionOutcome
 import com.example.domain.model.ShadowFormation
 import com.example.domain.model.ShadowMonarchProfile
 import com.example.domain.model.ShadowQuestCatalog
@@ -487,5 +488,92 @@ class ShadowArmyRepository(
             com.example.domain.model.ShadowSortOption.RANK -> result.sortedByDescending { it.currentRank.order }
             com.example.domain.model.ShadowSortOption.NAME -> result.sortedBy { it.name }
         }
+    }
+
+    // -------------------------------------------------------------------------
+    // PHASE 6.3 — SHADOW GROWTH & EVOLUTION MANAGEMENT
+    // -------------------------------------------------------------------------
+
+    suspend fun evaluateEvolution(
+        shadowId: String,
+        accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID
+    ): com.example.domain.model.ShadowEvolutionEvaluation {
+        return evolutionEngine.evaluateEvolution(shadowId, accountOwnerId)
+    }
+
+    suspend fun confirmEvolution(
+        shadowId: String,
+        accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID
+    ): Result<Shadow> {
+        return evolutionEngine.confirmEvolution(shadowId, accountOwnerId)
+    }
+
+    suspend fun awardShadowXpFromEvent(
+        shadowId: String,
+        sourceType: com.example.domain.model.ShadowExtractionSourceType,
+        eventId: String,
+        accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID
+    ): Boolean {
+        return evolutionEngine.awardShadowXpFromEvent(shadowId, sourceType, eventId, accountOwnerId)
+    }
+
+    suspend fun awardShadowXpFromDungeon(
+        shadowId: String,
+        dungeonId: String,
+        accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID
+    ): Boolean {
+        return evolutionEngine.awardShadowXpFromDungeon(shadowId, dungeonId, accountOwnerId)
+    }
+
+    suspend fun awardShadowXpFromBoss(
+        shadowId: String,
+        bossId: String,
+        accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID
+    ): Boolean {
+        return evolutionEngine.awardShadowXpFromBoss(shadowId, bossId, accountOwnerId)
+    }
+
+    suspend fun awardShadowXpFromQuest(
+        shadowId: String,
+        questId: String,
+        accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID
+    ): Boolean {
+        return evolutionEngine.awardShadowXpFromQuest(shadowId, questId, accountOwnerId)
+    }
+
+    suspend fun getShadowGrowthOverview(
+        accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID
+    ): com.example.domain.model.ShadowGrowthOverview {
+        val owner = accountOwnerId.trim()
+        val allShadows = shadowDao.getAllShadowsForOwnerOnce(owner).map { it.toDomain() }
+        val activeShadows = allShadows.filter { !it.isRetired }
+
+        val stageDist = ShadowEvolutionStage.entries.associateWith { stage ->
+            activeShadows.count { it.evolutionStage == stage }
+        }
+
+        val avgLevel = if (activeShadows.isNotEmpty()) {
+            activeShadows.map { it.level }.average().toFloat()
+        } else 0f
+
+        val highestLevel = activeShadows.maxByOrNull { it.level }
+
+        var readyCount = 0
+        var eligibleLevelCount = 0
+        for (shadow in activeShadows) {
+            val eval = evolutionEngine.evaluateEvolution(shadow.shadowId, owner)
+            if (eval.isEligible) readyCount++
+            val stageCap = com.example.domain.model.ShadowGrowthConfig.getStageLevelCap(shadow.evolutionStage)
+            if (shadow.level < stageCap) eligibleLevelCount++
+        }
+
+        return com.example.domain.model.ShadowGrowthOverview(
+            totalShadows = activeShadows.size,
+            readyToEvolveCount = readyCount,
+            eligibleToLevelUpCount = eligibleLevelCount,
+            averageLevel = avgLevel,
+            highestLevelShadow = highestLevel,
+            stageDistribution = stageDist
+        )
     }
 }

@@ -117,7 +117,13 @@ enum class ShadowEvolutionStage(
     ELITE("Elite", 3, 15, ShadowRank.C_RANK, "A powerful shadow demonstrating remarkable capability."),
     COMMANDER("Commander", 4, 30, ShadowRank.B_RANK, "A shadow that commands respect and leads with authority."),
     GENERAL("General", 5, 50, ShadowRank.A_RANK, "One of the Monarch's most formidable generals."),
-    MONARCH_GUARD("Monarch Guard", 6, 75, ShadowRank.S_RANK, "An elite guardian who serves only the Shadow Monarch.")
+    MONARCH_GUARD("Monarch Guard", 6, 75, ShadowRank.S_RANK, "An elite guardian who serves only the Shadow Monarch.");
+
+    fun nextStage(): ShadowEvolutionStage? {
+        val all = entries
+        val idx = all.indexOf(this)
+        return if (idx in 0 until all.lastIndex) all[idx + 1] else null
+    }
 }
 
 // ----------------------------------------------------------------------------
@@ -307,6 +313,7 @@ data class Shadow(
     val xpForCurrentLevel: Long get() = shadowXpRequired(level)
     val xpForNextLevel: Long get() = shadowXpRequired(level + 1)
     val xpIntoLevel: Long get() = shadowXp - xpForCurrentLevel
+    val recruitedAtEpochMs: Long get() = extractedAtEpochMs
 
     fun calculatePowerRating(): Long = stats.total.toLong() * level
 
@@ -757,6 +764,18 @@ object ShadowQuestCatalog {
 // ----------------------------------------------------------------------------
 // PHASE 6.2 — SHADOW COLLECTION & RESONANCE MODELS
 // ----------------------------------------------------------------------------
+
+object ShadowResonanceConfig {
+    const val SHARDS_PER_DUPLICATE: Int = 25
+    const val SHARDS_PER_RESONANCE_LEVEL: Int = 100
+    const val INITIAL_RESONANCE_LEVEL: Int = 1
+
+    fun calculateLevel(totalShards: Int): Int =
+        INITIAL_RESONANCE_LEVEL + (totalShards / SHARDS_PER_RESONANCE_LEVEL)
+
+    fun progressTowardsNextLevel(totalShards: Int): Int =
+        totalShards % SHARDS_PER_RESONANCE_LEVEL
+}
 
 enum class ShadowSortOption(val label: String) {
     RECENTLY_RECRUITED("Recently Recruited"),

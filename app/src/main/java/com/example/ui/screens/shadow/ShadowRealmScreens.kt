@@ -101,8 +101,12 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-// ============================================================================
-// 1. SHADOW REALM DASHBOARD SCREEN
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
+import com.example.domain.model.ShadowEvidenceEligibility
+import com.example.domain.model.ShadowExtractionEvidenceItem
+import com.example.domain.model.ShadowResonanceConfig
 // ============================================================================
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -551,9 +555,17 @@ fun ShadowExtractionScreen(
     onNavigateBack: () -> Unit
 ) {
     val extractionState by viewModel.extractionUiState.collectAsState()
-    var selectedSourceType by remember { mutableStateOf(ShadowExtractionSourceType.DUNGEON_COMPLETION) }
-    var sourceEventIdInput by remember { mutableStateOf("dungeon_complete_001") }
-    var evidenceInput by remember { mutableStateOf("Cleared C-Rank Dungeon: Frost Cave") }
+    val evidenceList by viewModel.eligibleEvidence.collectAsState()
+    val selectedItem by viewModel.selectedEvidenceItem.collectAsState()
+    val uiState by viewModel.uiState.collectAsState()
+
+    var sourceFilter by remember { mutableStateOf<ShadowExtractionSourceType?>(null) }
+    var showOnlyEligible by remember { mutableStateOf(false) }
+    val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()) }
+
+    LaunchedEffect(Unit) {
+        viewModel.loadEligibleEvidence()
+    }
 
     val infiniteTransition = rememberInfiniteTransition(label = "pulse")
     val alphaAnim by infiniteTransition.animateFloat(
@@ -563,10 +575,17 @@ fun ShadowExtractionScreen(
         label = "alpha"
     )
 
+    val filteredEvidence = remember(evidenceList, sourceFilter, showOnlyEligible) {
+        evidenceList.filter { item ->
+            (sourceFilter == null || item.sourceType == sourceFilter) &&
+            (!showOnlyEligible || item.eligibility == ShadowEvidenceEligibility.ELIGIBLE)
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("SHADOW EXTRACTION", style = MaterialTheme.typography.titleMedium, color = ShadowColors.PureIce) },
+                title = { Text("SHADOW RECRUITMENT & EXTRACTION", style = MaterialTheme.typography.titleMedium, color = ShadowColors.PureIce) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back", tint = ShadowColors.PureIce)
@@ -585,86 +604,128 @@ fun ShadowExtractionScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Source selection
-            Text(text = "EXTRACTION SOURCE", style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace), color = ShadowColors.Muted)
-
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                SourceTypeChip(
-                    label = "Dungeon",
-                    selected = selectedSourceType == ShadowExtractionSourceType.DUNGEON_COMPLETION,
-                    onClick = {
-                        selectedSourceType = ShadowExtractionSourceType.DUNGEON_COMPLETION
-                        sourceEventIdInput = "dungeon_complete_${System.currentTimeMillis() / 60000}"
-                        evidenceInput = "Completed Dungeon challenge verified"
-                    },
-                    modifier = Modifier.weight(1f)
-                )
-                SourceTypeChip(
-                    label = "Boss",
-                    selected = selectedSourceType == ShadowExtractionSourceType.BOSS_BATTLE_COMPLETION,
-                    onClick = {
-                        selectedSourceType = ShadowExtractionSourceType.BOSS_BATTLE_COMPLETION
-                        sourceEventIdInput = "boss_defeat_${System.currentTimeMillis() / 60000}"
-                        evidenceInput = "Defeated Monarch Raid Boss"
-                    },
-                    modifier = Modifier.weight(1f)
-                )
-                SourceTypeChip(
-                    label = "Discipline",
-                    selected = selectedSourceType == ShadowExtractionSourceType.DISCIPLINE_MILESTONE,
-                    onClick = {
-                        selectedSourceType = ShadowExtractionSourceType.DISCIPLINE_MILESTONE
-                        sourceEventIdInput = "discipline_streak_${System.currentTimeMillis() / 86400000}"
-                        evidenceInput = "Maintained 7-day verified discipline streak"
-                    },
-                    modifier = Modifier.weight(1f)
-                )
-            }
-
-            OutlinedTextField(
-                value = sourceEventIdInput,
-                onValueChange = { sourceEventIdInput = it },
-                label = { Text("Source Event ID") },
-                modifier = Modifier.fillMaxWidth(),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = ShadowColors.PureIce,
-                    unfocusedTextColor = ShadowColors.PureIce,
-                    focusedBorderColor = ShadowColors.Cyan,
-                    unfocusedBorderColor = ShadowColors.PanelSurfaceElevated
-                )
-            )
-
-            OutlinedTextField(
-                value = evidenceInput,
-                onValueChange = { evidenceInput = it },
-                label = { Text("Evidence Description") },
-                modifier = Modifier.fillMaxWidth(),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = ShadowColors.PureIce,
-                    unfocusedTextColor = ShadowColors.PureIce,
-                    focusedBorderColor = ShadowColors.Cyan,
-                    unfocusedBorderColor = ShadowColors.PanelSurfaceElevated
-                )
-            )
-
-            Button(
-                onClick = {
-                    viewModel.evaluateExtraction(selectedSourceType, sourceEventIdInput, evidenceInput)
-                },
-                enabled = !extractionState.isEvaluating && sourceEventIdInput.isNotBlank(),
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = ShadowColors.Violet)
+            // A. Recruitment Hub Overview Card
+            HolographicPanel(
+                accentColor = ShadowColors.Cyan,
+                secondaryColor = ShadowColors.Violet,
+                modifier = Modifier.fillMaxWidth()
             ) {
-                if (extractionState.isEvaluating) {
-                    CircularProgressIndicator(modifier = Modifier.size(18.dp), color = ShadowColors.PureIce)
-                    Spacer(modifier = Modifier.width(8.dp))
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "RECRUITMENT HUB",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontFamily = FontFamily.Monospace,
+                                letterSpacing = 2.sp,
+                                fontWeight = FontWeight.Bold
+                            ),
+                            color = ShadowColors.Cyan
+                        )
+                        val eligibleCount = evidenceList.count { it.eligibility == ShadowEvidenceEligibility.ELIGIBLE }
+                        Text(
+                            text = "$eligibleCount Available Remnant${if (eligibleCount == 1) "" else "s"}",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                            color = if (eligibleCount > 0) ShadowColors.Emerald else ShadowColors.Muted
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = "Army Capacity: ${uiState.activeShadows.size} / ${uiState.monarchProfile?.armyCapacity ?: 10} Shadows",
+                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                        color = ShadowColors.PureIce
+                    )
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    Text(
+                        text = "Only authoritative completed activities (Dungeons, Monarch Raids, Achievements, Social Missions) grant verified extraction remnants. Arbitrary manual entry is strictly prohibited by System Law.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = ShadowColors.Muted
+                    )
                 }
-                Text("ANALYZE SHADOW REMNANT", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold))
             }
 
-            // Cinematic extraction display
+            // Extraction Result Panel (if active)
+            val lastResult = extractionState.lastResult
+            if (lastResult != null) {
+                val isSuccess = lastResult.outcome == ShadowExtractionOutcome.SUCCESS
+                val isDuplicate = lastResult.outcome == ShadowExtractionOutcome.DUPLICATE_RESOLVED
+                val resultColor = when {
+                    isSuccess -> ShadowColors.Emerald
+                    isDuplicate -> ShadowColors.Cyan
+                    else -> ShadowColors.Crimson
+                }
+
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = resultColor.copy(alpha = 0.15f)),
+                    shape = RoundedCornerShape(10.dp),
+                    border = BorderStroke(1.dp, resultColor),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = if (isSuccess || isDuplicate) Icons.Rounded.CheckCircle else Icons.Rounded.Lock,
+                                contentDescription = null,
+                                tint = resultColor,
+                                modifier = Modifier.size(22.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = when {
+                                    isSuccess -> "SHADOW RECRUITED"
+                                    isDuplicate -> "DUPLICATE RESONANCE RESOLVED"
+                                    else -> "EXTRACTION ${lastResult.outcome.name}"
+                                },
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                color = ShadowColors.PureIce
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        if (isSuccess) {
+                            Text(
+                                text = "${lastResult.shadowName} has answered your call and arisen to join your Shadow Army! Awarded ${lastResult.monarchXpAwarded} Monarch XP and 25 Shadow Essence.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = ShadowColors.PureIce
+                            )
+                        } else if (isDuplicate) {
+                            Text(
+                                text = "${lastResult.shadowName} is already bound to your army. Duplicate remnant successfully converted into +${ShadowResonanceConfig.SHARDS_PER_DUPLICATE} Resonance Shards for this archetype's Resonance Core. Army capacity preserved.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = ShadowColors.PureIce
+                            )
+                        } else {
+                            Text(
+                                text = "Extraction rejected: ${lastResult.outcome.name}. No army capacity or resources were consumed.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = ShadowColors.Muted
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Button(
+                            onClick = { viewModel.clearSelectedEvidence() },
+                            colors = ButtonDefaults.buttonColors(containerColor = resultColor),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("CONTINUE", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold))
+                        }
+                    }
+                }
+            }
+
+            // Confirmation / Preparation Panel (if item is selected & pending extraction)
             val pending = extractionState.pendingExtraction
-            if (pending != null && pending.outcome == ShadowExtractionOutcome.PENDING_CONFIRMATION) {
+            if (selectedItem != null && pending != null && pending.outcome == ShadowExtractionOutcome.PENDING_CONFIRMATION && lastResult == null) {
                 HolographicPanel(
                     accentColor = ShadowColors.Cyan,
                     secondaryColor = ShadowColors.Violet,
@@ -675,31 +736,30 @@ fun ShadowExtractionScreen(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
-                            text = "TARGET IDENTIFIED.",
+                            text = "EXTRACTION RITUAL PREPARATION",
                             style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace, letterSpacing = 2.sp),
                             color = ShadowColors.Cyan
                         )
                         Text(
-                            text = "SHADOW EXTRACTION AVAILABLE",
+                            text = "SHADOW REMNANT LOCATED",
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                             color = ShadowColors.PureIce
                         )
 
-                        Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(12.dp))
 
-                        // Holographic Shadow preview
                         Box(
                             contentAlignment = Alignment.Center,
                             modifier = Modifier
-                                .size(90.dp)
-                                .clip(RoundedCornerShape(45.dp))
+                                .size(80.dp)
+                                .clip(RoundedCornerShape(40.dp))
                                 .background(ShadowColors.VioletDeep.copy(alpha = 0.5f))
-                                .border(2.dp, ShadowColors.Cyan.copy(alpha = alphaAnim), RoundedCornerShape(45.dp))
+                                .border(2.dp, ShadowColors.Cyan.copy(alpha = alphaAnim), RoundedCornerShape(40.dp))
                         ) {
-                            Icon(Icons.Rounded.Bolt, contentDescription = null, tint = ShadowColors.Cyan, modifier = Modifier.size(48.dp))
+                            Icon(Icons.Rounded.Bolt, contentDescription = null, tint = ShadowColors.Cyan, modifier = Modifier.size(44.dp))
                         }
 
-                        Spacer(modifier = Modifier.height(12.dp))
+                        Spacer(modifier = Modifier.height(10.dp))
 
                         Text(
                             text = pending.shadowName ?: "Shadow Soldier",
@@ -714,11 +774,20 @@ fun ShadowExtractionScreen(
                             pending.shadowRarity?.let { ShadowRarityBadge(it) }
                         }
 
-                        Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(10.dp))
 
                         Text(
-                            text = "THE SHADOW HAS ACCEPTED YOUR AUTHORITY.",
+                            text = "Harvested from: ${selectedItem?.title}",
                             style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                            color = ShadowColors.Muted,
+                            textAlign = TextAlign.Center
+                        )
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        Text(
+                            text = "If already recruited, resonance will automatically grant +${ShadowResonanceConfig.SHARDS_PER_DUPLICATE} Resonance Shards without consuming army capacity.",
+                            style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace, fontSize = 11.sp),
                             color = ShadowColors.Gold,
                             textAlign = TextAlign.Center
                         )
@@ -751,82 +820,228 @@ fun ShadowExtractionScreen(
                         Spacer(modifier = Modifier.height(8.dp))
 
                         OutlinedButton(
-                            onClick = { viewModel.cancelExtraction() },
+                            onClick = { viewModel.clearSelectedEvidence() },
                             modifier = Modifier.fillMaxWidth(),
                             colors = ButtonDefaults.outlinedButtonColors(contentColor = ShadowColors.Muted)
                         ) {
-                            Text("DISMISS")
+                            Text("CANCEL SELECTION")
                         }
                     }
                 }
             }
 
-            // Result display
-            val lastResult = extractionState.lastResult
-            if (lastResult != null) {
+            // B. Evidence Filter Chips
+            Text(
+                text = "VERIFIED EXTRACTION EVIDENCE",
+                style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
+                color = ShadowColors.Muted
+            )
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                FilterChip(
+                    selected = sourceFilter == null,
+                    onClick = { sourceFilter = null },
+                    label = { Text("All (${evidenceList.size})") },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = ShadowColors.Cyan.copy(alpha = 0.2f),
+                        selectedLabelColor = ShadowColors.Cyan
+                    )
+                )
+                FilterChip(
+                    selected = sourceFilter == ShadowExtractionSourceType.DUNGEON_COMPLETION,
+                    onClick = { sourceFilter = if (sourceFilter == ShadowExtractionSourceType.DUNGEON_COMPLETION) null else ShadowExtractionSourceType.DUNGEON_COMPLETION },
+                    label = { Text("Dungeon") },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = ShadowColors.Cyan.copy(alpha = 0.2f),
+                        selectedLabelColor = ShadowColors.Cyan
+                    )
+                )
+                FilterChip(
+                    selected = sourceFilter == ShadowExtractionSourceType.BOSS_BATTLE_COMPLETION,
+                    onClick = { sourceFilter = if (sourceFilter == ShadowExtractionSourceType.BOSS_BATTLE_COMPLETION) null else ShadowExtractionSourceType.BOSS_BATTLE_COMPLETION },
+                    label = { Text("Boss Raid") },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = ShadowColors.Cyan.copy(alpha = 0.2f),
+                        selectedLabelColor = ShadowColors.Cyan
+                    )
+                )
+                FilterChip(
+                    selected = sourceFilter == ShadowExtractionSourceType.ACHIEVEMENT_UNLOCK,
+                    onClick = { sourceFilter = if (sourceFilter == ShadowExtractionSourceType.ACHIEVEMENT_UNLOCK) null else ShadowExtractionSourceType.ACHIEVEMENT_UNLOCK },
+                    label = { Text("Achievement") },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = ShadowColors.Cyan.copy(alpha = 0.2f),
+                        selectedLabelColor = ShadowColors.Cyan
+                    )
+                )
+                FilterChip(
+                    selected = sourceFilter == ShadowExtractionSourceType.CONSISTENCY_MILESTONE,
+                    onClick = { sourceFilter = if (sourceFilter == ShadowExtractionSourceType.CONSISTENCY_MILESTONE) null else ShadowExtractionSourceType.CONSISTENCY_MILESTONE },
+                    label = { Text("Consistency") },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = ShadowColors.Cyan.copy(alpha = 0.2f),
+                        selectedLabelColor = ShadowColors.Cyan
+                    )
+                )
+                FilterChip(
+                    selected = showOnlyEligible,
+                    onClick = { showOnlyEligible = !showOnlyEligible },
+                    label = { Text("Eligible Only") },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = ShadowColors.Emerald.copy(alpha = 0.2f),
+                        selectedLabelColor = ShadowColors.Emerald
+                    )
+                )
+            }
+
+            // C. Evidence Items List
+            if (filteredEvidence.isEmpty()) {
                 Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = if (lastResult.outcome == ShadowExtractionOutcome.SUCCESS) ShadowColors.Emerald.copy(alpha = 0.15f)
-                        else ShadowColors.Crimson.copy(alpha = 0.15f)
-                    ),
+                    colors = CardDefaults.cardColors(containerColor = ShadowColors.PanelSurface),
                     shape = RoundedCornerShape(10.dp),
-                    border = BorderStroke(
-                        1.dp,
-                        if (lastResult.outcome == ShadowExtractionOutcome.SUCCESS) ShadowColors.Emerald else ShadowColors.Crimson
-                    ),
+                    border = BorderStroke(1.dp, ShadowColors.PanelSurfaceElevated),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = if (lastResult.outcome == ShadowExtractionOutcome.SUCCESS) Icons.Rounded.CheckCircle else Icons.Rounded.Lock,
-                                contentDescription = null,
-                                tint = if (lastResult.outcome == ShadowExtractionOutcome.SUCCESS) ShadowColors.Emerald else ShadowColors.Crimson,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "EXTRACTION OUTCOME: ${lastResult.outcome.name}",
-                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                                color = ShadowColors.PureIce
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        if (lastResult.outcome == ShadowExtractionOutcome.SUCCESS) {
-                            Text(
-                                text = "${lastResult.shadowName} has joined your Shadow Army! Awarded ${lastResult.monarchXpAwarded} Monarch XP and 25 Shadow Essence.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = ShadowColors.PureIce
-                            )
-                        } else {
-                            Text(
-                                text = "Extraction could not proceed: ${lastResult.outcome.name}. Deterministic check completed.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = ShadowColors.Muted
-                            )
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Lock,
+                            contentDescription = null,
+                            tint = ShadowColors.Muted,
+                            modifier = Modifier.size(36.dp)
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = "NO EXTRACTION EVIDENCE AVAILABLE",
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                            color = ShadowColors.PureIce
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "Complete Dungeons, defeat Monarch Raid Bosses, earn Achievements, or verify Social Missions to harvest eligible remnants.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = ShadowColors.Muted,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+            } else {
+                filteredEvidence.forEach { item ->
+                    val isEligible = item.eligibility == ShadowEvidenceEligibility.ELIGIBLE
+                    val isSelected = selectedItem?.sourceRecordId == item.sourceRecordId
+
+                    val cardBorder = when {
+                        isSelected -> BorderStroke(2.dp, ShadowColors.Cyan)
+                        isEligible -> BorderStroke(1.dp, ShadowColors.Emerald.copy(alpha = 0.5f))
+                        else -> BorderStroke(1.dp, ShadowColors.PanelSurfaceElevated)
+                    }
+
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (isSelected) ShadowColors.Cyan.copy(alpha = 0.1f) else ShadowColors.PanelSurface
+                        ),
+                        shape = RoundedCornerShape(10.dp),
+                        border = cardBorder,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(enabled = isEligible) {
+                                viewModel.selectEvidenceItem(item)
+                            }
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = item.title,
+                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                    color = if (isEligible) ShadowColors.PureIce else ShadowColors.Muted,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                // Eligibility Badge
+                                val (badgeText, badgeColor) = when (item.eligibility) {
+                                    ShadowEvidenceEligibility.ELIGIBLE -> "ELIGIBLE" to ShadowColors.Emerald
+                                    ShadowEvidenceEligibility.ALREADY_EXTRACTED -> "CLAIMED" to ShadowColors.Muted
+                                    ShadowEvidenceEligibility.NOT_VERIFIED -> "NOT VERIFIED" to ShadowColors.Crimson
+                                    ShadowEvidenceEligibility.INCOMPLETE -> "INCOMPLETE" to ShadowColors.Gold
+                                    ShadowEvidenceEligibility.WRONG_ACCOUNT -> "WRONG ACCOUNT" to ShadowColors.Crimson
+                                    ShadowEvidenceEligibility.SOURCE_UNAVAILABLE -> "UNAVAILABLE" to ShadowColors.Muted
+                                }
+                                Surface(
+                                    color = badgeColor.copy(alpha = 0.15f),
+                                    shape = RoundedCornerShape(4.dp),
+                                    border = BorderStroke(1.dp, badgeColor.copy(alpha = 0.5f))
+                                ) {
+                                    Text(
+                                        text = badgeText,
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            fontFamily = FontFamily.Monospace,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 10.sp
+                                        ),
+                                        color = badgeColor,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(6.dp))
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = "Source: ${item.sourceType.name}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = ShadowColors.Muted
+                                )
+                                Text(
+                                    text = dateFormat.format(Date(item.timestampEpochMs)),
+                                    style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace, fontSize = 10.sp),
+                                    color = ShadowColors.Muted
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(4.dp))
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Verification: ${item.verificationStatus}",
+                                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                                    color = if (item.verificationStatus.contains("VERIFIED")) ShadowColors.Cyan else ShadowColors.Muted
+                                )
+                                if (isEligible) {
+                                    Text(
+                                        text = if (isSelected) "SELECTED" else "TAP TO EXTRACT",
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (isSelected) ShadowColors.Cyan else ShadowColors.Emerald
+                                        )
+                                    )
+                                }
+                            }
                         }
                     }
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun SourceTypeChip(label: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Surface(
-        color = if (selected) ShadowColors.Cyan.copy(alpha = 0.2f) else ShadowColors.PanelSurface,
-        shape = RoundedCornerShape(8.dp),
-        border = BorderStroke(1.dp, if (selected) ShadowColors.Cyan else ShadowColors.PanelSurfaceElevated),
-        modifier = modifier.clickable(onClick = onClick)
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall.copy(fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal),
-            color = if (selected) ShadowColors.Cyan else ShadowColors.Muted,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(vertical = 10.dp, horizontal = 4.dp)
-        )
     }
 }
 
@@ -1023,8 +1238,8 @@ fun ShadowArchiveScreen(
                                 text = when (record.outcome) {
                                     ShadowExtractionOutcome.SUCCESS -> "RECRUITED"
                                     ShadowExtractionOutcome.DUPLICATE_RESOLVED -> "RESONANCE RESOLVED"
-                                    ShadowExtractionOutcome.REJECTED_CAPACITY -> "CAPACITY REACHED"
-                                    ShadowExtractionOutcome.REJECTED_ALREADY_EXTRACTED -> "ALREADY EXTRACTED"
+                                    ShadowExtractionOutcome.ARMY_CAPACITY_REACHED -> "CAPACITY REACHED"
+                                    ShadowExtractionOutcome.ALREADY_CLAIMED -> "ALREADY EXTRACTED"
                                     else -> record.outcome.name
                                 },
                                 style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
@@ -1038,7 +1253,7 @@ fun ShadowArchiveScreen(
                         Spacer(modifier = Modifier.height(4.dp))
                         if (record.outcome == ShadowExtractionOutcome.DUPLICATE_RESOLVED) {
                             Text(
-                                text = "Duplicate Remnant Converted: +25 Resonance Shards bound to core.",
+                                text = "Duplicate Remnant Converted: +${com.example.domain.model.ShadowResonanceConfig.SHARDS_PER_DUPLICATE} Resonance Shards bound to core.",
                                 style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
                                 color = ShadowColors.Cyan
                             )

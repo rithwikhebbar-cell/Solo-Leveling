@@ -106,6 +106,15 @@ class ShadowRealmViewModel(
     private val _selectedEvidenceItem = MutableStateFlow<com.example.domain.model.ShadowExtractionEvidenceItem?>(null)
     val selectedEvidenceItem: StateFlow<com.example.domain.model.ShadowExtractionEvidenceItem?> = _selectedEvidenceItem.asStateFlow()
 
+    private val _evolutionEvaluation = MutableStateFlow<com.example.domain.model.ShadowEvolutionEvaluation?>(null)
+    val evolutionEvaluation: StateFlow<com.example.domain.model.ShadowEvolutionEvaluation?> = _evolutionEvaluation.asStateFlow()
+
+    private val _isEvolving = MutableStateFlow(false)
+    val isEvolving: StateFlow<Boolean> = _isEvolving.asStateFlow()
+
+    private val _growthOverview = MutableStateFlow<com.example.domain.model.ShadowGrowthOverview?>(null)
+    val growthOverview: StateFlow<com.example.domain.model.ShadowGrowthOverview?> = _growthOverview.asStateFlow()
+
     private var ownerScopeJob: Job? = null
 
     init {

@@ -757,7 +757,10 @@ private fun RealityOsNavHost(
                 unlockedTitles = unlockedTitles,
                 unlockedAchievements = unlockedAchievements,
                 onOpenTitles = { navController.navigate(TitleCollectionRoute) },
-                onOpenAchievements = { navController.navigate(AchievementsRoute) }
+                onOpenAchievements = { navController.navigate(AchievementsRoute) },
+                onNavigateToPhysical = { navigateTopLevel(navController, PhysicalRoute) },
+                onNavigateToAcademic = { navController.navigate(AcademicDashboardRoute) },
+                onNavigateToLife = { navController.navigate(LifeDashboardRoute) }
             )
         }
         composable<PhysicalRoute> {

@@ -18,10 +18,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ErrorOutline
@@ -184,8 +187,11 @@ fun GlowingProgressBar(
     height: Dp = 8.dp,
     startColor: Color = SystemColors.ElectricCyan,
     endColor: Color = SystemColors.ArcaneViolet,
-    trackColor: Color = Color(0xFF1A2642)
+    trackColor: Color = Color(0xFF1A2642),
+    fillColor: Color? = null
 ) {
+    val effectiveStart = fillColor ?: startColor
+    val effectiveEnd = fillColor ?: endColor
     val animatedProgress by animateFloatAsState(
         targetValue = progress.coerceIn(0f, 1f),
         animationSpec = tween(durationMillis = 500, easing = FastOutSlowInEasing),
@@ -209,13 +215,13 @@ fun GlowingProgressBar(
                     .clip(RoundedCornerShape(50))
                     .background(
                         brush = Brush.horizontalGradient(
-                            colors = listOf(startColor, endColor)
+                            colors = listOf(effectiveStart, effectiveEnd)
                         )
                     )
                     .drawBehind {
                         if (glowEnabled) {
                             drawRect(
-                                color = startColor.copy(alpha = 0.25f)
+                                color = effectiveStart.copy(alpha = 0.25f)
                             )
                         }
                     }
@@ -786,6 +792,112 @@ fun SystemPageHeader(
         if (trailing != null) {
             Spacer(modifier = Modifier.width(12.dp))
             trailing()
+        }
+    }
+}
+
+@Composable
+fun SectionHeader(
+    title: String,
+    subtitle: String? = null,
+    modifier: Modifier = Modifier,
+    trailing: (@Composable () -> Unit)? = null
+) {
+    SystemSectionTitle(
+        title = title,
+        subtitle = subtitle,
+        modifier = modifier,
+        trailing = trailing
+    )
+}
+
+@Composable
+fun ProgressIndicator(
+    progress: Float,
+    modifier: Modifier = Modifier,
+    height: Dp = 8.dp,
+    startColor: Color = SystemColors.ElectricCyan,
+    endColor: Color = SystemColors.ArcaneViolet,
+    trackColor: Color = Color(0xFF1A2642)
+) {
+    GlowingProgressBar(
+        progress = progress,
+        modifier = modifier,
+        height = height,
+        startColor = startColor,
+        endColor = endColor,
+        trackColor = trackColor
+    )
+}
+
+@Composable
+fun StatusBadge(
+    rank: HunterRank,
+    modifier: Modifier = Modifier,
+    compact: Boolean = false
+) {
+    RankBadge(
+        rank = rank,
+        modifier = modifier,
+        compact = compact
+    )
+}
+
+@Composable
+fun <T> TacticalSelector(
+    options: List<T>,
+    selectedOption: T,
+    onOptionSelected: (T) -> Unit,
+    labelProvider: (T) -> String,
+    modifier: Modifier = Modifier,
+    activeColor: Color = SystemColors.ElectricCyan,
+    inactiveColor: Color = SystemColors.MutedSilver
+) {
+    val scrollState = rememberScrollState()
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .horizontalScroll(scrollState),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        options.forEach { option ->
+            val isSelected = option == selectedOption
+            val label = labelProvider(option)
+            Surface(
+                modifier = Modifier
+                    .heightIn(min = 44.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable { onOptionSelected(option) },
+                color = if (isSelected) activeColor.copy(alpha = 0.16f) else SystemColors.SecondarySurface,
+                shape = RoundedCornerShape(8.dp),
+                border = BorderStroke(
+                    width = if (isSelected) 1.dp else 0.75.dp,
+                    color = if (isSelected) activeColor.copy(alpha = 0.8f) else SystemColors.SubtleBorder
+                )
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    if (isSelected) {
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .clip(CircleShape)
+                                .background(activeColor)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                    }
+                    Text(
+                        text = label.uppercase(),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (isSelected) SystemColors.PureIce else inactiveColor
+                    )
+                }
+            }
         }
     }
 }

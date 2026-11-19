@@ -11,10 +11,10 @@ object SystemColors {
     val PanelSurface = Color(0xFF121C32)
     val PanelSurfaceElevated = Color(0xFF172440)
 
-    val ElectricCyan = Color(0xFF00D9FF)
+    val ElectricCyan = Color(0xFF00E5FF)
     val ElectricCyanDim = Color(0xFF0891B2)
-    val ArcaneViolet = Color(0xFF8957FF)
-    val MysticPurple = Color(0xFF8957FF)
+    val ArcaneViolet = Color(0xFF8B5CF6)
+    val MysticPurple = Color(0xFF8B5CF6)
     val SystemBlue = Color(0xFF287BFF)
     val NeonBlue = Color(0xFF287BFF)
     val MetallicSilver = Color(0xFFCBD5E1)
@@ -28,11 +28,11 @@ object SystemColors {
     val DangerCrimson = Color(0xFFEF4444)
     val MonarchGold = Color(0xFFFBBF24)
 
-    val PanelBorderCyan = Color(0x4D00D9FF)
-    val PanelBorderViolet = Color(0x4D8957FF)
+    val PanelBorderCyan = Color(0x4D00E5FF)
+    val PanelBorderViolet = Color(0x4D8B5CF6)
     val SubtleGridLine = Color(0x1F38BDF8)
     val SubtleBorder = Color(0x2E38BDF8)
-    val CardGlowLow = Color(0x1A00D9FF)
+    val CardGlowLow = Color(0x1A00E5FF)
 
     fun rankAccent(rank: HunterRank): Color = when (rank) {
         HunterRank.E_RANK -> MetallicSilver

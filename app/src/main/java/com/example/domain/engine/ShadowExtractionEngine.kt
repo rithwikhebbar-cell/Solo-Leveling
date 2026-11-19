@@ -22,6 +22,7 @@ import com.example.domain.model.ShadowExtractionOutcome
 import com.example.domain.model.ShadowExtractionSourceType
 import com.example.domain.model.ShadowRank
 import com.example.domain.model.ShadowRarity
+import com.example.domain.model.ShadowResonanceConfig
 import com.example.domain.model.ShadowStats
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -44,7 +45,7 @@ class ShadowExtractionEngine(
 
     companion object {
         const val MONARCH_XP_PER_EXTRACTION = 100
-        const val DUPLICATE_RESONANCE_SHARDS = 25
+        val DUPLICATE_RESONANCE_SHARDS: Int get() = com.example.domain.model.ShadowResonanceConfig.SHARDS_PER_DUPLICATE
 
         fun buildDeterminismSeed(sourceType: ShadowExtractionSourceType, sourceEventId: String): Long {
             val raw = "${sourceType.name}::$sourceEventId"
@@ -440,8 +441,8 @@ class ShadowExtractionEngine(
                         val archetypeId = archetype.archetypeId
 
                         val existingResonance = shadowResonanceDao.getResonanceForArchetype(owner, archetypeId)
-                        val newShards = (existingResonance?.resonanceShards ?: 0) + DUPLICATE_RESONANCE_SHARDS
-                        val newLevel = (existingResonance?.resonanceLevel ?: 1) + (newShards / 100)
+                        val newShards = (existingResonance?.resonanceShards ?: 0) + ShadowResonanceConfig.SHARDS_PER_DUPLICATE
+                        val newLevel = ShadowResonanceConfig.calculateLevel(newShards)
 
                         val resonanceRecord = ShadowResonanceEntity(
                             resonanceId = existingResonance?.resonanceId ?: "res_${UUID.randomUUID()}",

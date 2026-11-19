@@ -88,6 +88,13 @@ import com.example.domain.model.ShadowSkillCatalog
 import com.example.ui.components.HolographicPanel
 import com.example.ui.viewmodel.ShadowRealmViewModel
 
+import com.example.domain.model.ShadowSortOption
+import com.example.domain.model.ShadowCollectionOverview
+import com.example.domain.model.ShadowResonanceConfig
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
 // ============================================================================
 // 1. SHADOW COLLECTION SCREEN
 // ============================================================================
@@ -100,20 +107,59 @@ fun ShadowCollectionScreen(
     onSelectShadow: (String) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val collectionOverview by viewModel.collectionOverview.collectAsState()
+
     var searchQuery by remember { mutableStateOf("") }
     var selectedClassFilter by remember { mutableStateOf<ShadowClass?>(null) }
+    var selectedRarityFilter by remember { mutableStateOf<ShadowRarity?>(null) }
     var selectedRankFilter by remember { mutableStateOf<ShadowRank?>(null) }
+    var selectedStageFilter by remember { mutableStateOf<ShadowEvolutionStage?>(null) }
+    var selectedDeploymentFilter by remember { mutableStateOf<ShadowDeploymentStatus?>(null) }
+    var selectedSortOption by remember { mutableStateOf(ShadowSortOption.RECENTLY_RECRUITED) }
+    var showDistributions by remember { mutableStateOf(false) }
 
-    val filteredShadows = uiState.allShadows.filter { shadow ->
-        (searchQuery.isBlank() || shadow.name.contains(searchQuery, ignoreCase = true)) &&
-        (selectedClassFilter == null || shadow.shadowClass == selectedClassFilter) &&
-        (selectedRankFilter == null || shadow.currentRank == selectedRankFilter)
+    LaunchedEffect(Unit) {
+        viewModel.loadCollectionOverview()
     }
+
+    val filteredShadows = remember(
+        uiState.allShadows,
+        searchQuery,
+        selectedClassFilter,
+        selectedRarityFilter,
+        selectedRankFilter,
+        selectedStageFilter,
+        selectedDeploymentFilter,
+        selectedSortOption
+    ) {
+        val filtered = uiState.allShadows.filter { shadow ->
+            (searchQuery.isBlank() || shadow.name.contains(searchQuery, ignoreCase = true)) &&
+            (selectedClassFilter == null || shadow.shadowClass == selectedClassFilter) &&
+            (selectedRarityFilter == null || shadow.rarity == selectedRarityFilter) &&
+            (selectedRankFilter == null || shadow.currentRank == selectedRankFilter) &&
+            (selectedStageFilter == null || shadow.evolutionStage == selectedStageFilter) &&
+            (selectedDeploymentFilter == null || shadow.deploymentStatus == selectedDeploymentFilter)
+        }
+
+        when (selectedSortOption) {
+            ShadowSortOption.RECENTLY_RECRUITED -> filtered.sortedByDescending { it.extractedAtEpochMs }
+            ShadowSortOption.RARITY -> filtered.sortedByDescending { it.rarity.ordinal }
+            ShadowSortOption.LEVEL -> filtered.sortedByDescending { it.level }
+            ShadowSortOption.RANK -> filtered.sortedByDescending { it.currentRank.order }
+            ShadowSortOption.NAME -> filtered.sortedBy { it.name.lowercase() }
+        }
+    }
+
+    val totalOwned = collectionOverview?.totalOwned ?: uiState.allShadows.size
+    val uniqueArchetypes = collectionOverview?.uniqueArchetypesCollected ?: uiState.allShadows.map { it.name }.distinct().size
+    val totalCatalog = collectionOverview?.totalArchetypesInCatalog ?: 24
+    val completionPct = if (totalCatalog > 0) ((uniqueArchetypes * 100f) / totalCatalog) else 0f
+    val resonanceShards = collectionOverview?.duplicateResonanceCount ?: 0
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("SHADOW ROSTER (${uiState.allShadows.size})", style = MaterialTheme.typography.titleMedium, color = ShadowColors.PureIce) },
+                title = { Text("SHADOW COLLECTION ($totalOwned)", style = MaterialTheme.typography.titleMedium, color = ShadowColors.PureIce) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back", tint = ShadowColors.PureIce)
@@ -130,7 +176,186 @@ fun ShadowCollectionScreen(
                 .padding(padding)
                 .padding(horizontal = 16.dp)
         ) {
-            // Search field
+            // Error banner if any
+            if (uiState.error != null) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = ShadowColors.Crimson.copy(alpha = 0.15f)),
+                    shape = RoundedCornerShape(8.dp),
+                    border = BorderStroke(1.dp, ShadowColors.Crimson),
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Error: ${uiState.error}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = ShadowColors.PureIce,
+                            modifier = Modifier.weight(1f)
+                        )
+                        IconButton(onClick = { viewModel.clearError() }) {
+                            Icon(Icons.Rounded.Close, contentDescription = "Clear", tint = ShadowColors.PureIce, modifier = Modifier.size(16.dp))
+                        }
+                    }
+                }
+            }
+
+            // Collection Dashboard Overview Card
+            HolographicPanel(
+                accentColor = ShadowColors.Cyan,
+                secondaryColor = ShadowColors.Violet,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 6.dp)
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "CATALOG PROGRESS",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontFamily = FontFamily.Monospace,
+                                letterSpacing = 2.sp,
+                                fontWeight = FontWeight.Bold
+                            ),
+                            color = ShadowColors.Cyan
+                        )
+                        Text(
+                            text = "${"%.1f".format(completionPct)}% COMPLETE",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = FontWeight.Bold
+                            ),
+                            color = ShadowColors.Gold
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    LinearProgressIndicator(
+                        progress = { (completionPct / 100f).coerceIn(0f, 1f) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(8.dp)
+                            .clip(RoundedCornerShape(4.dp)),
+                        color = ShadowColors.Cyan,
+                        trackColor = ShadowColors.PanelSurfaceElevated
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column {
+                            Text(text = "Unique Archetypes", style = MaterialTheme.typography.labelSmall, color = ShadowColors.Muted)
+                            Text(
+                                text = "$uniqueArchetypes / $totalCatalog",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                color = ShadowColors.PureIce
+                            )
+                        }
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(text = "Army Roster", style = MaterialTheme.typography.labelSmall, color = ShadowColors.Muted)
+                            Text(
+                                text = "$totalOwned Shadows",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                color = ShadowColors.PureIce
+                            )
+                        }
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text(text = "Resonance Shards", style = MaterialTheme.typography.labelSmall, color = ShadowColors.Muted)
+                            Text(
+                                text = "$resonanceShards Shards",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                color = ShadowColors.Cyan
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    // Toggle distributions
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { showDistributions = !showDistributions },
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = if (showDistributions) "▲ HIDE DISTRIBUTIONS" else "▼ VIEW CLASS & RARITY METRICS",
+                            style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace, fontSize = 10.sp),
+                            color = ShadowColors.Muted
+                        )
+                    }
+
+                    AnimatedVisibility(visible = showDistributions) {
+                        Column(modifier = Modifier.padding(top = 8.dp)) {
+                            HorizontalDivider(color = ShadowColors.PanelSurfaceElevated, thickness = 1.dp)
+                            Spacer(modifier = Modifier.height(6.dp))
+
+                            Text(text = "CLASS BREAKDOWN", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = ShadowColors.Muted)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .horizontalScroll(rememberScrollState())
+                                    .padding(vertical = 4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                ShadowClass.entries.forEach { cls ->
+                                    val count = collectionOverview?.classDistribution?.get(cls) ?: uiState.allShadows.count { it.shadowClass == cls }
+                                    Surface(
+                                        color = ShadowColors.classColor(cls).copy(alpha = 0.12f),
+                                        shape = RoundedCornerShape(4.dp),
+                                        border = BorderStroke(1.dp, ShadowColors.classColor(cls).copy(alpha = 0.4f))
+                                    ) {
+                                        Text(
+                                            text = "${cls.label}: $count",
+                                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.SemiBold),
+                                            color = ShadowColors.classColor(cls),
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(text = "RARITY BREAKDOWN", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = ShadowColors.Muted)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .horizontalScroll(rememberScrollState())
+                                    .padding(vertical = 4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                ShadowRarity.entries.forEach { r ->
+                                    val count = collectionOverview?.rarityDistribution?.get(r) ?: uiState.allShadows.count { it.rarity == r }
+                                    Surface(
+                                        color = ShadowColors.rarityColor(r).copy(alpha = 0.12f),
+                                        shape = RoundedCornerShape(4.dp),
+                                        border = BorderStroke(1.dp, ShadowColors.rarityColor(r).copy(alpha = 0.4f))
+                                    ) {
+                                        Text(
+                                            text = "${r.label}: $count",
+                                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.SemiBold),
+                                            color = ShadowColors.rarityColor(r),
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Search input
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
@@ -139,7 +364,7 @@ fun ShadowCollectionScreen(
                 singleLine = true,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 8.dp),
+                    .padding(vertical = 4.dp),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedTextColor = ShadowColors.PureIce,
                     unfocusedTextColor = ShadowColors.PureIce,
@@ -148,23 +373,67 @@ fun ShadowCollectionScreen(
                 )
             )
 
-            // Class filters
+            // Sorting Controls
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState())
-                    .padding(vertical = 4.dp),
+                    .padding(vertical = 2.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(text = "Sort:", style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace), color = ShadowColors.Muted)
+                ShadowSortOption.entries.forEach { opt ->
+                    FilterChip(
+                        selected = selectedSortOption == opt,
+                        onClick = { selectedSortOption = opt },
+                        label = { Text(opt.label, fontSize = 11.sp) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = ShadowColors.Cyan.copy(alpha = 0.25f),
+                            selectedLabelColor = ShadowColors.Cyan
+                        )
+                    )
+                }
+            }
+
+            // Filter Rows (Class, Rarity, Rank, Deployment)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(vertical = 2.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 FilterChip(
-                    selected = selectedClassFilter == null,
-                    onClick = { selectedClassFilter = null },
-                    label = { Text("All Classes", fontSize = 11.sp) },
+                    selected = selectedClassFilter == null && selectedRarityFilter == null && selectedRankFilter == null && selectedDeploymentFilter == null,
+                    onClick = {
+                        selectedClassFilter = null
+                        selectedRarityFilter = null
+                        selectedRankFilter = null
+                        selectedDeploymentFilter = null
+                        selectedStageFilter = null
+                    },
+                    label = { Text("All Filters", fontSize = 11.sp) },
                     colors = FilterChipDefaults.filterChipColors(
                         selectedContainerColor = ShadowColors.Cyan.copy(alpha = 0.2f),
                         selectedLabelColor = ShadowColors.Cyan
                     )
                 )
+
+                // Deployment Filter
+                FilterChip(
+                    selected = selectedDeploymentFilter == ShadowDeploymentStatus.DEPLOYED,
+                    onClick = {
+                        selectedDeploymentFilter = if (selectedDeploymentFilter == ShadowDeploymentStatus.DEPLOYED) null else ShadowDeploymentStatus.DEPLOYED
+                    },
+                    label = { Text("Deployed Only", fontSize = 11.sp) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = ShadowColors.Emerald.copy(alpha = 0.2f),
+                        selectedLabelColor = ShadowColors.Emerald
+                    )
+                )
+
+                // Class filter chips
                 ShadowClass.entries.forEach { cls ->
                     FilterChip(
                         selected = selectedClassFilter == cls,
@@ -176,16 +445,21 @@ fun ShadowCollectionScreen(
                         )
                     )
                 }
-            }
 
-            // Rank filters
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
-                    .padding(vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
+                // Rarity filter chips
+                ShadowRarity.entries.forEach { r ->
+                    FilterChip(
+                        selected = selectedRarityFilter == r,
+                        onClick = { selectedRarityFilter = if (selectedRarityFilter == r) null else r },
+                        label = { Text(r.label, fontSize = 11.sp) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = ShadowColors.rarityColor(r).copy(alpha = 0.2f),
+                            selectedLabelColor = ShadowColors.rarityColor(r)
+                        )
+                    )
+                }
+
+                // Rank filter chips
                 ShadowRank.entries.forEach { rank ->
                     FilterChip(
                         selected = selectedRankFilter == rank,
@@ -199,10 +473,19 @@ fun ShadowCollectionScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(4.dp))
 
-            // Roster list
-            if (filteredShadows.isEmpty()) {
+            // Roster list / Loading / Empty
+            if (uiState.isLoading && uiState.allShadows.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(color = ShadowColors.Cyan)
+                }
+            } else if (filteredShadows.isEmpty()) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -211,7 +494,7 @@ fun ShadowCollectionScreen(
                 ) {
                     Text(
                         text = if (uiState.allShadows.isEmpty()) "No Shadows recruited yet.\nUse Shadow Extraction to summon your army."
-                        else "No shadows match the selected filter.",
+                        else "No shadows match the selected search or filter criteria.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = ShadowColors.Muted,
                         textAlign = TextAlign.Center
@@ -222,7 +505,7 @@ fun ShadowCollectionScreen(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(filteredShadows) { shadow ->
+                    items(filteredShadows, key = { it.shadowId }) { shadow ->
                         ShadowCard(
                             shadow = shadow,
                             onClick = { onSelectShadow(shadow.shadowId) }
@@ -356,6 +639,50 @@ fun ShadowDetailScreen(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     ShadowStatsDisplay(shadow.stats, modifier = Modifier.padding(16.dp))
+                }
+
+                // Recruitment Provenance Card
+                Text(text = "RECRUITMENT PROVENANCE", style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace), color = ShadowColors.Muted)
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = ShadowColors.PanelSurface),
+                    shape = RoundedCornerShape(10.dp),
+                    border = BorderStroke(1.dp, ShadowColors.Cyan.copy(alpha = 0.3f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()) }
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(text = "Recruitment Timestamp", style = MaterialTheme.typography.bodySmall, color = ShadowColors.Muted)
+                            Text(
+                                text = dateFormat.format(Date(shadow.extractedAtEpochMs)),
+                                style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                                color = ShadowColors.PureIce
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(text = "Extraction Event ID", style = MaterialTheme.typography.bodySmall, color = ShadowColors.Muted)
+                            Text(
+                                text = shadow.extractionEventId,
+                                style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace, fontSize = 11.sp),
+                                color = ShadowColors.Cyan
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(text = "Initial Rarity", style = MaterialTheme.typography.bodySmall, color = ShadowColors.Muted)
+                            ShadowRarityBadge(shadow.rarity)
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(text = "Active Deployment", style = MaterialTheme.typography.bodySmall, color = ShadowColors.Muted)
+                            Text(
+                                text = shadow.deploymentStatus.name,
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                color = if (shadow.deploymentStatus == ShadowDeploymentStatus.DEPLOYED) ShadowColors.Emerald else ShadowColors.Muted
+                            )
+                        }
+                    }
                 }
 
                 // Action buttons

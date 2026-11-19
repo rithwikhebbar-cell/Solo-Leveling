@@ -363,7 +363,7 @@ class SyncQueueManager(private val database: SoloLevelingDatabase) {
             )
         }
 
-        database.shadowResonanceDao().getAllResonanceRecordsForOwnerOnce(userId).forEach { resonance ->
+        for (resonance in database.shadowResonanceDao().getResonanceRecordsForOwnerOnce(userId)) {
             val key = scopedShadowLocalKey(userId, resonance.resonanceId)
             val cloudUuid = resolveOrAssignUuid(userId, SyncEntityType.SHADOW_RESONANCE_RECORD, key)
             val payload = CloudDataMapper.shadowResonanceToPayload(resonance, cloudUuid)

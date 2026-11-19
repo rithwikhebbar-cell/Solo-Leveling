@@ -353,18 +353,27 @@ class ShadowRealmViewModel(
     }
 
     // -------------------------------------------------------------------------
-    // SHADOW EVOLUTION & PROGRESSION
+    // SHADOW EVOLUTION & PROGRESSION (Authoritative Ingestion Only)
     // -------------------------------------------------------------------------
 
-    fun awardShadowXp(shadowId: String, xpAmount: Int, sourceTag: String) {
+    fun awardAuthoritativeXp(
+        shadowId: String,
+        sourceType: com.example.domain.model.ShadowExtractionSourceType,
+        eventId: String
+    ) {
         val owner = _activeAccountOwnerId.value
         viewModelScope.launch {
-            evolutionEngine.awardShadowXp(
+            val awarded = repository.awardShadowXpFromEvent(
                 shadowId = shadowId,
-                xpAmount = xpAmount,
-                sourceTag = sourceTag,
+                sourceType = sourceType,
+                eventId = eventId,
                 accountOwnerId = owner
             )
+            if (awarded) {
+                loadGrowthOverview(owner)
+                loadEvolutionEvaluation(shadowId)
+                _selectedShadow.value = repository.getShadowById(shadowId, owner)
+            }
         }
     }
 

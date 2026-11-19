@@ -46,28 +46,48 @@ class DailySystemResetWorker(
             val plan = DailyCycleManager.evaluateCyclePlan(nowMs, latest?.epochDay, tz)
             if (plan.shouldExecute) {
                 val dailyCount = db.questDao().getAllQuestsOnce().count { it.typeName == "DAILY" }
-                db.questDao().resetDailyQuests()
-                val physical = db.physicalStateDao().getPhysicalStateOnce()?.toDomain()
-                if (physical != null) {
-                    db.physicalStateDao().upsertPhysicalState(
-                        physical.copy(
-                            completedJoggingMinutesToday = 0,
-                            workoutStatus = WorkoutStatus.PENDING
+                val commitmentRepo = QuestCommitmentRepository(
+                    database = db,
+                    systemEventRepository = SystemEventRepository(db)
+                )
+                db.withTransaction {
+                    val startDay = latest?.epochDay ?: (plan.targetEpochDay - 1)
+                    for (day in startDay until plan.targetEpochDay) {
+                        commitmentRepo.evaluateAndRecordFailuresForCycle(
+                            logicalCycleId = "cycle_$day",
+                            triggerSource = "PERIODIC_WORKMANAGER_FALLBACK",
+                            nowEpochMs = nowMs
+                        )
+                    }
+                    commitmentRepo.evaluateAndRecordFailuresForCycle(
+                        logicalCycleId = "cycle_${plan.targetEpochDay - 1}",
+                        triggerSource = "PERIODIC_WORKMANAGER_FALLBACK",
+                        nowEpochMs = nowMs
+                    )
+
+                    db.questDao().resetDailyQuests()
+                    val physical = db.physicalStateDao().getPhysicalStateOnce()?.toDomain()
+                    if (physical != null) {
+                        db.physicalStateDao().upsertPhysicalState(
+                            physical.copy(
+                                completedJoggingMinutesToday = 0,
+                                workoutStatus = WorkoutStatus.PENDING
+                            ).toEntity()
+                        )
+                    }
+                    db.dailyCycleDao().insertCycleIfAbsent(
+                        DailyCycleExecution(
+                            epochDay = plan.targetEpochDay,
+                            timezoneId = DailyCycleManager.resolveZone(tz).id,
+                            executedAtEpochMs = nowMs,
+                            triggerSource = "PERIODIC_WORKMANAGER_FALLBACK",
+                            dailyQuestsResetCount = dailyCount,
+                            missedDaysCaughtUp = plan.missedDaysCount,
+                            status = "COMPLETED",
+                            notes = plan.reason
                         ).toEntity()
                     )
                 }
-                db.dailyCycleDao().insertCycleIfAbsent(
-                    DailyCycleExecution(
-                        epochDay = plan.targetEpochDay,
-                        timezoneId = DailyCycleManager.resolveZone(tz).id,
-                        executedAtEpochMs = nowMs,
-                        triggerSource = "PERIODIC_WORKMANAGER_FALLBACK",
-                        dailyQuestsResetCount = dailyCount,
-                        missedDaysCaughtUp = plan.missedDaysCount,
-                        status = "COMPLETED",
-                        notes = plan.reason
-                    ).toEntity()
-                )
             }
             Result.success()
         }.getOrElse {

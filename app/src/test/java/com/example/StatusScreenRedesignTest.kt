@@ -28,8 +28,114 @@ import org.junit.Test
 class StatusScreenRedesignTest {
 
     // ========================================================================
-    // 1. SEVEN CORE CANONICAL ATTRIBUTES INTEGRITY
+    // 1. SEVEN CORE CANONICAL ATTRIBUTES INTEGRITY & ORDERING
     // ========================================================================
+    @Test
+    fun sevenCanonicalAttributes_exactOrderingAndIdentifiers() {
+        val expectedCodes = listOf("STR", "VIT", "AGI", "INT", "DIS", "WIS", "CHA")
+        val expectedNames = listOf(
+            "Strength",
+            "Vitality",
+            "Agility",
+            "Intelligence",
+            "Discipline",
+            "Wisdom",
+            "Charisma"
+        )
+
+        val enumEntries = AttributeType.entries
+        assertEquals("Must contain exactly seven canonical attributes", 7, enumEntries.size)
+
+        for (i in expectedCodes.indices) {
+            assertEquals("Index $i code mismatch", expectedCodes[i], enumEntries[i].code)
+            assertEquals("Index $i displayName mismatch", expectedNames[i], enumEntries[i].displayName)
+        }
+
+        val emptyPlayerAttrs = PlayerAttributes()
+        val list = emptyPlayerAttrs.asList()
+        assertEquals(7, list.size)
+        for (i in expectedCodes.indices) {
+            assertEquals("PlayerAttributes.asList() index $i mismatch", expectedCodes[i], list[i].type.code)
+            assertEquals("PlayerAttributes.asList() index $i name mismatch", expectedNames[i], list[i].type.displayName)
+        }
+    }
+
+    @Test
+    fun noLegacyPresentationLabels_senOrWilAbsent() {
+        val allCodes = AttributeType.entries.map { it.code }
+        val allNames = AttributeType.entries.map { it.displayName }
+        val allEnums = AttributeType.entries.map { it.name }
+
+        assertFalse("Must not contain SEN", allCodes.contains("SEN"))
+        assertFalse("Must not contain WIL", allCodes.contains("WIL"))
+        assertFalse("Must not contain SEN enum", allEnums.contains("SEN"))
+        assertFalse("Must not contain WIL enum", allEnums.contains("WIL"))
+
+        assertFalse("Must not contain Sense in display names", allNames.any { it.contains("Sense", ignoreCase = true) })
+        assertFalse("Must not contain Perception in display names", allNames.any { it.contains("Perception", ignoreCase = true) })
+        assertFalse("Must not contain Willpower in display names", allNames.any { it.contains("Willpower", ignoreCase = true) })
+    }
+
+    @Test
+    fun attributeAllocationAndProgression_updatesCorrectCanonicalAttribute() {
+        val initial = PlayerAttributes()
+
+        // 1. Target WIS with 150 verified XP -> gains 1 verified point, 50 XP remainder
+        val afterWis = ProgressionEngine.applyAttributeXp(
+            attributes = initial,
+            deltas = mapOf(AttributeType.WIS to 150),
+            isVerified = true
+        )
+        assertEquals(1, afterWis.wis.verifiedPoints)
+        assertEquals(0, afterWis.wis.selfReportedPoints)
+        assertEquals(50, afterWis.wis.progressXp)
+        assertEquals(11, afterWis.wis.totalValue) // base 10 + 1
+
+        // Confirm other 6 attributes remain completely untouched
+        assertEquals(0, afterWis.str.verifiedPoints)
+        assertEquals(0, afterWis.vit.verifiedPoints)
+        assertEquals(0, afterWis.agi.verifiedPoints)
+        assertEquals(0, afterWis.intel.verifiedPoints)
+        assertEquals(0, afterWis.dis.verifiedPoints)
+        assertEquals(0, afterWis.cha.verifiedPoints)
+
+        // 2. Target CHA with 220 self-reported XP -> gains 2 self-reported points, 20 XP remainder
+        val afterCha = ProgressionEngine.applyAttributeXp(
+            attributes = initial,
+            deltas = mapOf(AttributeType.CHA to 220),
+            isVerified = false
+        )
+        assertEquals(0, afterCha.cha.verifiedPoints)
+        assertEquals(2, afterCha.cha.selfReportedPoints)
+        assertEquals(20, afterCha.cha.progressXp)
+        assertEquals(12, afterCha.cha.totalValue) // base 10 + 2
+
+        // Confirm WIS and STR are untouched in afterCha
+        assertEquals(0, afterCha.wis.verifiedPoints)
+        assertEquals(0, afterCha.str.verifiedPoints)
+    }
+
+    @Test
+    fun playerAttributes_byTypeAccessor_mapsExactAttributes() {
+        val attrs = PlayerAttributes(
+            str = AttributeBreakdown(AttributeType.STR, baseValue = 11),
+            vit = AttributeBreakdown(AttributeType.VIT, baseValue = 12),
+            agi = AttributeBreakdown(AttributeType.AGI, baseValue = 13),
+            intel = AttributeBreakdown(AttributeType.INT, baseValue = 14),
+            dis = AttributeBreakdown(AttributeType.DIS, baseValue = 15),
+            wis = AttributeBreakdown(AttributeType.WIS, baseValue = 16),
+            cha = AttributeBreakdown(AttributeType.CHA, baseValue = 17)
+        )
+
+        assertEquals(11, attrs.byType(AttributeType.STR).baseValue)
+        assertEquals(12, attrs.byType(AttributeType.VIT).baseValue)
+        assertEquals(13, attrs.byType(AttributeType.AGI).baseValue)
+        assertEquals(14, attrs.byType(AttributeType.INT).baseValue)
+        assertEquals(15, attrs.byType(AttributeType.DIS).baseValue)
+        assertEquals(16, attrs.byType(AttributeType.WIS).baseValue)
+        assertEquals(17, attrs.byType(AttributeType.CHA).baseValue)
+    }
+
     @Test
     fun sevenCanonicalAttributes_preserveAllValuesAndProvenance() {
         val attributes = PlayerAttributes(

@@ -208,6 +208,22 @@ fun AttributeDetailBottomSheet(
                         Text(text = "Self-Reported Bonus", style = MaterialTheme.typography.bodyMedium, color = SystemColors.WarningAmber)
                         Text(text = "+${attribute.selfReportedPoints} PTS", style = MaterialTheme.typography.labelMedium, color = SystemColors.WarningAmber)
                     }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(text = "Equipment & Artifact Bonus", style = MaterialTheme.typography.bodyMedium, color = SystemColors.MutedSilver)
+                        Text(text = "+0 PTS", style = MaterialTheme.typography.labelMedium, color = SystemColors.MutedSilver)
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(text = "Point Allocation Mode", style = MaterialTheme.typography.bodyMedium, color = SystemColors.MutedSilver)
+                        Text(text = "Deterministic Activity Earned", style = MaterialTheme.typography.labelMedium, color = accent)
+                    }
                 }
             }
 

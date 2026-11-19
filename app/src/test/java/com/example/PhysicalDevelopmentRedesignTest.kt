@@ -3,14 +3,14 @@ package com.example
 import com.example.domain.engine.ProgressionEngine
 import com.example.domain.engine.RecoveryEngine
 import com.example.domain.model.ActiveJoggingSessionState
+import com.example.domain.model.AttributeBreakdown
 import com.example.domain.model.AttributeType
-import com.example.domain.model.Attributes
-import com.example.domain.model.AttributeValue
 import com.example.domain.model.HealthConnectSyncState
+import com.example.domain.model.HunterRank
 import com.example.domain.model.PhysicalActivityKind
 import com.example.domain.model.PhysicalDevelopmentState
+import com.example.domain.model.PlayerAttributes
 import com.example.domain.model.PlayerProfile
-import com.example.domain.model.Rank
 import com.example.domain.model.RecoveryAssessment
 import com.example.domain.model.RecoveryState
 import com.example.domain.model.RecoveryStatus
@@ -113,26 +113,18 @@ class PhysicalDevelopmentRedesignTest {
 
     @Test
     fun physicalPowerScore_andConditioningTiers_calculatedAccurately() {
-        fun makeAttr(value: Int) = AttributeValue(
-            currentValue = value,
-            baseValue = value,
-            equippedBonus = 0,
-            passiveBonus = 0,
-            attributeXp = 0
-        )
-
         val player = PlayerProfile(
-            name = "Sung Jin-Woo",
+            codename = "Sung Jin-Woo",
             level = 25,
-            rank = Rank.E,
-            attributes = Attributes(
-                str = makeAttr(40),
-                vit = makeAttr(35),
-                agi = makeAttr(30),
-                int = makeAttr(20),
-                sen = makeAttr(20),
-                dis = makeAttr(25),
-                wil = makeAttr(20)
+            rank = HunterRank.E_RANK,
+            attributes = PlayerAttributes(
+                str = AttributeBreakdown(AttributeType.STR, baseValue = 40),
+                vit = AttributeBreakdown(AttributeType.VIT, baseValue = 35),
+                agi = AttributeBreakdown(AttributeType.AGI, baseValue = 30),
+                intel = AttributeBreakdown(AttributeType.INT, baseValue = 20),
+                dis = AttributeBreakdown(AttributeType.DIS, baseValue = 25),
+                wis = AttributeBreakdown(AttributeType.WIS, baseValue = 20),
+                cha = AttributeBreakdown(AttributeType.CHA, baseValue = 20)
             )
         )
 

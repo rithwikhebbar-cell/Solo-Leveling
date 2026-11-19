@@ -22,6 +22,7 @@ import com.example.data.repository.AcademicRepository
 import com.example.data.repository.AiSystemRepository
 import com.example.data.repository.IntelligenceRepository
 import com.example.data.repository.LifeManagementRepository
+import com.example.data.repository.QuestCommitmentRepository
 import com.example.data.repository.RealityOsRepository
 import com.example.data.repository.RpgRepository
 import com.example.data.repository.SyncRepository
@@ -31,6 +32,7 @@ import com.example.data.repository.SystemExperienceRepository
 import com.example.data.repository.ShadowArmyRepository
 import com.example.data.repository.SocialRepository
 import com.example.data.repository.SocialRepositoryImpl
+import com.example.worker.QuestDeadlineWorker
 import com.example.domain.engine.CommunicationPracticeEngine
 import com.example.domain.engine.SocialMasteryAnalyticsEngine
 import com.example.service.AudioLifecycleManager
@@ -171,6 +173,13 @@ class AppContainer(application: Application) {
         )
     }
 
+    val questCommitmentRepository: QuestCommitmentRepository by lazy {
+        QuestCommitmentRepository(
+            database = database,
+            systemEventRepository = systemEventRepository
+        )
+    }
+
     val automationOrchestrator: AutomationOrchestrator by lazy {
         AutomationOrchestrator(
             context = application,
@@ -178,7 +187,8 @@ class AppContainer(application: Application) {
             preferencesRepository = preferencesRepository,
             systemEventRepository = systemEventRepository,
             intelligenceRepository = intelligenceRepository,
-            syncRepository = syncRepository
+            syncRepository = syncRepository,
+            questCommitmentRepository = questCommitmentRepository
         )
     }
 
@@ -330,6 +340,7 @@ class SoloLevelingApplication : Application() {
             container.audioLifecycleManager.reconcileOrphanFiles(activeOwnerId)
         }
         CloudSyncWorker.enqueueImmediateSync(this, "APP_STARTUP")
+        QuestDeadlineWorker.schedule(this)
         observeNetworkRestoration()
     }
 

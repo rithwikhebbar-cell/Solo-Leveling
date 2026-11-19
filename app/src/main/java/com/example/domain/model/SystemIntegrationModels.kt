@@ -42,7 +42,11 @@ enum class SystemEventType(val label: String, val defaultModule: String) {
     // Milestone 12 — Quest Failure & Penalty Events
     QUEST_OVERDUE("Quest Overdue", "PENALTY"),
     QUEST_FAILURE_CONFIRMED("Quest Failure Confirmed", "PENALTY"),
-    PENALTY_EXEMPTED("Penalty Exempted", "PENALTY")
+    PENALTY_EXEMPTED("Penalty Exempted", "PENALTY"),
+    PENALTY_CALCULATED("Penalty Calculated", "PENALTY"),
+    PENALTY_ALLOCATED("Penalty Allocated", "PENALTY"),
+    PENALTY_ESCALATED("Penalty Escalated", "PENALTY"),
+    PENALTY_BALANCE_UPDATED("Penalty Balance Updated", "PENALTY")
 }
 
 enum class EventProcessingStatus(val label: String) {

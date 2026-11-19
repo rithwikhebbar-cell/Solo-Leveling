@@ -362,6 +362,12 @@ fun ShadowCollectionScreen(
                 }
             }
 
+            // Phase 6.3 — Legion Growth Overview Card
+            ShadowGrowthOverviewCard(
+                growthOverview = growthOverview,
+                shadows = uiState.allShadows
+            )
+
             // Search input
             OutlinedTextField(
                 value = searchQuery,
@@ -525,6 +531,153 @@ fun ShadowCollectionScreen(
 }
 
 // ============================================================================
+// PHASE 6.3 — SHADOW GROWTH OVERVIEW COMPONENT
+// ============================================================================
+
+@Composable
+fun ShadowGrowthOverviewCard(
+    growthOverview: ShadowGrowthOverview?,
+    shadows: List<Shadow>,
+    modifier: Modifier = Modifier
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    val total = growthOverview?.totalShadows ?: shadows.size
+    val avgLevel = growthOverview?.averageLevel ?: (if (shadows.isNotEmpty()) shadows.map { it.level }.average().toFloat() else 1f)
+    val readyToEvolve = growthOverview?.readyToEvolveCount ?: 0
+
+    HolographicPanel(
+        accentColor = ShadowColors.Violet,
+        secondaryColor = ShadowColors.Cyan,
+        modifier = modifier.fillMaxWidth().padding(vertical = 4.dp)
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "LEGION GROWTH DASHBOARD",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontFamily = FontFamily.Monospace,
+                        letterSpacing = 2.sp,
+                        fontWeight = FontWeight.Bold
+                    ),
+                    color = ShadowColors.Violet
+                )
+                Text(
+                    text = if (readyToEvolve > 0) "$readyToEvolve READY" else "OPTIMAL",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold
+                    ),
+                    color = if (readyToEvolve > 0) ShadowColors.Emerald else ShadowColors.Muted
+                )
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column {
+                    Text(text = "Total Legion", style = MaterialTheme.typography.labelSmall, color = ShadowColors.Muted)
+                    Text(
+                        text = "$total Units",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = ShadowColors.PureIce
+                    )
+                }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(text = "Average Level", style = MaterialTheme.typography.labelSmall, color = ShadowColors.Muted)
+                    Text(
+                        text = "Lv. ${"%.1f".format(Locale.getDefault(), avgLevel)}",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = ShadowColors.Cyan
+                    )
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(text = "Ready to Evolve", style = MaterialTheme.typography.labelSmall, color = ShadowColors.Muted)
+                    Text(
+                        text = "$readyToEvolve Shadows",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = if (readyToEvolve > 0) ShadowColors.Emerald else ShadowColors.PureIce
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { expanded = !expanded },
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = if (expanded) "▲ HIDE STAGE DISTRIBUTION" else "▼ VIEW EVOLUTION STAGES & RECENT ASCENSIONS",
+                    style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace, fontSize = 10.sp),
+                    color = ShadowColors.Muted
+                )
+            }
+
+            AnimatedVisibility(visible = expanded) {
+                Column(modifier = Modifier.padding(top = 8.dp)) {
+                    HorizontalDivider(color = ShadowColors.PanelSurfaceElevated, thickness = 1.dp)
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Text(text = "STAGE DISTRIBUTION", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = ShadowColors.Muted)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState())
+                            .padding(vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        ShadowEvolutionStage.entries.forEach { stage ->
+                            val count = growthOverview?.stageDistribution?.get(stage)
+                                ?: shadows.count { it.evolutionStage == stage }
+                            Surface(
+                                color = ShadowColors.Violet.copy(alpha = 0.12f),
+                                shape = RoundedCornerShape(4.dp),
+                                border = BorderStroke(1.dp, ShadowColors.Violet.copy(alpha = 0.4f))
+                            ) {
+                                Text(
+                                    text = "${stage.label}: $count",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.SemiBold),
+                                    color = ShadowColors.PureIce,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    val evolvedShadows = shadows.filter { it.evolutionHistoryJson != "[]" }
+                    if (evolvedShadows.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(text = "RECENTLY EVOLVED SHADOWS", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = ShadowColors.Muted)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        evolvedShadows.take(3).forEach { shadow ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(text = shadow.name, style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold), color = ShadowColors.PureIce)
+                                Text(text = shadow.evolutionStage.label, style = MaterialTheme.typography.labelSmall, color = ShadowColors.Cyan)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ============================================================================
 // 2. SHADOW DETAIL SCREEN
 // ============================================================================
 
@@ -575,6 +728,12 @@ fun ShadowDetailScreen(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
+                        val stageCap = ShadowGrowthConfig.getStageLevelCap(shadow.evolutionStage)
+                        val nextStage = shadow.evolutionStage.nextStage()
+                        val isMaxStage = nextStage == null
+                        val isStageCapReached = shadow.level >= stageCap && !isMaxStage
+                        val isReadyToEvolve = !isMaxStage && shadow.level >= nextStage!!.minLevel && shadow.currentRank.order >= nextStage.minRank.order
+
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -587,9 +746,49 @@ fun ShadowDetailScreen(
                                     color = ShadowColors.PureIce
                                 )
                                 Spacer(modifier = Modifier.height(4.dp))
-                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                                     ShadowClassBadge(shadow.shadowClass)
                                     ShadowRarityBadge(shadow.rarity)
+                                    if (isMaxStage) {
+                                        Surface(
+                                            color = ShadowColors.Gold.copy(alpha = 0.15f),
+                                            shape = RoundedCornerShape(4.dp),
+                                            border = BorderStroke(1.dp, ShadowColors.Gold)
+                                        ) {
+                                            Text(
+                                                text = "MAX STAGE",
+                                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 9.sp),
+                                                color = ShadowColors.Gold,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                    } else if (isReadyToEvolve) {
+                                        Surface(
+                                            color = ShadowColors.Emerald.copy(alpha = 0.15f),
+                                            shape = RoundedCornerShape(4.dp),
+                                            border = BorderStroke(1.dp, ShadowColors.Emerald)
+                                        ) {
+                                            Text(
+                                                text = "READY TO EVOLVE",
+                                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 9.sp),
+                                                color = ShadowColors.Emerald,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                    } else if (isStageCapReached) {
+                                        Surface(
+                                            color = ShadowColors.Amber.copy(alpha = 0.15f),
+                                            shape = RoundedCornerShape(4.dp),
+                                            border = BorderStroke(1.dp, ShadowColors.Amber)
+                                        ) {
+                                            Text(
+                                                text = "STAGE CAP REACHED",
+                                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 9.sp),
+                                                color = ShadowColors.Amber,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                    }
                                 }
                             }
                             ShadowRankBadge(shadow.currentRank)
@@ -597,19 +796,19 @@ fun ShadowDetailScreen(
 
                         Spacer(modifier = Modifier.height(16.dp))
 
-                        // Level & XP Bar
+                        // Level & XP Bar with Stage Cap
                         val nextXp = ShadowEvolutionEngine.calculateNextLevelXp(shadow.level)
                         val progress = if (nextXp > 0) (shadow.shadowXp.toFloat() / nextXp).coerceIn(0f, 1f) else 1f
 
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text(text = "LEVEL ${shadow.level}", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold), color = ShadowColors.Cyan)
+                            Text(text = "LEVEL ${shadow.level} (Cap: Lv. $stageCap)", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold), color = ShadowColors.Cyan)
                             Text(text = "${shadow.shadowXp} / $nextXp XP", style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace), color = ShadowColors.PureIce)
                         }
                         Spacer(modifier = Modifier.height(4.dp))
                         LinearProgressIndicator(
                             progress = { progress },
                             modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)),
-                            color = ShadowColors.Cyan,
+                            color = if (isStageCapReached) ShadowColors.Amber else ShadowColors.Cyan,
                             trackColor = ShadowColors.PanelSurfaceElevated
                         )
 
@@ -688,6 +887,38 @@ fun ShadowDetailScreen(
                                 style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                                 color = if (shadow.deploymentStatus == ShadowDeploymentStatus.DEPLOYED) ShadowColors.Emerald else ShadowColors.Muted
                             )
+                        }
+                    }
+                }
+
+                // Evolution & Ascension History Card
+                val historyList = remember(shadow.evolutionHistoryJson) {
+                    try {
+                        kotlinx.serialization.json.Json.decodeFromString<List<String>>(shadow.evolutionHistoryJson)
+                    } catch (_: Exception) { emptyList() }
+                }
+                if (historyList.isNotEmpty()) {
+                    Text(text = "EVOLUTION & ASCENSION HISTORY", style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace), color = ShadowColors.Muted)
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = ShadowColors.PanelSurface),
+                        shape = RoundedCornerShape(10.dp),
+                        border = BorderStroke(1.dp, ShadowColors.Violet.copy(alpha = 0.3f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()) }
+                            historyList.forEach { entry ->
+                                val parts = entry.split(":")
+                                val stageName = parts.getOrNull(0) ?: "UNKNOWN"
+                                val timestamp = parts.getOrNull(1)?.toLongOrNull() ?: 0L
+                                val stageLabel = ShadowEvolutionStage.entries.find { it.name == stageName }?.label ?: stageName
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text(text = "Ascended to $stageLabel", style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold), color = ShadowColors.Cyan)
+                                    if (timestamp > 0L) {
+                                        Text(text = dateFormat.format(Date(timestamp)), style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace, fontSize = 11.sp), color = ShadowColors.Muted)
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -813,7 +1044,7 @@ private fun DeployShadowDialog(
 }
 
 // ============================================================================
-// 3. SHADOW EVOLUTION SCREEN
+// 3. SHADOW EVOLUTION SCREEN (Phase 6.3 Evolution Chamber)
 // ============================================================================
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -825,11 +1056,18 @@ fun ShadowEvolutionScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val shadow = uiState.allShadows.find { it.shadowId == shadowId }
+    val evaluation by viewModel.evolutionEvaluation.collectAsState()
+    val isEvolving by viewModel.isEvolving.collectAsState()
+    var showConfirmDialog by remember { mutableStateOf(false) }
+
+    LaunchedEffect(shadowId) {
+        viewModel.loadEvolutionEvaluation(shadowId)
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("SHADOW EVOLUTION", style = MaterialTheme.typography.titleMedium, color = ShadowColors.PureIce) },
+                title = { Text("EVOLUTION CHAMBER", style = MaterialTheme.typography.titleMedium, color = ShadowColors.PureIce) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back", tint = ShadowColors.PureIce)
@@ -845,6 +1083,10 @@ fun ShadowEvolutionScreen(
                 Text("Shadow not found", color = ShadowColors.Muted)
             }
         } else {
+            val eval = evaluation
+            val targetStage = eval?.targetStage
+            val isMaxStage = eval?.state == ShadowEvolutionState.MAX_STAGE_REACHED
+
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -853,70 +1095,324 @@ fun ShadowEvolutionScreen(
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // Current Stage vs Next
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = ShadowColors.PanelSurface),
-                    shape = RoundedCornerShape(10.dp),
-                    border = BorderStroke(1.dp, ShadowColors.Violet.copy(alpha = 0.4f)),
+                // Current Stage vs Target Stage Hero Card
+                HolographicPanel(
+                    accentColor = ShadowColors.Violet,
+                    secondaryColor = ShadowColors.Cyan,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text(text = "EVOLUTION STAGES", style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace), color = ShadowColors.Muted)
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             Column {
-                                Text(text = "CURRENT", style = MaterialTheme.typography.labelSmall, color = ShadowColors.Muted)
-                                Text(text = shadow.evolutionStage.label, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = ShadowColors.PureIce)
-                                ShadowRankBadge(shadow.currentRank)
+                                Text(
+                                    text = shadow.name,
+                                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                                    color = ShadowColors.PureIce
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    ShadowClassBadge(shadow.shadowClass)
+                                    ShadowRarityBadge(shadow.rarity)
+                                }
                             }
-                            Icon(Icons.Rounded.Upgrade, contentDescription = null, tint = ShadowColors.Violet, modifier = Modifier.size(32.dp))
+                            ShadowRankBadge(shadow.currentRank)
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text(text = "CURRENT STAGE", style = MaterialTheme.typography.labelSmall, color = ShadowColors.Muted)
+                                Text(
+                                    text = shadow.evolutionStage.label,
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = ShadowColors.PureIce
+                                )
+                                Text(text = "Lv. ${shadow.level}", style = MaterialTheme.typography.bodySmall, color = ShadowColors.Cyan)
+                            }
+
+                            Icon(
+                                Icons.Rounded.Upgrade,
+                                contentDescription = null,
+                                tint = if (eval?.isEligible == true) ShadowColors.Emerald else ShadowColors.Violet,
+                                modifier = Modifier.size(36.dp)
+                            )
+
                             Column(horizontalAlignment = Alignment.End) {
-                                Text(text = "NEXT STAGE", style = MaterialTheme.typography.labelSmall, color = ShadowColors.Muted)
-                                val nextRank = ShadowEvolutionEngine.calculateRank(shadow.level + 10, shadow.shadowXp)
-                                val nextStage = ShadowEvolutionEngine.calculateEvolutionStage(shadow.level + 10, nextRank)
-                                Text(text = nextStage.label, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = ShadowColors.Cyan)
-                                ShadowRankBadge(nextRank)
+                                Text(text = "TARGET STAGE", style = MaterialTheme.typography.labelSmall, color = ShadowColors.Muted)
+                                Text(
+                                    text = targetStage?.label ?: "MAX ASCENDED",
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = if (targetStage != null) ShadowColors.Cyan else ShadowColors.Gold
+                                )
+                                if (targetStage != null) {
+                                    Text(
+                                        text = "Req. Lv. ${targetStage.minLevel} / ${targetStage.minRank.label}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = ShadowColors.Muted
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Status Banner
+                val bannerColor = when {
+                    isMaxStage -> ShadowColors.Gold
+                    eval?.isEligible == true -> ShadowColors.Emerald
+                    else -> ShadowColors.Amber
+                }
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = bannerColor.copy(alpha = 0.12f)),
+                    shape = RoundedCornerShape(8.dp),
+                    border = BorderStroke(1.dp, bannerColor.copy(alpha = 0.5f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = when {
+                                isMaxStage -> Icons.Rounded.Star
+                                eval?.isEligible == true -> Icons.Rounded.CheckCircle
+                                else -> Icons.Rounded.Lock
+                            },
+                            contentDescription = null,
+                            tint = bannerColor,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                text = when {
+                                    isMaxStage -> "MAXIMUM STAGE ACHIEVED"
+                                    eval?.isEligible == true -> "READY TO EVOLVE"
+                                    else -> eval?.state?.label ?: "EVOLUTION REQUIREMENTS"
+                                },
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                color = bannerColor
+                            )
+                            if (eval != null && eval.blockers.isNotEmpty() && !isMaxStage && !eval.isEligible) {
+                                Text(
+                                    text = eval.blockers.joinToString(" • "),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = ShadowColors.PureIce.copy(alpha = 0.8f)
+                                )
                             }
                         }
                     }
                 }
 
                 // Requirements Checklist
-                Text(text = "REQUIREMENTS CHECKLIST", style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace), color = ShadowColors.Muted)
+                if (!isMaxStage && eval != null) {
+                    Text(
+                        text = "EVOLUTION REQUIREMENTS",
+                        style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace, letterSpacing = 1.sp),
+                        color = ShadowColors.Muted
+                    )
 
-                val reqLevel = 10 * ((shadow.level / 10) + 1)
-                val levelMet = shadow.level >= reqLevel
-                val coreCost = 2
-                val coresMet = uiState.evolutionCoresBalance >= coreCost
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = ShadowColors.PanelSurface),
+                        shape = RoundedCornerShape(10.dp),
+                        border = BorderStroke(1.dp, ShadowColors.PanelSurfaceElevated),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            // Level requirement
+                            val levelMet = shadow.level >= eval.requiredLevel
+                            RequirementItem(
+                                title = "Reach Level ${eval.requiredLevel}",
+                                value = "Lv. ${shadow.level} / ${eval.requiredLevel}",
+                                isMet = levelMet
+                            )
 
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = ShadowColors.PanelSurface),
-                    shape = RoundedCornerShape(10.dp),
-                    border = BorderStroke(1.dp, ShadowColors.PanelSurfaceElevated),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        RequirementItem("Reach Level $reqLevel", "${shadow.level} / $reqLevel", levelMet)
-                        RequirementItem("Evolution Cores ($coreCost required)", "${uiState.evolutionCoresBalance} / $coreCost", coresMet)
-                        RequirementItem("Monarch Authority Alignment", "Verified", true)
+                            // Rank requirement
+                            val rankMet = shadow.currentRank.order >= eval.requiredRank.order
+                            RequirementItem(
+                                title = "Rank ${eval.requiredRank.label}",
+                                value = "${shadow.currentRank.label} (Req: ${eval.requiredRank.label})",
+                                isMet = rankMet
+                            )
+
+                            HorizontalDivider(color = ShadowColors.PanelSurfaceElevated)
+
+                            // Resource costs
+                            eval.resourceCosts.forEach { (resourceType, cost) ->
+                                val balance = eval.currentBalances[resourceType] ?: 0
+                                val resourceMet = balance >= cost
+                                RequirementItem(
+                                    title = resourceType.label,
+                                    value = "$balance / $cost",
+                                    isMet = resourceMet
+                                )
+                            }
+                        }
+                    }
+
+                    // Predicted Attribute Increases Card
+                    if (eval.statPreview != null) {
+                        Text(
+                            text = "PREDICTED ATTRIBUTE ASCENSION",
+                            style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace, letterSpacing = 1.sp),
+                            color = ShadowColors.Muted
+                        )
+
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = ShadowColors.PanelSurface),
+                            shape = RoundedCornerShape(10.dp),
+                            border = BorderStroke(1.dp, ShadowColors.Cyan.copy(alpha = 0.3f)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                val current = shadow.stats
+                                val preview = eval.statPreview
+                                val bonus = ShadowGrowthConfig.getStageStatBonusIncrement(eval.targetStage!!)
+
+                                Text(
+                                    text = "Stage Ascension Bonus (+${bonus.power} to all attributes)",
+                                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+                                    color = ShadowColors.Cyan
+                                )
+                                Spacer(modifier = Modifier.height(10.dp))
+
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    StatAscensionItem("PWR", current.power, preview.power)
+                                    StatAscensionItem("END", current.endurance, preview.endurance)
+                                    StatAscensionItem("FOC", current.focus, preview.focus)
+                                    StatAscensionItem("DIS", current.discipline, preview.discipline)
+                                    StatAscensionItem("WIS", current.wisdom, preview.wisdom)
+                                    StatAscensionItem("ADP", current.adaptability, preview.adaptability)
+                                }
+                            }
+                        }
                     }
                 }
 
-                // Award XP training button for test / real development progression
-                OutlinedButton(
-                    onClick = {
-                        viewModel.awardShadowXp(shadow.shadowId, 100, "training_session_${System.currentTimeMillis()}")
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = ShadowColors.Cyan),
-                    border = BorderStroke(1.dp, ShadowColors.Cyan.copy(alpha = 0.5f))
-                ) {
-                    Icon(Icons.Rounded.Bolt, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("TRAIN SHADOW (+100 XP)")
+                // Evolution Action Button
+                if (!isMaxStage) {
+                    Button(
+                        onClick = { showConfirmDialog = true },
+                        enabled = (eval?.isEligible == true) && !isEvolving,
+                        modifier = Modifier.fillMaxWidth().height(52.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = ShadowColors.Violet,
+                            disabledContainerColor = ShadowColors.PanelSurfaceElevated,
+                            contentColor = ShadowColors.PureIce,
+                            disabledContentColor = ShadowColors.Muted
+                        ),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        if (isEvolving) {
+                            CircularProgressIndicator(color = ShadowColors.PureIce, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("COMMUNING WITH VOID...", fontWeight = FontWeight.Bold)
+                        } else {
+                            Icon(Icons.Rounded.Upgrade, contentDescription = null, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = if (eval?.isEligible == true) "CONFIRM SHADOW EVOLUTION" else "EVOLUTION REQUIREMENTS INCOMPLETE",
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+
+                // Explicit Confirmation Dialog
+                if (showConfirmDialog && eval?.targetStage != null) {
+                    AlertDialog(
+                        onDismissRequest = { if (!isEvolving) showConfirmDialog = false },
+                        title = {
+                            Text(
+                                "CONFIRM SHADOW EVOLUTION",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                color = ShadowColors.Cyan
+                            )
+                        },
+                        text = {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text(
+                                    text = "Ascend ${shadow.name} (${shadow.shadowClass.label}) to ${eval.targetStage.label}?",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = ShadowColors.PureIce
+                                )
+                                HorizontalDivider(color = ShadowColors.PanelSurfaceElevated)
+                                Text(
+                                    text = "Resource Investment:",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                    color = ShadowColors.Muted
+                                )
+                                eval.resourceCosts.forEach { (res, cost) ->
+                                    Text(
+                                        text = "• ${res.label}: $cost",
+                                        style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                                        color = ShadowColors.Cyan
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
+                                val bonus = ShadowGrowthConfig.getStageStatBonusIncrement(eval.targetStage)
+                                Text(
+                                    text = "Permanent Attribute Gain: +${bonus.power} to all stats",
+                                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+                                    color = ShadowColors.Emerald
+                                )
+                                Text(
+                                    text = "Monarch XP Reward: +200 XP",
+                                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+                                    color = ShadowColors.Gold
+                                )
+                            }
+                        },
+                        confirmButton = {
+                            Button(
+                                onClick = {
+                                    viewModel.confirmEvolution(shadow.shadowId) { success, _ ->
+                                        if (success) {
+                                            showConfirmDialog = false
+                                        }
+                                    }
+                                },
+                                enabled = !isEvolving,
+                                colors = ButtonDefaults.buttonColors(containerColor = ShadowColors.Violet)
+                            ) {
+                                if (isEvolving) {
+                                    CircularProgressIndicator(color = ShadowColors.PureIce, modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                                } else {
+                                    Text("ARISE & EVOLVE")
+                                }
+                            }
+                        },
+                        dismissButton = {
+                            OutlinedButton(
+                                onClick = { showConfirmDialog = false },
+                                enabled = !isEvolving
+                            ) {
+                                Text("CANCEL")
+                            }
+                        },
+                        containerColor = ShadowColors.PanelSurface
+                    )
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun StatAscensionItem(label: String, current: Int, preview: Int) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(text = label, style = MaterialTheme.typography.labelSmall, color = ShadowColors.Muted)
+        Text(text = "$current", style = MaterialTheme.typography.bodySmall, color = ShadowColors.PureIce)
+        Text(text = "→ $preview", style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold), color = ShadowColors.Emerald)
     }
 }
 

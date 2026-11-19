@@ -16,6 +16,14 @@ import com.example.data.local.dao.SocialScenarioDao
 import com.example.data.local.dao.SocialRecommendationDao
 import com.example.data.local.dao.SocialTrainingPlanDao
 import com.example.data.local.dao.SocialCompetencyProgressDao
+import com.example.data.local.dao.ConfirmedFailureDao
+import com.example.data.local.dao.QuestCommitmentDao
+import com.example.data.local.dao.QuestExemptionDao
+import com.example.data.local.dao.QuestRescheduleDao
+import com.example.data.local.entity.ConfirmedFailureRecordEntity
+import com.example.data.local.entity.QuestCommitmentEntity
+import com.example.data.local.entity.QuestExemptionEntity
+import com.example.data.local.entity.QuestRescheduleEntity
 import com.example.data.local.entity.SocialAssessmentEntity
 import com.example.data.local.entity.SocialMissionRecordEntity
 import com.example.data.local.entity.SocialModuleProgressEntity
@@ -332,9 +340,14 @@ import com.example.domain.model.VerificationStatus
         SocialPlannedActivityEntity::class,
         SocialCompetencyProgressEntity::class,
         ShadowEvidenceClaimEntity::class,
-        ShadowResonanceEntity::class
+        ShadowResonanceEntity::class,
+        // Milestone 12 — Quest Failure & Commitments
+        QuestCommitmentEntity::class,
+        ConfirmedFailureRecordEntity::class,
+        QuestExemptionEntity::class,
+        QuestRescheduleEntity::class
     ],
-    version = 17,
+    version = 18,
     exportSchema = false
 )
 abstract class SoloLevelingDatabase : RoomDatabase() {
@@ -414,6 +427,12 @@ abstract class SoloLevelingDatabase : RoomDatabase() {
     abstract fun socialRecommendationDao(): SocialRecommendationDao
     abstract fun socialTrainingPlanDao(): SocialTrainingPlanDao
     abstract fun socialCompetencyProgressDao(): SocialCompetencyProgressDao
+
+    // Milestone 12 — Quest Failure & Commitments DAOs
+    abstract fun questCommitmentDao(): QuestCommitmentDao
+    abstract fun confirmedFailureDao(): ConfirmedFailureDao
+    abstract fun questExemptionDao(): QuestExemptionDao
+    abstract fun questRescheduleDao(): QuestRescheduleDao
 
     companion object {
         @Volatile
@@ -3429,6 +3448,103 @@ abstract class SoloLevelingDatabase : RoomDatabase() {
             }
         }
 
+        // =====================================================================
+        // MIGRATION 17 → 18: Milestone 12 Phase 2 Quest Commitment & Failure Detection
+        // =====================================================================
+        val MIGRATION_17_18: Migration = object : Migration(17, 18) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // 1. Create quest_commitments table
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `quest_commitments` (
+                        `commitmentId` TEXT NOT NULL,
+                        `questId` INTEGER NOT NULL,
+                        `accountOwnerId` TEXT NOT NULL,
+                        `logicalCycleId` TEXT NOT NULL,
+                        `stateName` TEXT NOT NULL,
+                        `acceptedAtEpochMs` INTEGER,
+                        `deadlineEpochMs` INTEGER NOT NULL,
+                        `gracePeriodMinutes` INTEGER NOT NULL,
+                        `gracePeriodExpiresAtEpochMs` INTEGER NOT NULL,
+                        `rescheduleCount` INTEGER NOT NULL,
+                        `originalDeadlineEpochMs` INTEGER NOT NULL,
+                        `createdAtEpochMs` INTEGER NOT NULL,
+                        `updatedAtEpochMs` INTEGER NOT NULL,
+                        PRIMARY KEY(`commitmentId`),
+                        FOREIGN KEY(`questId`) REFERENCES `quests`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_quest_commitments_questId_logicalCycleId` ON `quest_commitments` (`questId`, `logicalCycleId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_quest_commitments_accountOwnerId` ON `quest_commitments` (`accountOwnerId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_quest_commitments_stateName` ON `quest_commitments` (`stateName`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_quest_commitments_deadlineEpochMs` ON `quest_commitments` (`deadlineEpochMs`)")
+
+                // 2. Create confirmed_quest_failures table
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `confirmed_quest_failures` (
+                        `failureId` TEXT NOT NULL,
+                        `commitmentId` TEXT NOT NULL,
+                        `questId` INTEGER NOT NULL,
+                        `logicalCycleId` TEXT NOT NULL,
+                        `accountOwnerId` TEXT NOT NULL,
+                        `deadlineEpochMs` INTEGER NOT NULL,
+                        `gracePeriodExpiresAtEpochMs` INTEGER NOT NULL,
+                        `confirmedAtEpochMs` INTEGER NOT NULL,
+                        `failureReasonCode` TEXT NOT NULL,
+                        `policyVersion` INTEGER NOT NULL,
+                        `exemptionEvaluated` INTEGER NOT NULL,
+                        PRIMARY KEY(`failureId`)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_confirmed_quest_failures_commitmentId` ON `confirmed_quest_failures` (`commitmentId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_confirmed_quest_failures_questId` ON `confirmed_quest_failures` (`questId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_confirmed_quest_failures_logicalCycleId` ON `confirmed_quest_failures` (`logicalCycleId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_confirmed_quest_failures_accountOwnerId` ON `confirmed_quest_failures` (`accountOwnerId`)")
+
+                // 3. Create quest_exemptions table
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `quest_exemptions` (
+                        `exemptionId` TEXT NOT NULL,
+                        `commitmentId` TEXT NOT NULL,
+                        `questId` INTEGER NOT NULL,
+                        `accountOwnerId` TEXT NOT NULL,
+                        `categoryName` TEXT NOT NULL,
+                        `lifecycleStateName` TEXT NOT NULL,
+                        `explanation` TEXT NOT NULL,
+                        `requestedAtEpochMs` INTEGER NOT NULL,
+                        `reviewedAtEpochMs` INTEGER,
+                        `reviewerNotes` TEXT,
+                        PRIMARY KEY(`exemptionId`)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_quest_exemptions_commitmentId` ON `quest_exemptions` (`commitmentId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_quest_exemptions_accountOwnerId` ON `quest_exemptions` (`accountOwnerId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_quest_exemptions_lifecycleStateName` ON `quest_exemptions` (`lifecycleStateName`)")
+
+                // 4. Create quest_reschedules table
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `quest_reschedules` (
+                        `rescheduleId` TEXT NOT NULL,
+                        `commitmentId` TEXT NOT NULL,
+                        `questId` INTEGER NOT NULL,
+                        `previousDeadlineEpochMs` INTEGER NOT NULL,
+                        `revisedDeadlineEpochMs` INTEGER NOT NULL,
+                        `reasonCategory` TEXT NOT NULL,
+                        `rescheduledAtEpochMs` INTEGER NOT NULL,
+                        PRIMARY KEY(`rescheduleId`)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_quest_reschedules_commitmentId` ON `quest_reschedules` (`commitmentId`)")
+            }
+        }
+
         fun getInstance(context: Context): SoloLevelingDatabase {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
@@ -3452,7 +3568,8 @@ abstract class SoloLevelingDatabase : RoomDatabase() {
                         MIGRATION_13_14,
                         MIGRATION_14_15,
                         MIGRATION_15_16,
-                        MIGRATION_16_17
+                        MIGRATION_16_17,
+                        MIGRATION_17_18
                     )
                     .build()
                     .also { INSTANCE = it }

@@ -6,8 +6,10 @@ import com.example.data.local.entity.toDomain
 import com.example.data.local.entity.toEntity
 import com.example.data.preferences.UserPreferencesRepository
 import com.example.data.repository.IntelligenceRepository
+import com.example.data.repository.QuestCommitmentRepository
 import com.example.data.repository.SyncRepository
 import com.example.data.repository.SystemEventRepository
+import androidx.room.withTransaction
 import com.example.domain.engine.DailyCycleManager
 import com.example.domain.model.AutomationExecutionRecord
 import com.example.domain.model.AutomationExecutionStatus
@@ -37,7 +39,8 @@ class AutomationOrchestrator(
     private val preferencesRepository: UserPreferencesRepository,
     private val systemEventRepository: SystemEventRepository,
     private val intelligenceRepository: IntelligenceRepository,
-    private val syncRepository: SyncRepository
+    private val syncRepository: SyncRepository,
+    private val questCommitmentRepository: QuestCommitmentRepository = QuestCommitmentRepository(database, systemEventRepository)
 ) {
     private val jobLocks = ConcurrentHashMap<String, Mutex>()
 
@@ -149,29 +152,49 @@ class AutomationOrchestrator(
 
             val dailyQuests = database.questDao().getAllQuestsOnce()
                 .count { it.typeName == "DAILY" }
-            database.questDao().resetDailyQuests()
 
-            val physical = database.physicalStateDao().getPhysicalStateOnce()?.toDomain()
-            if (physical != null) {
-                database.physicalStateDao().upsertPhysicalState(
-                    physical.copy(
-                        completedJoggingMinutesToday = 0,
-                        workoutStatus = WorkoutStatus.PENDING
-                    ).toEntity()
+            val execution = database.withTransaction {
+                // 1. Evaluate commitments for closing cycles before clearing daily quest progress
+                val startDay = latest?.epochDay ?: (plan.targetEpochDay - 1)
+                for (day in startDay until plan.targetEpochDay) {
+                    questCommitmentRepository.evaluateAndRecordFailuresForCycle(
+                        logicalCycleId = "cycle_$day",
+                        triggerSource = triggerSource,
+                        nowEpochMs = nowEpochMs
+                    )
+                }
+                questCommitmentRepository.evaluateAndRecordFailuresForCycle(
+                    logicalCycleId = "cycle_${plan.targetEpochDay - 1}",
+                    triggerSource = triggerSource,
+                    nowEpochMs = nowEpochMs
                 )
-            }
 
-            val execution = DailyCycleExecution(
-                epochDay = plan.targetEpochDay,
-                timezoneId = DailyCycleManager.resolveZone(tz).id,
-                executedAtEpochMs = nowEpochMs,
-                triggerSource = triggerSource,
-                dailyQuestsResetCount = dailyQuests,
-                missedDaysCaughtUp = plan.missedDaysCount,
-                status = "COMPLETED",
-                notes = plan.reason
-            )
-            database.dailyCycleDao().insertCycleIfAbsent(execution.toEntity())
+                // 2. Perform atomic reset
+                database.questDao().resetDailyQuests()
+
+                val physical = database.physicalStateDao().getPhysicalStateOnce()?.toDomain()
+                if (physical != null) {
+                    database.physicalStateDao().upsertPhysicalState(
+                        physical.copy(
+                            completedJoggingMinutesToday = 0,
+                            workoutStatus = WorkoutStatus.PENDING
+                        ).toEntity()
+                    )
+                }
+
+                val exec = DailyCycleExecution(
+                    epochDay = plan.targetEpochDay,
+                    timezoneId = DailyCycleManager.resolveZone(tz).id,
+                    executedAtEpochMs = nowEpochMs,
+                    triggerSource = triggerSource,
+                    dailyQuestsResetCount = dailyQuests,
+                    missedDaysCaughtUp = plan.missedDaysCount,
+                    status = "COMPLETED",
+                    notes = plan.reason
+                )
+                database.dailyCycleDao().insertCycleIfAbsent(exec.toEntity())
+                exec
+            }
 
             systemEventRepository.publishEvent(
                 eventType = SystemEventType.DAILY_RESET_COMPLETED,

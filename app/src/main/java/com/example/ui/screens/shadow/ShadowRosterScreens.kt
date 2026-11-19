@@ -91,8 +91,13 @@ import com.example.ui.viewmodel.ShadowRealmViewModel
 import com.example.domain.model.ShadowSortOption
 import com.example.domain.model.ShadowCollectionOverview
 import com.example.domain.model.ShadowResonanceConfig
+import com.example.domain.model.ShadowGrowthConfig
+import com.example.domain.model.ShadowEvolutionState
+import com.example.domain.model.ShadowEvolutionEvaluation
+import com.example.domain.model.ShadowGrowthOverview
 import java.text.SimpleDateFormat
 import java.util.Date
+import java.util.Locale
 import java.util.Locale
 
 // ============================================================================
@@ -108,6 +113,7 @@ fun ShadowCollectionScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val collectionOverview by viewModel.collectionOverview.collectAsState()
+    val growthOverview by viewModel.growthOverview.collectAsState()
 
     var searchQuery by remember { mutableStateOf("") }
     var selectedClassFilter by remember { mutableStateOf<ShadowClass?>(null) }
@@ -120,6 +126,7 @@ fun ShadowCollectionScreen(
 
     LaunchedEffect(Unit) {
         viewModel.loadCollectionOverview()
+        viewModel.loadGrowthOverview()
     }
 
     val filteredShadows = remember(

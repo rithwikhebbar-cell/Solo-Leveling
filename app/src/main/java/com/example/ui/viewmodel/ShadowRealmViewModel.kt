@@ -134,6 +134,9 @@ class ShadowRealmViewModel(
         _selectedShadow.value = null
         _extractionUiState.value = ShadowExtractionUiState()
         _analytics.value = null
+        _evolutionEvaluation.value = null
+        _isEvolving.value = false
+        _growthOverview.value = null
         _settingsState.value = ShadowRealmSettings(accountOwnerId = owner)
         _uiState.value = ShadowRealmUiState(
             isLoading = true,
@@ -147,6 +150,7 @@ class ShadowRealmViewModel(
                     refreshResourceBalances(owner)
                     loadCollectionOverview(owner)
                     loadEligibleEvidence(owner)
+                    loadGrowthOverview(owner)
                 }.onFailure { e ->
                     _uiState.value = _uiState.value.copy(error = e.message)
                 }
@@ -512,6 +516,47 @@ class ShadowRealmViewModel(
 
     fun clearError() {
         _uiState.value = _uiState.value.copy(error = null)
+    }
+
+    // -------------------------------------------------------------------------
+    // PHASE 6.3 — SHADOW GROWTH & EVOLUTION ACTIONS
+    // -------------------------------------------------------------------------
+
+    fun loadEvolutionEvaluation(shadowId: String) {
+        val owner = _activeAccountOwnerId.value
+        viewModelScope.launch {
+            _evolutionEvaluation.value = repository.evaluateEvolution(shadowId, owner)
+        }
+    }
+
+    fun clearEvolutionEvaluation() {
+        _evolutionEvaluation.value = null
+    }
+
+    fun confirmEvolution(shadowId: String, onComplete: ((Boolean, String?) -> Unit)? = null) {
+        val owner = _activeAccountOwnerId.value
+        viewModelScope.launch {
+            _isEvolving.value = true
+            val result = repository.confirmEvolution(shadowId, owner)
+            _isEvolving.value = false
+            result.onSuccess { evolvedShadow ->
+                _selectedShadow.value = evolvedShadow
+                loadEvolutionEvaluation(shadowId)
+                refreshResourceBalances(owner)
+                loadGrowthOverview(owner)
+                loadCollectionOverview(owner)
+                onComplete?.invoke(true, null)
+            }.onFailure { error ->
+                _uiState.value = _uiState.value.copy(error = error.message)
+                onComplete?.invoke(false, error.message)
+            }
+        }
+    }
+
+    fun loadGrowthOverview(accountOwnerId: String = _activeAccountOwnerId.value) {
+        viewModelScope.launch {
+            _growthOverview.value = repository.getShadowGrowthOverview(accountOwnerId)
+        }
     }
 
     companion object {

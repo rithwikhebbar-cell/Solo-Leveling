@@ -38,7 +38,11 @@ enum class SystemEventType(val label: String, val defaultModule: String) {
     MONARCH_SKILL_UNLOCKED("New Monarch Skill Unlocked", "SHADOW"),
     SHADOW_ARMY_CAPACITY_REACHED("Army Capacity Reached", "SHADOW"),
     SHADOW_FORMATION_UPDATED("Formation Updated", "SHADOW"),
-    SHADOW_QUEST_COMPLETED("Shadow Quest Completed", "SHADOW")
+    SHADOW_QUEST_COMPLETED("Shadow Quest Completed", "SHADOW"),
+    // Milestone 12 — Quest Failure & Penalty Events
+    QUEST_OVERDUE("Quest Overdue", "PENALTY"),
+    QUEST_FAILURE_CONFIRMED("Quest Failure Confirmed", "PENALTY"),
+    PENALTY_EXEMPTED("Penalty Exempted", "PENALTY")
 }
 
 enum class EventProcessingStatus(val label: String) {

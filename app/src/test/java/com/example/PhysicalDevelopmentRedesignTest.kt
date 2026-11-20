@@ -45,10 +45,10 @@ class PhysicalDevelopmentRedesignTest {
     @Test
     fun recoveryEngine_safetyDecision_restRecommendedRestrictsWorkouts() {
         // High fatigue (5/5) and low sleep (4.5h) should trigger REST_RECOMMENDED
-        val assessment = RecoveryEngine.evaluateReadiness(
-            loadMinutes48h = 120,
-            loadMinutes7d = 300,
-            sessions7d = 6,
+        val assessment = RecoveryEngine.assess(
+            measuredLoadMinutes48h = 120,
+            measuredLoadMinutes7d = 300,
+            measuredSessions7d = 6,
             consecutiveActiveDays = 6,
             measuredSleepHoursLastNight = 4.5,
             measuredRestingHrBpm = 82,
@@ -65,10 +65,10 @@ class PhysicalDevelopmentRedesignTest {
 
     @Test
     fun recoveryEngine_readyStatus_permitsFullTraining() {
-        val assessment = RecoveryEngine.evaluateReadiness(
-            loadMinutes48h = 30,
-            loadMinutes7d = 120,
-            sessions7d = 3,
+        val assessment = RecoveryEngine.assess(
+            measuredLoadMinutes48h = 30,
+            measuredLoadMinutes7d = 120,
+            measuredSessions7d = 3,
             consecutiveActiveDays = 2,
             measuredSleepHoursLastNight = 8.0,
             measuredRestingHrBpm = 58,

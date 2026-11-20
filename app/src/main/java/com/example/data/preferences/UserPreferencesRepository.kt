@@ -10,6 +10,7 @@ import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.example.domain.model.DEFAULT_SHADOW_ACCOUNT_OWNER_ID
+import com.example.domain.model.SupportedAiModels
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -22,7 +23,7 @@ data class UserPreferences(
     val dailyResetHour: Int = 4,
     val healthConnectSyncEnabled: Boolean = false,
     val supabaseCloudSyncEnabled: Boolean = false,
-    val openRouterModelId: String = "google/gemini-2.5-flash",
+    val openRouterModelId: String = SupportedAiModels.DEFAULT_MODEL_ID,
     val academicDailyGoalMinutes: Int = 60,
     val academicWeeklyGoalMinutes: Int = 360
 )
@@ -32,6 +33,19 @@ data class ShadowRealmSettings(
     val extractionAlertsEnabled: Boolean = true,
     val evolutionAlertsEnabled: Boolean = true,
     val autoRecallOnRest: Boolean = true,
+    val updatedAtEpochMs: Long = 0L
+)
+
+data class VoiceCommandPermissions(
+    val allowPlayerInfo: Boolean = true,
+    val allowDailyManagement: Boolean = true,
+    val allowHabitsAndRoutines: Boolean = true,
+    val allowPhysicalDevelopment: Boolean = true,
+    val allowAcademicDevelopment: Boolean = true,
+    val allowMissionsAndRpg: Boolean = true,
+    val allowSystemControl: Boolean = true,
+    val allowAiConversation: Boolean = true,
+    val requireConfirmationForMutations: Boolean = true,
     val updatedAtEpochMs: Long = 0L
 )
 
@@ -45,6 +59,16 @@ class UserPreferencesRepository(private val context: Context) {
         val OPENROUTER_MODEL_ID = stringPreferencesKey("openrouter_model_id")
         val ACADEMIC_DAILY_GOAL_MINUTES = intPreferencesKey("academic_daily_goal_minutes")
         val ACADEMIC_WEEKLY_GOAL_MINUTES = intPreferencesKey("academic_weekly_goal_minutes")
+        val VOICE_PERM_PLAYER_INFO = booleanPreferencesKey("voice_perm_player_info")
+        val VOICE_PERM_DAILY_MGMT = booleanPreferencesKey("voice_perm_daily_mgmt")
+        val VOICE_PERM_HABITS = booleanPreferencesKey("voice_perm_habits")
+        val VOICE_PERM_PHYSICAL = booleanPreferencesKey("voice_perm_physical")
+        val VOICE_PERM_ACADEMIC = booleanPreferencesKey("voice_perm_academic")
+        val VOICE_PERM_MISSIONS_RPG = booleanPreferencesKey("voice_perm_missions_rpg")
+        val VOICE_PERM_SYSTEM_CONTROL = booleanPreferencesKey("voice_perm_system_control")
+        val VOICE_PERM_AI_CONVERSATION = booleanPreferencesKey("voice_perm_ai_conversation")
+        val VOICE_PERM_REQUIRE_CONFIRM = booleanPreferencesKey("voice_perm_require_confirm")
+        val VOICE_PERM_UPDATED_AT = longPreferencesKey("voice_perm_updated_at")
     }
 
     private fun normalizeShadowOwner(accountOwnerId: String): String {
@@ -75,10 +99,55 @@ class UserPreferencesRepository(private val context: Context) {
             dailyResetHour = prefs[Keys.DAILY_RESET_HOUR] ?: 4,
             healthConnectSyncEnabled = prefs[Keys.HEALTH_CONNECT_SYNC_ENABLED] ?: false,
             supabaseCloudSyncEnabled = prefs[Keys.SUPABASE_CLOUD_SYNC_ENABLED] ?: false,
-            openRouterModelId = prefs[Keys.OPENROUTER_MODEL_ID] ?: "google/gemini-2.5-flash",
+            openRouterModelId = prefs[Keys.OPENROUTER_MODEL_ID] ?: SupportedAiModels.DEFAULT_MODEL_ID,
             academicDailyGoalMinutes = prefs[Keys.ACADEMIC_DAILY_GOAL_MINUTES] ?: 60,
             academicWeeklyGoalMinutes = prefs[Keys.ACADEMIC_WEEKLY_GOAL_MINUTES] ?: 360
         )
+    }
+
+    val voiceCommandPermissionsFlow: Flow<VoiceCommandPermissions> = context.realityOsDataStore.data.map { prefs ->
+        VoiceCommandPermissions(
+            allowPlayerInfo = prefs[Keys.VOICE_PERM_PLAYER_INFO] ?: true,
+            allowDailyManagement = prefs[Keys.VOICE_PERM_DAILY_MGMT] ?: true,
+            allowHabitsAndRoutines = prefs[Keys.VOICE_PERM_HABITS] ?: true,
+            allowPhysicalDevelopment = prefs[Keys.VOICE_PERM_PHYSICAL] ?: true,
+            allowAcademicDevelopment = prefs[Keys.VOICE_PERM_ACADEMIC] ?: true,
+            allowMissionsAndRpg = prefs[Keys.VOICE_PERM_MISSIONS_RPG] ?: true,
+            allowSystemControl = prefs[Keys.VOICE_PERM_SYSTEM_CONTROL] ?: true,
+            allowAiConversation = prefs[Keys.VOICE_PERM_AI_CONVERSATION] ?: true,
+            requireConfirmationForMutations = prefs[Keys.VOICE_PERM_REQUIRE_CONFIRM] ?: true,
+            updatedAtEpochMs = prefs[Keys.VOICE_PERM_UPDATED_AT] ?: 0L
+        )
+    }
+
+    suspend fun updateVoiceCommandPermissions(
+        transform: (VoiceCommandPermissions) -> VoiceCommandPermissions
+    ) {
+        context.realityOsDataStore.edit { prefs ->
+            val current = VoiceCommandPermissions(
+                allowPlayerInfo = prefs[Keys.VOICE_PERM_PLAYER_INFO] ?: true,
+                allowDailyManagement = prefs[Keys.VOICE_PERM_DAILY_MGMT] ?: true,
+                allowHabitsAndRoutines = prefs[Keys.VOICE_PERM_HABITS] ?: true,
+                allowPhysicalDevelopment = prefs[Keys.VOICE_PERM_PHYSICAL] ?: true,
+                allowAcademicDevelopment = prefs[Keys.VOICE_PERM_ACADEMIC] ?: true,
+                allowMissionsAndRpg = prefs[Keys.VOICE_PERM_MISSIONS_RPG] ?: true,
+                allowSystemControl = prefs[Keys.VOICE_PERM_SYSTEM_CONTROL] ?: true,
+                allowAiConversation = prefs[Keys.VOICE_PERM_AI_CONVERSATION] ?: true,
+                requireConfirmationForMutations = prefs[Keys.VOICE_PERM_REQUIRE_CONFIRM] ?: true,
+                updatedAtEpochMs = prefs[Keys.VOICE_PERM_UPDATED_AT] ?: 0L
+            )
+            val updated = transform(current)
+            prefs[Keys.VOICE_PERM_PLAYER_INFO] = updated.allowPlayerInfo
+            prefs[Keys.VOICE_PERM_DAILY_MGMT] = updated.allowDailyManagement
+            prefs[Keys.VOICE_PERM_HABITS] = updated.allowHabitsAndRoutines
+            prefs[Keys.VOICE_PERM_PHYSICAL] = updated.allowPhysicalDevelopment
+            prefs[Keys.VOICE_PERM_ACADEMIC] = updated.allowAcademicDevelopment
+            prefs[Keys.VOICE_PERM_MISSIONS_RPG] = updated.allowMissionsAndRpg
+            prefs[Keys.VOICE_PERM_SYSTEM_CONTROL] = updated.allowSystemControl
+            prefs[Keys.VOICE_PERM_AI_CONVERSATION] = updated.allowAiConversation
+            prefs[Keys.VOICE_PERM_REQUIRE_CONFIRM] = updated.requireConfirmationForMutations
+            prefs[Keys.VOICE_PERM_UPDATED_AT] = System.currentTimeMillis()
+        }
     }
 
     fun observeShadowSettings(accountOwnerId: String): Flow<ShadowRealmSettings> {

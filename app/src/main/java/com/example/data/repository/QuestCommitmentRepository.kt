@@ -277,7 +277,7 @@ class QuestCommitmentRepository(
             val commitments = commitmentDao.getCommitmentsForCycleOnce(logicalCycleId)
             val recoveryAssessment = database.recoveryAssessmentDao().getLatestOnce()
             val recoveryState = recoveryAssessment?.let {
-                runCatching { RecoveryState.valueOf(it.recoveryStateName) }.getOrNull()
+                runCatching { RecoveryState.valueOf(it.stateName) }.getOrNull()
             }
             val confirmedFailures = mutableListOf<ConfirmedFailureRecord>()
 

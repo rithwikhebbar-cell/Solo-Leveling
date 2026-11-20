@@ -60,6 +60,9 @@ import com.example.domain.model.QuestCategory
 import com.example.domain.model.QuestType
 import com.example.domain.model.RecoveryState
 import com.example.domain.model.RpgContextSummary
+import com.example.domain.model.DEFAULT_SHADOW_ACCOUNT_OWNER_ID
+import com.example.domain.model.ShadowArmyContextSummary
+import com.example.domain.model.ShadowResourceType
 import com.example.domain.model.SubjectProgressSummary
 import com.example.domain.model.SupportedAiModels
 import com.example.domain.model.SystemNotificationPreferences
@@ -86,19 +89,20 @@ data class ProposalGenerationResult(
  * Central AI System Administrator & Game Master Repository.
  *
  * SECURITY & ARCHITECTURE INVARIANTS:
- * 1. Zero client-side API keys — communicates solely via BackendAiGateway proxy.
+ * 1. Zero client-side API keys — communicates solely via Firebase AI Logic (App Check) or BackendAiGateway proxy.
  * 2. Progression authority belongs exclusively to ProgressionEngine / RealityOsRepository / AcademicRepository.
  *    This repository NEVER mutates player XP, level, rank, or attributes directly.
  * 3. Proposals require explicit player confirmation before entering Quest Board / Academic Quests.
- * 4. Honest deterministic fallback activates automatically whenever backend URL is missing, offline,
- *    consent-denied, auth-rejected, rate-limited, or malformed.
+ * 4. Honest deterministic fallback activates automatically whenever offline, consent-denied,
+ *    auth-rejected, rate-limited, or malformed.
  */
 class AiSystemRepository(
     private val database: SoloLevelingDatabase,
     private val preferencesRepository: UserPreferencesRepository,
     private val realityOsRepository: RealityOsRepository,
     private val academicRepository: AcademicRepository,
-    private val backendAiGateway: BackendAiGateway
+    private val backendAiGateway: BackendAiGateway,
+    private val activeAccountOwnerIdProvider: suspend () -> String = { DEFAULT_SHADOW_ACCOUNT_OWNER_ID }
 ) {
     private val conversationDao = database.aiConversationDao()
     private val proposalDao = database.aiProposalDao()
@@ -292,6 +296,36 @@ class AiSystemRepository(
             shadowCollectionCount = database.inventoryShadowDao().getAllShadowCollectionOnce().size
         )
 
+        val shadowArmySummary = runCatching {
+            val ownerId = activeAccountOwnerIdProvider()
+            val monarch = database.shadowMonarchProfileDao().getProfileForOwnerOnce(ownerId)
+            val shadows = database.shadowDao().getAllShadowsForOwnerOnce(ownerId).filter { !it.isRetired }
+            val activeDeployments = database.shadowDeploymentDao().getActiveDeploymentsForOwnerOnce(ownerId)
+            val formations = database.shadowFormationDao().getAllFormationsForOwnerOnce(ownerId)
+            val activeFormation = formations.firstOrNull { it.isActive }
+            val essence = database.shadowResourceDao()
+                .getCurrentBalanceForOwner(ownerId, ShadowResourceType.SHADOW_ESSENCE.name)
+            val totalPower = shadows.sumOf {
+                it.statPower + it.statEndurance + it.statFocus + it.statDiscipline + it.statWisdom + it.statAdaptability
+            }
+            if (monarch != null || shadows.isNotEmpty()) {
+                ShadowArmyContextSummary(
+                    monarchLevel = monarch?.monarchLevel ?: 1,
+                    monarchTitle = monarch?.monarchRankName ?: "AWAKENING",
+                    activeShadowsCount = shadows.size,
+                    armyCapacity = monarch?.armyCapacity ?: 10,
+                    activeDeploymentsCount = activeDeployments.size,
+                    activeFormationName = activeFormation?.name,
+                    totalArmyPower = totalPower,
+                    shadowEssenceBalance = essence,
+                    notableShadowNames = shadows
+                        .sortedByDescending { it.statPower + it.statEndurance + it.statFocus + it.statDiscipline + it.statWisdom + it.statAdaptability }
+                        .take(5)
+                        .map { it.name }
+                )
+            } else null
+        }.getOrNull()
+
         return PlayerContextEngine.buildContextSnapshot(
             scope = scope,
             consent = consent,
@@ -313,7 +347,8 @@ class AiSystemRepository(
             selectedAiModelId = modelPrefs.selectedModelId,
             nowEpochMs = now,
             lifeSummaryInput = lifeSummary,
-            rpgSummaryInput = rpgSummary
+            rpgSummaryInput = rpgSummary,
+            shadowArmySummaryInput = shadowArmySummary
         )
     }
 
@@ -399,7 +434,19 @@ class AiSystemRepository(
         var errorMessage: String? = null
 
         val endpointValid = HttpBackendAiGateway.normalizeProxyEndpoint(modelPrefs.backendBaseUrl) != null
-        val canUseCloud = modelPrefs.aiEnabled && consent.cloudAiConsentGranted && endpointValid
+        val canUseCloud = modelPrefs.aiEnabled &&
+            consent.cloudAiConsentGranted &&
+            (backendAiGateway.supportsDirectCloud || endpointValid)
+
+        val compactContext = buildString {
+            append(PlayerContextEngine.formatCompactPromptContext(snapshot))
+            if (historyBefore.size > 8) {
+                val olderSummary = historyBefore.dropLast(6).takeLast(4).joinToString(" | ") { turn ->
+                    "${turn.role.wireValue}: ${PromptSanitizer.sanitize(turn.content, maxChars = 70)}"
+                }
+                appendLine("EARLIER CONVERSATION SUMMARY: $olderSummary")
+            }
+        }
 
         if (canUseCloud) {
             usedCloud = true
@@ -407,9 +454,9 @@ class AiSystemRepository(
                 model = modelOption.id,
                 requestType = "CHAT",
                 systemPrompt = GAME_MASTER_SYSTEM_PROMPT,
-                contextSummary = PlayerContextEngine.formatCompactPromptContext(snapshot),
-                recentTurns = HttpBackendAiGateway.buildBoundedTurns(historyBefore, maxTurns = 6),
-                userPrompt = PromptSanitizer.sanitize(cleanPrompt, maxChars = 600),
+                contextSummary = compactContext,
+                recentTurns = HttpBackendAiGateway.buildBoundedTurns(historyBefore, maxTurns = 8),
+                userPrompt = PromptSanitizer.sanitize(cleanPrompt, maxChars = 1000),
                 stream = modelPrefs.streamingEnabled && modelOption.supportsStreaming
             )
 
@@ -491,6 +538,20 @@ class AiSystemRepository(
         )
     }
 
+    suspend fun regenerateLastResponse(
+        conversationId: Long,
+        onStreamToken: (String) -> Unit = {}
+    ): ChatDispatchResult? {
+        val messages = conversationDao.getMessagesForConversationOnce(conversationId).map { it.toDomain() }
+        val lastUserMsg = messages.lastOrNull { it.role == AiChatRole.USER } ?: return null
+        conversationDao.deleteMessagesFrom(conversationId, lastUserMsg.id)
+        return sendChatMessage(
+            conversationId = conversationId,
+            userPrompt = lastUserMsg.content,
+            onStreamToken = onStreamToken
+        )
+    }
+
     suspend fun generateQuestProposals(): ProposalGenerationResult {
         val startMs = System.currentTimeMillis()
         val modelPrefs = configDao.getModelPreferencesOnce()?.toDomain() ?: AiModelPreferenceState()
@@ -515,7 +576,7 @@ class AiSystemRepository(
 
         val canUseCloud = modelPrefs.aiEnabled &&
             consent.cloudAiConsentGranted &&
-            HttpBackendAiGateway.normalizeProxyEndpoint(modelPrefs.backendBaseUrl) != null
+            (backendAiGateway.supportsDirectCloud || HttpBackendAiGateway.normalizeProxyEndpoint(modelPrefs.backendBaseUrl) != null)
 
         if (canUseCloud) {
             usedCloud = true
@@ -683,7 +744,7 @@ class AiSystemRepository(
 
         val canUseCloud = modelPrefs.aiEnabled &&
             consent.cloudAiConsentGranted &&
-            HttpBackendAiGateway.normalizeProxyEndpoint(modelPrefs.backendBaseUrl) != null
+            (backendAiGateway.supportsDirectCloud || HttpBackendAiGateway.normalizeProxyEndpoint(modelPrefs.backendBaseUrl) != null)
 
         if (canUseCloud) {
             usedCloud = true
@@ -808,11 +869,11 @@ class AiSystemRepository(
 
     companion object {
         private const val GAME_MASTER_SYSTEM_PROMPT =
-            "You are the SOLO LEVELING Reality OS AI System Administrator & Game Master. " +
-                "Base every statement strictly on the provided player telemetry snapshot. " +
-                "Clearly separate measured data, self-reported entries, and heuristic familiarity estimates. " +
-                "Never fabricate unrecorded sessions, never claim to modify XP/attributes/ranks directly, " +
-                "and never encourage training through REST_RECOMMENDED or self-reported discomfort."
+            "You are the SOLO LEVELING Reality OS AI System Companion — an intelligent, analytical, direct, and disciplined digital mentor. " +
+                "Base every fact strictly on the provided player telemetry snapshot. Never invent or fabricate player stats, sessions, or achievements. " +
+                "Clearly distinguish measured data, self-reported entries, and heuristic familiarity estimates. " +
+                "Keep replies concise, structured, and actionable by default, expanding into full depth when the player requests detailed analysis. " +
+                "Never claim to directly grant XP, alter attributes, promote ranks, or bypass recovery safety when REST_RECOMMENDED or discomfort is reported."
 
         private const val QUEST_JSON_SYSTEM_PROMPT =
             "Return ONLY valid JSON: {\"proposals\":[{\"title\":\"\",\"description\":\"\",\"category\":\"PHYSICAL|ACADEMIC|DISCIPLINE|PERSONAL|RECOVERY|LONG_TERM\",\"difficulty\":\"E-Rank|D-Rank|C-Rank\",\"objective\":\"\",\"completionCriteria\":\"\",\"suggestedDurationMinutes\":30,\"priority\":\"LOW|MEDIUM|HIGH|CRITICAL\",\"reason\":\"\"}]}. " +

@@ -25,6 +25,9 @@ class SystemSpeechCommandController(
     private val _state = MutableStateFlow<SpeechInputUiState>(SpeechInputUiState.Idle)
     val state: StateFlow<SpeechInputUiState> = _state.asStateFlow()
 
+    private val _partialTranscript = MutableStateFlow("")
+    val partialTranscript: StateFlow<String> = _partialTranscript.asStateFlow()
+
     private var recognizer: SpeechRecognizer? = null
 
     fun isRecognizerSupported(): Boolean = runCatching {
@@ -80,6 +83,7 @@ class SystemSpeechCommandController(
                 override fun onResults(results: Bundle?) {
                     val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                     val top = matches?.firstOrNull()?.trim().orEmpty()
+                    _partialTranscript.value = ""
                     _state.value = SpeechInputUiState.Idle
                     releaseRecognizer()
                     if (top.isNotBlank()) {
@@ -89,7 +93,17 @@ class SystemSpeechCommandController(
                     }
                 }
 
-                override fun onPartialResults(partialResults: Bundle?) = Unit
+                override fun onPartialResults(partialResults: Bundle?) {
+                    val partial = partialResults
+                        ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                        ?.firstOrNull()
+                        ?.trim()
+                        .orEmpty()
+                    if (partial.isNotBlank()) {
+                        _partialTranscript.value = partial
+                    }
+                }
+
                 override fun onEvent(eventType: Int, params: Bundle?) = Unit
             })
 
@@ -97,8 +111,9 @@ class SystemSpeechCommandController(
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE, localeTag)
                 putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
-                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
+                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
             }
+            _partialTranscript.value = ""
             _state.value = SpeechInputUiState.Listening(0f)
             sr.startListening(intent)
         }.onFailure { err ->
@@ -110,6 +125,7 @@ class SystemSpeechCommandController(
     fun stopListening() {
         runCatching { recognizer?.stopListening() }
         releaseRecognizer()
+        _partialTranscript.value = ""
         if (_state.value is SpeechInputUiState.Listening || _state.value is SpeechInputUiState.Processing) {
             _state.value = SpeechInputUiState.Idle
         }

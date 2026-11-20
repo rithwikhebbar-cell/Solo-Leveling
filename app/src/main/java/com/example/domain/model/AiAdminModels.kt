@@ -67,58 +67,75 @@ data class AiModelOption(
 )
 
 object SupportedAiModels {
-    const val DEFAULT_MODEL_ID = "google/gemini-2.5-flash"
+    const val DEFAULT_MODEL_ID = "gemini-3.8-flash"
+    const val FAST_INTENT_MODEL_ID = "gemini-3.5-flash-lite"
+    const val DEEP_REASONING_MODEL_ID = "gemini-4-argon"
 
     val catalog: List<AiModelOption> = listOf(
         AiModelOption(
-            id = "google/gemini-2.5-flash",
-            displayName = "Gemini 2.5 Flash",
-            provider = "Google via OpenRouter",
+            id = DEFAULT_MODEL_ID,
+            displayName = "Gemini 3.8 Flash (Recommended)",
+            provider = "Google Gemini • Firebase AI Logic",
             supportsStreaming = true,
             supportsStructuredJson = true,
             contextWindowTokens = 1_000_000,
-            description = "Fast multimodal reasoning, low latency, streaming & JSON schema."
+            description = "Fast, intelligent conversational reasoning with streaming & structured JSON schema."
         ),
         AiModelOption(
-            id = "anthropic/claude-3.5-sonnet",
-            displayName = "Claude 3.5 Sonnet",
-            provider = "Anthropic via OpenRouter",
+            id = FAST_INTENT_MODEL_ID,
+            displayName = "Gemini 3.5 Flash-Lite",
+            provider = "Google Gemini • Firebase AI Logic",
             supportsStreaming = true,
             supportsStructuredJson = true,
-            contextWindowTokens = 200_000,
-            description = "Deep structured coaching and nuanced planning."
+            contextWindowTokens = 1_000_000,
+            description = "Ultra-low latency model optimized for rapid voice command interpretation and quick briefs."
         ),
         AiModelOption(
-            id = "openai/gpt-4o-mini",
-            displayName = "GPT-4o Mini",
-            provider = "OpenAI via OpenRouter",
+            id = DEEP_REASONING_MODEL_ID,
+            displayName = "Gemini 4 Argon",
+            provider = "Google Gemini • Firebase AI Logic",
             supportsStreaming = true,
             supportsStructuredJson = true,
-            contextWindowTokens = 128_000,
-            description = "Balanced cost-efficient daily planning and chat."
-        ),
-        AiModelOption(
-            id = "meta-llama/llama-3.3-70b-instruct",
-            displayName = "Llama 3.3 70B Instruct",
-            provider = "Meta via OpenRouter",
-            supportsStreaming = true,
-            supportsStructuredJson = false,
-            contextWindowTokens = 131_072,
-            description = "Open-weights instruction model (prompt-guided JSON fallback)."
+            contextWindowTokens = 1_000_000,
+            description = "Deep multi-step analytical reasoning for comprehensive progression audits and strategic planning."
         )
     )
 
+    fun resolveGeminiModelId(modelId: String): String {
+        val clean = modelId.trim()
+        return when {
+            clean == DEFAULT_MODEL_ID || clean == FAST_INTENT_MODEL_ID || clean == DEEP_REASONING_MODEL_ID -> clean
+            clean.contains("argon", ignoreCase = true) -> DEEP_REASONING_MODEL_ID
+            clean.contains("lite", ignoreCase = true) -> FAST_INTENT_MODEL_ID
+            else -> DEFAULT_MODEL_ID
+        }
+    }
+
     fun findById(modelId: String): AiModelOption =
-        catalog.find { it.id == modelId } ?: AiModelOption(
-            id = modelId,
-            displayName = modelId.substringAfterLast('/'),
-            provider = "Custom OpenRouter Model",
-            supportsStreaming = true,
-            supportsStructuredJson = false,
-            contextWindowTokens = 32_768,
-            description = "Custom model ID; structured JSON capability not assumed."
-        )
+        catalog.find { it.id == modelId }
+            ?: catalog.find { it.id == resolveGeminiModelId(modelId) }
+            ?: AiModelOption(
+                id = modelId,
+                displayName = modelId.substringAfterLast('/'),
+                provider = "Custom Proxy Model",
+                supportsStreaming = true,
+                supportsStructuredJson = true,
+                contextWindowTokens = 128_000,
+                description = "Custom backend proxy model ID."
+            )
 }
+
+data class ShadowArmyContextSummary(
+    val monarchLevel: Int = 1,
+    val monarchTitle: String = "Shadow Initiate",
+    val activeShadowsCount: Int = 0,
+    val armyCapacity: Int = 3,
+    val activeDeploymentsCount: Int = 0,
+    val activeFormationName: String? = null,
+    val totalArmyPower: Int = 0,
+    val shadowEssenceBalance: Int = 0,
+    val notableShadowNames: List<String> = emptyList()
+)
 
 data class PlayerContextSnapshot(
     val generatedAtEpochMs: Long = System.currentTimeMillis(),
@@ -129,6 +146,7 @@ data class PlayerContextSnapshot(
     val questSummary: QuestContextSummary? = null,
     val lifeSummary: LifeContextSummary? = null,
     val rpgSummary: RpgContextSummary? = null,
+    val shadowArmySummary: ShadowArmyContextSummary? = null,
     val preferencesSummary: PreferencesContextSummary? = null,
     val dataCompletenessNotes: List<String> = emptyList()
 )

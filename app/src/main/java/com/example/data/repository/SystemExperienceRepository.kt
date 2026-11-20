@@ -6,15 +6,27 @@ import com.example.data.local.entity.SystemExperiencePreferenceEntity
 import com.example.data.local.entity.toDomain
 import com.example.data.local.entity.toEntity
 import com.example.data.preferences.UserPreferencesRepository
+import com.example.data.preferences.VoiceCommandPermissions
 import com.example.domain.engine.AwakeningScriptEngine
+import com.example.domain.engine.CommandExecutionResult
+import com.example.domain.engine.CommandExecutionStatus
+import com.example.domain.engine.GeminiIntentEngine
+import com.example.domain.engine.IntentResolutionSource
+import com.example.domain.engine.PlayerContextEngine
+import com.example.domain.engine.StructuredVoiceIntent
 import com.example.domain.engine.SystemAnnouncementEngine
 import com.example.domain.engine.SystemCelebrationEngine
+import com.example.domain.engine.SystemCommandExecutor
 import com.example.domain.engine.SystemPresentationCoordinator
 import com.example.domain.engine.VoiceCommandProcessor
+import com.example.domain.model.AiConsentState
+import com.example.domain.model.AiContextScope
+import com.example.domain.model.AiModelPreferenceState
 import com.example.domain.model.AwakeningStage
 import com.example.domain.model.CelebrationEvent
 import com.example.domain.model.HunterRank
 import com.example.domain.model.PlayerProfile
+import com.example.domain.model.SupportedAiModels
 import com.example.domain.model.SystemAnnouncementCategory
 import com.example.domain.model.SystemAnnouncementRecord
 import com.example.domain.model.SystemEvent
@@ -44,7 +56,10 @@ class SystemExperienceRepository(
     private val context: Context,
     private val database: SoloLevelingDatabase,
     private val preferencesRepository: UserPreferencesRepository,
-    val voiceEngine: VoiceOutputPort
+    val voiceEngine: VoiceOutputPort,
+    private val geminiIntentEngine: GeminiIntentEngine? = null,
+    private val systemCommandExecutor: SystemCommandExecutor? = null,
+    private val aiSystemRepository: AiSystemRepository? = null
 ) {
     private val experienceDao = database.systemExperienceDao()
     private val playerDao = database.playerDao()
@@ -70,6 +85,15 @@ class SystemExperienceRepository(
 
     fun observeVoiceHistory(): Flow<List<VoiceCommandHistoryRecord>> =
         experienceDao.observeVoiceHistory(30).map { list -> list.map { it.toDomain() } }
+
+    fun observeVoiceCommandPermissions(): Flow<VoiceCommandPermissions> =
+        preferencesRepository.voiceCommandPermissionsFlow
+
+    suspend fun updateVoiceCommandPermissions(
+        transform: (VoiceCommandPermissions) -> VoiceCommandPermissions
+    ) {
+        preferencesRepository.updateVoiceCommandPermissions(transform)
+    }
 
     suspend fun ensureInitialized() {
         val prefs = experienceDao.getPreferencesOnce()
@@ -337,6 +361,134 @@ class SystemExperienceRepository(
         }
         return resolution
     }
+
+    /**
+     * Gemini-powered natural language voice command pipeline:
+     * Transcript -> GeminiIntentEngine (schema-validated) -> SystemCommandExecutor (permission/safety/confirmation checked) -> TTS feedback.
+     */
+    suspend fun executeGeminiVoiceCommand(
+        transcript: String,
+        confirmedIntent: StructuredVoiceIntent? = null
+    ): CommandExecutionResult {
+        val expPrefs = experienceDao.getPreferencesOnce()?.toDomain() ?: SystemExperiencePreferences()
+        val intentEngine = geminiIntentEngine
+        val executor = systemCommandExecutor
+        if (intentEngine == null || executor == null) {
+            val legacy = executeVoiceTranscript(transcript, confirmedSensitiveAction = confirmedIntent != null)
+            return CommandExecutionResult(
+                status = when {
+                    !legacy.matched -> CommandExecutionStatus.NEEDS_CLARIFICATION
+                    legacy.requiresConfirmation && confirmedIntent == null -> CommandExecutionStatus.AWAITING_CONFIRMATION
+                    else -> CommandExecutionStatus.EXECUTED
+                },
+                commandLabel = legacy.action?.label ?: "Legacy Voice Command",
+                spokenResponse = legacy.responseText,
+                displayDetails = legacy.responseText,
+                deepLinkRoute = legacy.deepLinkRoute,
+                source = IntentResolutionSource.OFFLINE_LOCAL
+            )
+        }
+
+        val intent = if (confirmedIntent != null) {
+            confirmedIntent
+        } else {
+            val modelPrefs = aiConfigDao.getModelPreferencesOnce()?.toDomain() ?: AiModelPreferenceState()
+            val consent = aiConfigDao.getConsentRecordOnce()?.toDomain() ?: AiConsentState()
+            val contextBrief = runCatching {
+                aiSystemRepository?.buildContextSnapshot(AiContextScope.FULL)?.let {
+                    PlayerContextEngine.formatCompactPromptContext(it)
+                }.orEmpty()
+            }.getOrDefault("")
+            intentEngine.interpret(
+                rawTranscript = transcript,
+                contextSummary = contextBrief,
+                cloudAiAllowed = modelPrefs.aiEnabled && consent.cloudAiConsentGranted,
+                backendBaseUrl = modelPrefs.backendBaseUrl,
+                preferredModelId = SupportedAiModels.FAST_INTENT_MODEL_ID
+            )
+        }
+
+        val result = executor.execute(
+            intent = intent,
+            confirmed = confirmedIntent != null
+        )
+
+        experienceDao.insertVoiceHistory(
+            VoiceCommandHistoryRecord(
+                transcript = transcript.trim(),
+                matchedActionName = "${result.commandLabel} [${result.source.label}]",
+                outcome = "${result.status.name}:${result.commandId?.wireId ?: "NONE"}",
+                executedAtEpochMs = System.currentTimeMillis()
+            ).toEntity()
+        )
+
+        if (expPrefs.ttsEnabled && result.spokenResponse.isNotBlank()) {
+            voiceEngine.speak(
+                text = stripMarkdownForSpeech(result.spokenResponse),
+                priority = TtsSpeechPriority.HIGH,
+                speechRate = expPrefs.ttsSpeechRate,
+                pitch = expPrefs.ttsPitch,
+                localeTag = expPrefs.voiceLocaleTag,
+                interruptCurrent = true
+            )
+        }
+        if (result.status == CommandExecutionStatus.EXECUTED) {
+            SystemAudioHapticFeedback.triggerCue(
+                context = context,
+                cue = SystemCueType.VOICE_COMMAND_ACK,
+                soundEnabled = expPrefs.soundEffectsEnabled,
+                hapticEnabled = expPrefs.hapticFeedbackEnabled,
+                reducedMotionEnabled = expPrefs.reducedMotionEnabled
+            )
+        }
+        return result
+    }
+
+    /**
+     * Multi-turn Voice Conversation Mode turn backed by AiSystemRepository (shares chat history with AI Companion)
+     * and SystemVoiceEngine (TTS).
+     */
+    suspend fun executeVoiceConversationTurn(
+        transcript: String,
+        conversationId: Long?,
+        onStreamToken: (String) -> Unit = {}
+    ): Pair<Long?, String> {
+        val aiRepo = aiSystemRepository ?: return null to "AI Companion service unavailable."
+        val expPrefs = experienceDao.getPreferencesOnce()?.toDomain() ?: SystemExperiencePreferences()
+        val dispatch = aiRepo.sendChatMessage(
+            conversationId = conversationId,
+            userPrompt = transcript,
+            onStreamToken = onStreamToken
+        )
+        val reply = dispatch.assistantMessage.content
+
+        experienceDao.insertVoiceHistory(
+            VoiceCommandHistoryRecord(
+                transcript = transcript.trim(),
+                matchedActionName = "Voice Conversation [${dispatch.assistantMessage.modelUsed}]",
+                outcome = "CONVERSATION:${dispatch.connectionStatus.name}",
+                executedAtEpochMs = System.currentTimeMillis()
+            ).toEntity()
+        )
+
+        if (expPrefs.ttsEnabled && reply.isNotBlank()) {
+            voiceEngine.speak(
+                text = stripMarkdownForSpeech(reply).take(600),
+                priority = TtsSpeechPriority.HIGH,
+                speechRate = expPrefs.ttsSpeechRate,
+                pitch = expPrefs.ttsPitch,
+                localeTag = expPrefs.voiceLocaleTag,
+                interruptCurrent = true
+            )
+        }
+        return dispatch.conversationId to reply
+    }
+
+    private fun stripMarkdownForSpeech(raw: String): String = raw
+        .replace(Regex("```[\\s\\S]*?```"), " code block omitted ")
+        .replace(Regex("[*_`#>]"), "")
+        .replace(Regex("\\s+"), " ")
+        .trim()
 
     suspend fun clearVoiceHistory() {
         experienceDao.clearVoiceHistory()

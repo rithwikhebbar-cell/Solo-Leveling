@@ -4,8 +4,10 @@ import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.example.data.local.SoloLevelingDatabase
+import com.example.data.local.entity.AchievementDefinitionEntity
 import com.example.data.local.entity.AchievementUnlockRecordEntity
 import com.example.data.local.entity.BossBattleInstanceEntity
+import com.example.data.local.entity.BossDefinitionEntity
 import com.example.data.local.entity.DungeonDefinitionEntity
 import com.example.data.local.entity.DungeonInstanceEntity
 import com.example.data.repository.ShadowArmyRepository
@@ -89,6 +91,28 @@ class ShadowPhase62RecruitmentRobolectricTest {
                 notes = "Completed dungeon"
             )
         )
+        db.bossBattleDao().insertBossDefinition(
+            BossDefinitionEntity(
+                id = 501L,
+                code = "BOSS_501",
+                title = "Blood-Red Commander Igris",
+                subtitle = "Knight of the Crimson Throne",
+                description = "Test boss definition",
+                categoryName = "PHYSICAL",
+                difficultyName = "B_RANK",
+                requiredRankName = "E_RANK",
+                requiredLevel = 1,
+                xpReward = 250,
+                primaryAttrName = "STR",
+                primaryAttrXp = 25,
+                secondaryAttrName = "VIT",
+                secondaryAttrXp = 15,
+                rewardTitleId = null,
+                rewardItemId = null,
+                rewardShadowId = null,
+                totalEstimatedDays = 7
+            )
+        )
         db.bossBattleDao().insertBossInstance(
             BossBattleInstanceEntity(
                 id = 1L,
@@ -97,6 +121,23 @@ class ShadowPhase62RecruitmentRobolectricTest {
                 startedAtEpochMs = now - 7200_000,
                 completedAtEpochMs = now - 1800_000,
                 abandonedAtEpochMs = null
+            )
+        )
+        db.achievementTitleDao().insertAchievementDefinitions(
+            listOf(
+                AchievementDefinitionEntity(
+                    id = "ach_first_win",
+                    title = "First Victory",
+                    description = "Complete your first verified milestone",
+                    categoryName = "COMBAT",
+                    rarityName = "RARE",
+                    criterionDescription = "Complete 1 dungeon or boss encounter",
+                    targetValue = 1,
+                    xpBonus = 100,
+                    rewardTitleId = null,
+                    rewardItemId = null,
+                    rewardShadowId = null
+                )
             )
         )
         db.achievementTitleDao().insertAchievementUnlock(

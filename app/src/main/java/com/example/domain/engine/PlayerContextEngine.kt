@@ -26,22 +26,51 @@ import com.example.domain.model.WorkoutSession
 import com.example.domain.model.AcademicContextSummary
 import com.example.domain.model.LifeContextSummary
 import com.example.domain.model.RpgContextSummary
+import com.example.domain.model.ShadowArmyContextSummary
 
 /**
  * Sanitizes untrusted player-entered or externally imported text before including it in prompts.
- * Prevents prompt-injection attempts by stripping system-style control delimiters and capping length.
+ * Prevents prompt-injection attempts by stripping system-style control delimiters, role-spoofing phrases,
+ * secret/API-key patterns, and capping length.
  */
 object PromptSanitizer {
-    private val controlPattern = Regex("(?i)(</?system>|</?assistant>|ignore previous instructions|you are now|override xp|set rank)")
+    private val controlPattern = Regex(
+        "(?i)(</?system>|</?assistant>|</?user>|\\[/?INST\\]|ignore (all )?previous instructions|" +
+            "disregard (all )?previous|you are now|act as root|system override|override xp|set rank|grant infinite|bypass safety)"
+    )
+    private val secretLeakPattern = Regex(
+        "(?i)(AIza[0-9A-Za-z_-]{20,}|sk-[A-Za-z0-9_-]{20,}|Bearer\\s+[A-Za-z0-9._-]{20,})"
+    )
 
     fun sanitize(raw: String, maxChars: Int = 140): String {
         val collapsed = raw
             .replace('\n', ' ')
             .replace('\r', ' ')
             .replace(controlPattern, "[filtered]")
+            .replace(secretLeakPattern, "[redacted]")
             .trim()
-        return if (collapsed.length <= maxChars) collapsed else collapsed.take(maxChars - 3) + "..."
+        return if (collapsed.length <= maxChars) collapsed else collapsed.take((maxChars - 3).coerceAtLeast(1)) + "..."
     }
+
+    fun containsPromptInjection(raw: String): Boolean =
+        controlPattern.containsMatchIn(raw)
+}
+
+/**
+ * Validates and sanitizes AI responses before displaying or persisting them to the user.
+ */
+object AiResponseValidator {
+    private val secretPattern = Regex("(?i)(AIza[0-9A-Za-z_-]{20,}|sk-[A-Za-z0-9_-]{20,})")
+
+    fun sanitizeResponse(raw: String, maxChars: Int = 6000): String {
+        val cleaned = raw
+            .replace(secretPattern, "[redacted]")
+            .trim()
+        return if (cleaned.length <= maxChars) cleaned else cleaned.take(maxChars) + "..."
+    }
+
+    fun isValidAssistantReply(raw: String): Boolean =
+        raw.trim().isNotEmpty()
 }
 
 /**
@@ -90,7 +119,8 @@ object PlayerContextEngine {
         selectedAiModelId: String,
         nowEpochMs: Long = System.currentTimeMillis(),
         lifeSummaryInput: LifeContextSummary? = null,
-        rpgSummaryInput: RpgContextSummary? = null
+        rpgSummaryInput: RpgContextSummary? = null,
+        shadowArmySummaryInput: ShadowArmyContextSummary? = null
     ): PlayerContextSnapshot {
         val missingNotes = mutableListOf<String>()
         val nextRankProgress = ProgressionEngine.evaluateNextRankProgress(profile)
@@ -216,6 +246,7 @@ object PlayerContextEngine {
 
         val lifeSummary = if (consent.shareLifeWithAi) lifeSummaryInput else null
         val rpgSummary = if (consent.shareRpgWithAi) rpgSummaryInput else null
+        val shadowArmySummary = if (consent.shareRpgWithAi) shadowArmySummaryInput else null
 
         return PlayerContextSnapshot(
             generatedAtEpochMs = nowEpochMs,
@@ -226,6 +257,7 @@ object PlayerContextEngine {
             questSummary = questSummary,
             lifeSummary = lifeSummary,
             rpgSummary = rpgSummary,
+            shadowArmySummary = shadowArmySummary,
             preferencesSummary = prefSummary,
             dataCompletenessNotes = missingNotes.distinct()
         )
@@ -262,6 +294,15 @@ object PlayerContextEngine {
         snapshot.rpgSummary?.let { rpg ->
             appendLine("RPG SYSTEMS: Title='${rpg.equippedTitle}', ActiveDungeons=${rpg.activeDungeonsCount}, ClearedDungeons=${rpg.clearedDungeonsCount}, Skills=${rpg.unlockedSkillsCount}/${rpg.totalSkillsCount}, Achievements=${rpg.unlockedAchievementsCount}, Shadows=${rpg.shadowCollectionCount}" +
                 (rpg.activeBossTitle?.let { " | Boss='$it' (${rpg.activeBossHpPercent ?: 100}% HP)" } ?: ""))
+        }
+        snapshot.shadowArmySummary?.let { shadow ->
+            appendLine(
+                "SHADOW ARMY: MonarchLv.${shadow.monarchLevel} (${PromptSanitizer.sanitize(shadow.monarchTitle, 32)}) | " +
+                    "Soldiers=${shadow.activeShadowsCount}/${shadow.armyCapacity}, Deployed=${shadow.activeDeploymentsCount}, " +
+                    "Power=${shadow.totalArmyPower}, Essence=${shadow.shadowEssenceBalance}" +
+                    (shadow.activeFormationName?.let { ", Formation='${PromptSanitizer.sanitize(it, 28)}'" } ?: "") +
+                    (if (shadow.notableShadowNames.isNotEmpty()) ", Roster=${shadow.notableShadowNames.take(5).joinToString(",")}" else "")
+            )
         }
         snapshot.questSummary?.let { q ->
             appendLine("QUESTS: Active=${q.activeGeneralQuestsCount + q.activeAcademicQuestsCount}, Completed=${q.completedGeneralQuestsCount + q.completedAcademicQuestsCount}")

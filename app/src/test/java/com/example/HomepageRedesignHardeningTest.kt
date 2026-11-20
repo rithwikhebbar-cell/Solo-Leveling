@@ -1,10 +1,18 @@
 package com.example
 
+import com.example.data.healthconnect.HealthConnectPermissionState
+import com.example.data.healthconnect.HealthConnectSdkAvailability
+import com.example.data.integration.CloudSyncStatus
+import com.example.data.integration.HealthConnectReadiness
+import com.example.data.integration.SystemAdvisory
+import com.example.data.preferences.UserPreferences
 import com.example.domain.engine.MonarchProgressionEngine
 import com.example.domain.engine.NextRankProgress
 import com.example.domain.engine.ProgressionEngine
-import com.example.domain.engine.SystemAnnouncementEngine
+import com.example.domain.engine.RecoveryEngine
+import com.example.domain.model.ActiveJoggingSessionState
 import com.example.domain.model.AttributeType
+import com.example.domain.model.HealthConnectSyncState
 import com.example.domain.model.HunterRank
 import com.example.domain.model.MonarchRank
 import com.example.domain.model.PhysicalDevelopmentState
@@ -16,7 +24,10 @@ import com.example.domain.model.QuestType
 import com.example.domain.model.ShadowMonarchProfile
 import com.example.domain.model.SystemAnnouncementCategory
 import com.example.domain.model.SystemAnnouncementRecord
+import com.example.domain.model.SystemNotificationChannelSpec
 import com.example.domain.model.VerificationStatus
+import com.example.domain.model.WorkoutCategory
+import com.example.ui.viewmodel.PhysicalDashboardBundle
 import com.example.ui.viewmodel.RealityOsUiState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -90,6 +101,7 @@ class HomepageRedesignHardeningTest {
             currentValue = 5,
             xpReward = 80,
             primaryAttribute = AttributeType.VIT,
+            primaryAttrXpReward = 25,
             isCompleted = true,
             completedAtEpochMs = 1700000000000L
         )
@@ -116,10 +128,11 @@ class HomepageRedesignHardeningTest {
             id = 303L,
             title = "Offline Discipline Protocol",
             description = "Read 20 pages",
-            category = QuestCategory.INTELLECTUAL,
+            category = QuestCategory.INTELLECT,
             type = QuestType.DAILY,
             targetValue = 20,
             unit = "pages",
+            currentValue = 0,
             xpReward = 40,
             primaryAttribute = AttributeType.INT,
             primaryAttrXpReward = 15
@@ -180,18 +193,24 @@ class HomepageRedesignHardeningTest {
     @Test
     fun announcementBanner_validatesDeepLinkRoute() {
         val announcementWithValidRoute = SystemAnnouncementRecord(
-            id = "ann-1",
+            id = 1L,
+            announcementKey = "ann-1",
             title = "Level Up Available",
             message = "Congratulations on reaching Level 20",
+            voiceSummary = "Level Up Available",
             category = SystemAnnouncementCategory.LEVEL_UP,
+            channelSpec = SystemNotificationChannelSpec.LEVEL_UP,
             deepLinkRoute = "status",
             actionLabel = "Inspect"
         )
         val announcementWithoutRoute = SystemAnnouncementRecord(
-            id = "ann-2",
+            id = 2L,
+            announcementKey = "ann-2",
             title = "System Calibrating",
             message = "Background telemetry sync active",
+            voiceSummary = "System Calibrating",
             category = SystemAnnouncementCategory.SYSTEM_ALERT,
+            channelSpec = SystemNotificationChannelSpec.SYSTEM_ALERT,
             deepLinkRoute = "",
             actionLabel = ""
         )
@@ -209,13 +228,13 @@ class HomepageRedesignHardeningTest {
         // Authenticated profile with active legion
         val activeProfile = ShadowMonarchProfile(
             monarchLevel = 15,
-            monarchRank = MonarchRank.SHADOW_LORD,
+            monarchRank = MonarchRank.SOVEREIGN,
             activeShadowCount = 8,
             armyCapacity = 12,
             monarchAuthority = 450
         )
         assertEquals(15, activeProfile.monarchLevel)
-        assertEquals("Shadow Lord", activeProfile.monarchRank.label)
+        assertEquals("Sovereign", activeProfile.monarchRank.label)
         assertEquals(8, activeProfile.activeShadowCount)
         assertEquals(12, activeProfile.armyCapacity)
         assertEquals(450, activeProfile.monarchAuthority)
@@ -248,26 +267,24 @@ class HomepageRedesignHardeningTest {
             verificationStatus = VerificationStatus.VERIFIED_HEALTH_CONNECT
         )
         // Verify total XP awarded is greater than 0
-        assertTrue(physicalReward > 0)
+        assertTrue(physicalReward.xpAwarded > 0)
 
         // Physical development state must never have momentum XP awarded
         val physicalState = PhysicalDevelopmentState(
             completedJoggingMinutesToday = 45,
-            effectiveJoggingTarget = 30
+            aiRecommendedJoggingMinutes = 30
         )
         assertEquals(45, physicalState.completedJoggingMinutesToday)
+        assertEquals(30, physicalState.effectiveJoggingTarget)
 
         // Shadow Monarch extraction must never award Momentum XP to player
         val shadowProfile = ShadowMonarchProfile(monarchLevel = 2, monarchAuthority = 100)
         assertEquals(100, shadowProfile.monarchAuthority)
         // Confirm MonarchProgressionEngine does not touch player level XP or momentum XP
-        val monarchProgress = MonarchProgressionEngine.evaluatePromotion(
-            shadowProfile,
-            activeShadowCount = 5,
-            dungeonClears = 10,
-            rulerDefeats = 1
-        )
-        assertNotNull(monarchProgress)
+        val monarchRank = MonarchRank.forLevel(shadowProfile.monarchLevel)
+        val nextLevelXp = MonarchProgressionEngine.calculateNextLevelXp(shadowProfile.monarchLevel)
+        assertEquals(MonarchRank.AWAKENING, monarchRank)
+        assertTrue(nextLevelXp > 0L)
     }
 
     // ========================================================================
@@ -291,20 +308,26 @@ class HomepageRedesignHardeningTest {
     @Test
     fun systemAnnouncementPriority_ordersHighSeverityAboveRoutineNotifications() {
         val highPriority = SystemAnnouncementRecord(
-            id = "alert-1",
+            id = 1L,
+            announcementKey = "alert-1",
             title = "Boss Gate Approaching",
             message = "High rank dungeon open",
-            category = SystemAnnouncementCategory.BOSS
+            voiceSummary = "Boss Gate Approaching",
+            category = SystemAnnouncementCategory.BOSS,
+            channelSpec = SystemNotificationChannelSpec.BOSS_BATTLE
         )
         val routinePriority = SystemAnnouncementRecord(
-            id = "routine-1",
+            id = 2L,
+            announcementKey = "routine-1",
             title = "Daily Summary",
             message = "Today's recap",
-            category = SystemAnnouncementCategory.DAILY_SUMMARY
+            voiceSummary = "Daily Summary",
+            category = SystemAnnouncementCategory.DAILY_SUMMARY,
+            channelSpec = SystemNotificationChannelSpec.DAILY_REPORT
         )
 
         // SystemAnnouncementCategory ordering
-        assertTrue(SystemAnnouncementCategory.BOSS.ordinal < SystemAnnouncementCategory.DAILY_SUMMARY.ordinal)
+        assertTrue(highPriority.category.ordinal < routinePriority.category.ordinal)
     }
 
     // ========================================================================
@@ -313,13 +336,13 @@ class HomepageRedesignHardeningTest {
     @Test
     fun uiState_preservesAllSevenCanonicalAttributesAccurately() {
         val initialAttributes = PlayerAttributes(
-            str = com.example.domain.model.AttributeBreakdown(AttributeType.STR, 15, 12, 3, 40),
-            vit = com.example.domain.model.AttributeBreakdown(AttributeType.VIT, 14, 10, 4, 20),
-            agi = com.example.domain.model.AttributeBreakdown(AttributeType.AGI, 18, 14, 4, 80),
-            intAttr = com.example.domain.model.AttributeBreakdown(AttributeType.INT, 20, 16, 4, 50),
-            dis = com.example.domain.model.AttributeBreakdown(AttributeType.DIS, 22, 18, 4, 90),
-            wis = com.example.domain.model.AttributeBreakdown(AttributeType.WIS, 16, 12, 4, 30),
-            cha = com.example.domain.model.AttributeBreakdown(AttributeType.CHA, 12, 8, 4, 10)
+            str = com.example.domain.model.AttributeBreakdown(AttributeType.STR, 0, 12, 3, 40),
+            vit = com.example.domain.model.AttributeBreakdown(AttributeType.VIT, 0, 10, 4, 20),
+            agi = com.example.domain.model.AttributeBreakdown(AttributeType.AGI, 0, 14, 4, 80),
+            intel = com.example.domain.model.AttributeBreakdown(AttributeType.INT, 0, 16, 4, 50),
+            dis = com.example.domain.model.AttributeBreakdown(AttributeType.DIS, 0, 18, 4, 90),
+            wis = com.example.domain.model.AttributeBreakdown(AttributeType.WIS, 0, 12, 4, 30),
+            cha = com.example.domain.model.AttributeBreakdown(AttributeType.CHA, 0, 8, 4, 10)
         )
 
         val player = PlayerProfile(
@@ -330,19 +353,54 @@ class HomepageRedesignHardeningTest {
             attributes = initialAttributes,
             streakDays = 14,
             verifiedActivitiesCount = 42,
-            totalActivitiesCount = 50
+            selfReportedActivitiesCount = 8
+        )
+
+        val defaultRecovery = RecoveryEngine.assess(
+            measuredLoadMinutes48h = 0,
+            measuredLoadMinutes7d = 0,
+            measuredSessions7d = 0,
+            consecutiveActiveDays = 0
         )
 
         val state = RealityOsUiState.Ready(
             player = player,
-            quests = emptyList(),
-            notifications = emptyList(),
-            physicalState = PhysicalDevelopmentState(),
             nextRankProgress = NextRankProgress(
-                currentRank = HunterRank.C_RANK,
                 nextRank = HunterRank.B_RANK,
+                levelProgress = 0.7f,
+                attributeProgress = 0.6f,
+                verifiedProgress = 0.65f,
                 overallProgress = 0.65f,
                 isEligibleForPromotion = false
+            ),
+            quests = emptyList(),
+            physicalState = PhysicalDevelopmentState(),
+            notifications = emptyList(),
+            activityLogs = emptyList(),
+            preferences = UserPreferences(),
+            healthConnectReadiness = HealthConnectReadiness.AVAILABLE,
+            cloudSyncStatus = CloudSyncStatus.LOCAL_ONLY,
+            currentAdvisory = SystemAdvisory(
+                headline = "System Nominal",
+                recommendation = "Maintain daily cadence",
+                suggestedJoggingMinutes = 30,
+                sourceLabel = "Local Deterministic Engine"
+            ),
+            physicalBundle = PhysicalDashboardBundle(
+                joggingSessions = emptyList(),
+                workoutSessions = emptyList(),
+                exerciseRecords = emptyList(),
+                recoveryAssessment = defaultRecovery,
+                recoveryHistory = emptyList(),
+                importedHealthActivities = emptyList(),
+                healthConnectSyncState = HealthConnectSyncState(),
+                healthConnectAvailability = HealthConnectSdkAvailability.AVAILABLE,
+                healthConnectPermissions = HealthConnectPermissionState(),
+                isSyncingHealthConnect = false,
+                syncFeedbackMessage = null,
+                pendingJoggingProposal = null,
+                activeJoggingSession = ActiveJoggingSessionState(),
+                advisoryWorkoutCategory = WorkoutCategory.STRENGTH to "Baseline conditioning"
             )
         )
 

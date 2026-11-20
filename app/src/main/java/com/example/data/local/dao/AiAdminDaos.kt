@@ -47,6 +47,9 @@ interface AiConversationDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertMessage(message: AiMessageEntity): Long
+
+    @Query("DELETE FROM ai_messages WHERE conversationId = :conversationId AND id >= :fromMessageId")
+    suspend fun deleteMessagesFrom(conversationId: Long, fromMessageId: Long)
 }
 
 @Dao

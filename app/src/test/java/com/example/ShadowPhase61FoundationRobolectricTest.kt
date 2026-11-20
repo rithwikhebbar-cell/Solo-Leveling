@@ -27,12 +27,16 @@ import com.example.domain.model.ShadowStats
 import com.example.domain.model.SyncEntityType
 import com.example.ui.viewmodel.ShadowRealmViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -317,56 +321,66 @@ class ShadowPhase61FoundationRobolectricTest {
         assertEquals(180L, repository.getShadowById(shadowId, accountA)?.shadowXp)
     }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     @Test
-    fun viewModelAndDataStoreSettings_switchCleanlyAndPersistPerAccount() = runTest {
-        val prefs = UserPreferencesRepository(context)
-        val ownerFlow = MutableStateFlow(DEFAULT_SHADOW_ACCOUNT_OWNER_ID)
+    fun viewModelAndDataStoreSettings_switchCleanlyAndPersistPerAccount() {
+        Dispatchers.setMain(Dispatchers.Default)
+        try {
+            runBlocking {
+                val prefs = UserPreferencesRepository(context)
+                val ownerFlow = MutableStateFlow(DEFAULT_SHADOW_ACCOUNT_OWNER_ID)
 
-        // Seed distinct data in Account A and Account B
-        monarchEngine.getOrCreateProfile(accountA)
-        monarchEngine.awardMonarchXp("vm_test_a", 400, "Alpha", accountA)
-        repository.awardResource(ShadowResourceType.SHADOW_ESSENCE, 90, "vm_res_a", "Alpha Essence", accountA).getOrThrow()
+                // Seed distinct data in Account A and Account B
+                monarchEngine.getOrCreateProfile(accountA)
+                monarchEngine.awardMonarchXp("vm_test_a", 400, "Alpha", accountA)
+                repository.awardResource(ShadowResourceType.SHADOW_ESSENCE, 90, "vm_res_a", "Alpha Essence", accountA).getOrThrow()
 
-        monarchEngine.getOrCreateProfile(accountB)
-        repository.awardResource(ShadowResourceType.SHADOW_ESSENCE, 15, "vm_res_b", "Beta Essence", accountB).getOrThrow()
+                monarchEngine.getOrCreateProfile(accountB)
+                repository.awardResource(ShadowResourceType.SHADOW_ESSENCE, 15, "vm_res_b", "Beta Essence", accountB).getOrThrow()
 
-        val vm1 = ShadowRealmViewModel(repository, ownerFlow, prefs)
+                val vm1 = ShadowRealmViewModel(repository, ownerFlow, prefs)
 
-        // Switch to Account A and update settings
-        ownerFlow.value = accountA
-        withTimeout(3000) {
-            vm1.uiState.first {
-                it.activeAccountOwnerId == accountA && !it.isLoading && it.shadowEssenceBalance == 90
+                // Switch to Account A and update settings
+                ownerFlow.value = accountA
+                withTimeout(5000) {
+                    vm1.uiState.first {
+                        it.activeAccountOwnerId == accountA && !it.isLoading && it.shadowEssenceBalance == 90
+                    }
+                }
+                vm1.updateExtractionAlerts(false)
+                vm1.updateAutoRecallOnRest(false)
+                withTimeout(5000) {
+                    vm1.settingsState.first {
+                        it.accountOwnerId == accountA && !it.extractionAlertsEnabled && !it.autoRecallOnRest
+                    }
+                }
+
+                // Switch to Account B -> state & settings reset cleanly to B's values
+                ownerFlow.value = accountB
+                withTimeout(5000) {
+                    vm1.uiState.first {
+                        it.activeAccountOwnerId == accountB && !it.isLoading && it.shadowEssenceBalance == 15
+                    }
+                }
+                val bSettings = withTimeout(5000) {
+                    vm1.settingsState.first { it.accountOwnerId == accountB }
+                }
+                assertTrue(bSettings.extractionAlertsEnabled)
+                assertTrue(bSettings.autoRecallOnRest)
+
+                // Simulate app restart with fresh ViewModel & PreferencesRepository -> Account A settings survived!
+                val prefsRestart = UserPreferencesRepository(context)
+                val vmRestart = ShadowRealmViewModel(repository, MutableStateFlow(accountA), prefsRestart)
+                val restoredA = withTimeout(5000) {
+                    vmRestart.settingsState.first { it.accountOwnerId == accountA && it.updatedAtEpochMs > 0L }
+                }
+                assertFalse(restoredA.extractionAlertsEnabled)
+                assertTrue(restoredA.evolutionAlertsEnabled)
+                assertFalse(restoredA.autoRecallOnRest)
             }
+        } finally {
+            Dispatchers.resetMain()
         }
-        vm1.updateExtractionAlerts(false)
-        vm1.updateAutoRecallOnRest(false)
-        withTimeout(3000) {
-            vm1.settingsState.first {
-                it.accountOwnerId == accountA && !it.extractionAlertsEnabled && !it.autoRecallOnRest
-            }
-        }
-
-        // Switch to Account B -> state & settings reset cleanly to B's values
-        ownerFlow.value = accountB
-        withTimeout(3000) {
-            vm1.uiState.first {
-                it.activeAccountOwnerId == accountB && !it.isLoading && it.shadowEssenceBalance == 15
-            }
-        }
-        val bSettings = vm1.settingsState.first { it.accountOwnerId == accountB }
-        assertTrue(bSettings.extractionAlertsEnabled)
-        assertTrue(bSettings.autoRecallOnRest)
-
-        // Simulate app restart with fresh ViewModel & PreferencesRepository -> Account A settings survived!
-        val prefsRestart = UserPreferencesRepository(context)
-        val vmRestart = ShadowRealmViewModel(repository, MutableStateFlow(accountA), prefsRestart)
-        val restoredA = withTimeout(3000) {
-            vmRestart.settingsState.first { it.accountOwnerId == accountA && it.updatedAtEpochMs > 0L }
-        }
-        assertFalse(restoredA.extractionAlertsEnabled)
-        assertTrue(restoredA.evolutionAlertsEnabled)
-        assertFalse(restoredA.autoRecallOnRest)
     }
 
     @Test

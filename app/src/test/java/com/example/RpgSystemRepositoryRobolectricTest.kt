@@ -566,7 +566,8 @@ class RpgSystemRepositoryRobolectricTest {
                 SoloLevelingDatabase.MIGRATION_13_14,
                 SoloLevelingDatabase.MIGRATION_14_15,
                 SoloLevelingDatabase.MIGRATION_15_16,
-                SoloLevelingDatabase.MIGRATION_16_17
+                SoloLevelingDatabase.MIGRATION_16_17,
+                SoloLevelingDatabase.MIGRATION_17_18
             )
             .allowMainThreadQueries()
             .build()

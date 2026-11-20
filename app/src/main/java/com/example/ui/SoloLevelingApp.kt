@@ -1760,7 +1760,12 @@ private fun RealityOsNavHost(
                 onClearAllConversations = aiSystemViewModel::clearAllConversations,
                 onSpeakMessage = { msg -> systemExperienceViewModel.speakText(msg) },
                 onOpenVoiceConsole = { navController.navigate(VoiceCommandRoute) },
-                onOpenAiSettings = { navController.navigate(AiSystemRoute) }
+                onOpenAiSettings = { navController.navigate(AiSystemRoute) },
+                onSelectConversation = aiSystemViewModel::selectConversation,
+                onDeleteConversation = aiSystemViewModel::deleteConversation,
+                onStopGeneration = aiSystemViewModel::stopGeneration,
+                onRegenerateResponse = aiSystemViewModel::regenerateLastResponse,
+                onEnableCloudConsent = { aiSystemViewModel.updateConsent(cloudConsent = true) }
             )
         }
         composable<VoiceCommandRoute> {
@@ -1778,7 +1783,12 @@ private fun RealityOsNavHost(
                     }
                 },
                 onDismissPending = systemExperienceViewModel::dismissPendingVoiceConfirmation,
-                onClearHistory = systemExperienceViewModel::clearVoiceHistory
+                onClearHistory = systemExperienceViewModel::clearVoiceHistory,
+                onSelectVoiceMode = systemExperienceViewModel::setVoiceMode,
+                onStopVoice = systemExperienceViewModel::stopVoice,
+                onEndVoiceSession = systemExperienceViewModel::endVoiceConversationSession,
+                onOpenAiCompanion = { navController.navigate(AiCompanionRoute) },
+                onOpenVoiceSettings = { navController.navigate(SystemVoiceSettingsRoute) }
             )
         }
         composable<SystemVoiceSettingsRoute> {
@@ -1789,7 +1799,8 @@ private fun RealityOsNavHost(
                 onTestVoice = systemExperienceViewModel::testSystemVoice,
                 onStopVoice = systemExperienceViewModel::stopVoice,
                 onMarkAnnouncementRead = systemExperienceViewModel::markAnnouncementRead,
-                onMarkAllRead = systemExperienceViewModel::markAllAnnouncementsRead
+                onMarkAllRead = systemExperienceViewModel::markAllAnnouncementsRead,
+                onUpdateVoicePermissions = systemExperienceViewModel::updateVoiceCommandPermissions
             )
         }
         composable<WidgetHubRoute> {

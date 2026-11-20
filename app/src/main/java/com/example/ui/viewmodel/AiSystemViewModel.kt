@@ -20,7 +20,9 @@ import com.example.domain.model.PlanMode
 import com.example.domain.model.PlayerContextSnapshot
 import com.example.domain.model.PlayerProfile
 import com.example.domain.model.SystemNotificationPreferences
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -98,6 +100,7 @@ class AiSystemViewModel(
 
     private val selectedConversationIdFlow = MutableStateFlow<Long?>(null)
     private val transientState = MutableStateFlow(AiTransientUiState())
+    private var activeChatJob: Job? = null
 
     private val activeMessagesFlow = combine(
         aiSystemRepository.conversations,
@@ -140,7 +143,6 @@ class AiSystemViewModel(
             transient.isSendingChat -> AiConnectionStatus.CONNECTING
             transient.connectionStatus != AiConnectionStatus.LOCAL_FALLBACK -> transient.connectionStatus
             !config.consent.cloudAiConsentGranted || !config.modelPrefs.aiEnabled -> AiConnectionStatus.LOCAL_FALLBACK
-            config.modelPrefs.backendBaseUrl.isBlank() -> AiConnectionStatus.BACKEND_UNCONFIGURED
             else -> AiConnectionStatus.CONNECTED
         }
         AiSystemUiState.Ready(
@@ -223,7 +225,8 @@ class AiSystemViewModel(
     fun sendChatMessage(prompt: String) {
         val clean = prompt.trim()
         if (clean.isBlank()) return
-        viewModelScope.launch {
+        activeChatJob?.cancel()
+        activeChatJob = viewModelScope.launch {
             transientState.update {
                 it.copy(
                     isSendingChat = true,
@@ -234,26 +237,92 @@ class AiSystemViewModel(
             }
             val buffer = StringBuilder()
             val convId = selectedConversationIdFlow.value
-            val result = aiSystemRepository.sendChatMessage(
-                conversationId = convId,
-                userPrompt = clean,
-                onStreamToken = { delta ->
-                    buffer.append(delta)
-                    transientState.update { it.copy(streamingPreview = buffer.toString()) }
+            try {
+                val result = aiSystemRepository.sendChatMessage(
+                    conversationId = convId,
+                    userPrompt = clean,
+                    onStreamToken = { delta ->
+                        buffer.append(delta)
+                        transientState.update { it.copy(streamingPreview = buffer.toString()) }
+                    }
+                )
+                selectedConversationIdFlow.value = result.conversationId
+                transientState.update {
+                    it.copy(
+                        activeConversationId = result.conversationId,
+                        isSendingChat = false,
+                        streamingPreview = "",
+                        connectionStatus = result.connectionStatus,
+                        lastErrorDetail = result.errorDetail,
+                        lastUserPromptForRetry = if (result.errorDetail != null) clean else null
+                    )
                 }
+                refreshAnalysis()
+            } catch (ce: CancellationException) {
+                transientState.update {
+                    it.copy(
+                        isSendingChat = false,
+                        streamingPreview = "",
+                        feedbackMessage = "Generation stopped."
+                    )
+                }
+                throw ce
+            }
+        }
+    }
+
+    fun stopGeneration() {
+        activeChatJob?.cancel()
+        activeChatJob = null
+        transientState.update {
+            it.copy(
+                isSendingChat = false,
+                streamingPreview = "",
+                feedbackMessage = "Response generation stopped."
             )
-            selectedConversationIdFlow.value = result.conversationId
+        }
+    }
+
+    fun regenerateLastResponse() {
+        val convId = selectedConversationIdFlow.value ?: transientState.value.activeConversationId
+            ?: (uiState.value as? AiSystemUiState.Ready)?.activeConversationId ?: return
+        activeChatJob?.cancel()
+        activeChatJob = viewModelScope.launch {
             transientState.update {
                 it.copy(
-                    activeConversationId = result.conversationId,
-                    isSendingChat = false,
+                    isSendingChat = true,
                     streamingPreview = "",
-                    connectionStatus = result.connectionStatus,
-                    lastErrorDetail = result.errorDetail,
-                    lastUserPromptForRetry = if (result.errorDetail != null) clean else null
+                    lastErrorDetail = null
                 )
             }
-            refreshAnalysis()
+            val buffer = StringBuilder()
+            try {
+                val result = aiSystemRepository.regenerateLastResponse(
+                    conversationId = convId,
+                    onStreamToken = { delta ->
+                        buffer.append(delta)
+                        transientState.update { it.copy(streamingPreview = buffer.toString()) }
+                    }
+                )
+                if (result != null) {
+                    selectedConversationIdFlow.value = result.conversationId
+                    transientState.update {
+                        it.copy(
+                            activeConversationId = result.conversationId,
+                            isSendingChat = false,
+                            streamingPreview = "",
+                            connectionStatus = result.connectionStatus,
+                            lastErrorDetail = result.errorDetail
+                        )
+                    }
+                    refreshAnalysis()
+                } else {
+                    transientState.update { it.copy(isSendingChat = false, streamingPreview = "") }
+                }
+            } catch (ce: CancellationException) {
+                transientState.update { it.copy(isSendingChat = false, streamingPreview = "") }
+                throw ce
+            }
         }
     }
 

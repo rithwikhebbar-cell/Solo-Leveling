@@ -256,7 +256,7 @@ class StatusScreenRedesignTest {
     fun domainTelemetry_tracksAllThreeDomainsAccurately() {
         val physical = PhysicalDevelopmentState(
             completedJoggingMinutesToday = 30,
-            effectiveJoggingTarget = 30,
+            aiRecommendedJoggingMinutes = 30,
             weeklySessionsCompleted = 4,
             recoveryStatus = RecoveryStatus.OPTIMAL
         )
@@ -289,7 +289,7 @@ class StatusScreenRedesignTest {
             durationMinutes = 45,
             verificationStatus = VerificationStatus.VERIFIED_HEALTH_CONNECT
         )
-        assertTrue(reward > 0)
+        assertTrue(reward.xpAwarded > 0)
         // Verified: ProgressionEngine only awards Momentum XP for intellectual and habit consistency, strictly zero for physical activities.
     }
 }

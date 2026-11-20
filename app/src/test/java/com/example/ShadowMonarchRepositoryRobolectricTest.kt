@@ -390,28 +390,47 @@ class ShadowMonarchRepositoryRobolectricTest {
     fun armyCapacityLimit_blocksExtractionWhenFull() = runTest {
         monarchProgressionEngine.getOrCreateProfile()
 
-        // Recruit shadows up to default capacity of 10
-        for (i in 1..10) {
-            val eventId = (500L + i)
-            seedClearedDungeon(eventId)
+        // Recruit unique shadows up to default capacity of 10 (accounting for duplicate resonance)
+        var nextEventId = 501L
+        while (monarchProgressionEngine.getOrCreateProfile().activeShadowCount < 10 && nextEventId < 700L) {
+            seedClearedDungeon(nextEventId)
             val pending = extractionEngine.evaluateExtractionEligibility(
                 sourceType = ShadowExtractionSourceType.DUNGEON_COMPLETION,
-                sourceEventId = eventId.toString(),
-                evidenceSummary = "Dungeon Clear #$i"
+                sourceEventId = nextEventId.toString(),
+                evidenceSummary = "Dungeon Clear #$nextEventId"
             )
-            extractionEngine.confirmExtraction(pending)
+            if (pending.outcome == ShadowExtractionOutcome.PENDING_CONFIRMATION) {
+                extractionEngine.confirmExtraction(pending)
+            }
+            nextEventId++
         }
 
         val profile = monarchProgressionEngine.getOrCreateProfile()
         assertEquals(10, profile.activeShadowCount)
         assertEquals(10, profile.armyCapacity)
 
-        // Attempt 11th extraction when army is full
-        seedClearedDungeon(511L)
+        // Pick a cleared dungeon whose deterministic shadow archetype is NOT already owned
+        val ownedNames = database.shadowDao().getAllShadowsOnce().map { it.name.lowercase() }.toSet()
+        var blockedEventId = nextEventId
+        while (blockedEventId < 1000L) {
+            val seed = ShadowExtractionEngine.buildDeterminismSeed(
+                ShadowExtractionSourceType.DUNGEON_COMPLETION,
+                blockedEventId.toString()
+            )
+            val candidateName = ShadowExtractionEngine.selectName(
+                ShadowExtractionEngine.selectClass(seed),
+                seed
+            )
+            if (candidateName.lowercase() !in ownedNames) break
+            blockedEventId++
+        }
+
+        // Attempt extraction of a new shadow when army is full
+        seedClearedDungeon(blockedEventId)
         val blockedAttempt = extractionEngine.evaluateExtractionEligibility(
             sourceType = ShadowExtractionSourceType.DUNGEON_COMPLETION,
-            sourceEventId = "511",
-            evidenceSummary = "Dungeon Clear #11"
+            sourceEventId = blockedEventId.toString(),
+            evidenceSummary = "Dungeon Clear #$blockedEventId"
         )
 
         assertEquals(ShadowExtractionOutcome.ARMY_CAPACITY_REACHED, blockedAttempt.outcome)

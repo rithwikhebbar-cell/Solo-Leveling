@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.example.data.local.SoloLevelingDatabase
+import com.example.data.local.entity.DungeonDefinitionEntity
+import com.example.data.local.entity.DungeonInstanceEntity
 import com.example.data.local.entity.ShadowEntity
 import com.example.data.local.entity.toDomain
 import com.example.data.repository.ShadowArmyRepository
@@ -260,8 +262,8 @@ class ShadowPhase63GrowthRobolectricTest {
             owner = accountA
         )
 
-        // Award 120 XP (Dungeon Completion), reaching Level 2
-        val awarded = repository.awardShadowXpFromDungeon(shadow.shadowId, "dg_level_up", accountA)
+        // Award 250 XP (Boss Defeat), crossing Level 2 threshold (175 XP) and reaching Level 2 (< 450 XP)
+        val awarded = repository.awardShadowXpFromBoss(shadow.shadowId, "boss_level_up", accountA)
         assertTrue(awarded)
 
         val updated = repository.getShadowById(shadow.shadowId, accountA)
@@ -519,10 +521,93 @@ class ShadowPhase63GrowthRobolectricTest {
 
     @Test
     fun testPhase62RecruitmentRegression_evidenceExtractionAndResonanceUnaffected() = runTest {
+        val now = System.currentTimeMillis()
+        database.dungeonDao().insertDefinition(
+            DungeonDefinitionEntity(
+                id = 901L,
+                code = "DNG_REG_901",
+                title = "Frost Regression Gate",
+                description = "Regression test gate",
+                categoryName = "PHYSICAL",
+                difficultyName = "C_RANK",
+                requiredRankName = "E_RANK",
+                requiredLevel = 1,
+                requiredAttributeCode = null,
+                requiredAttributeValue = 0,
+                timeLimitHours = 24,
+                baseXpReward = 100,
+                primaryAttrName = "STR",
+                primaryAttrXp = 10,
+                secondaryAttrName = "VIT",
+                secondaryAttrXp = 5,
+                rewardTitleId = null,
+                rewardItemId = null,
+                rewardShadowId = null,
+                isRepeatable = true,
+                creationSourceName = "TEST",
+                isActiveCatalog = true
+            )
+        )
+
+        val firstInstanceId = 9001L
+        val firstSeed = ShadowExtractionEngine.buildDeterminismSeed(
+            ShadowExtractionSourceType.DUNGEON_COMPLETION,
+            firstInstanceId.toString()
+        )
+        val firstName = ShadowExtractionEngine.selectName(
+            ShadowExtractionEngine.selectClass(firstSeed),
+            firstSeed
+        )
+
+        var duplicateInstanceId = firstInstanceId + 1L
+        while (duplicateInstanceId < firstInstanceId + 500L) {
+            val candidateSeed = ShadowExtractionEngine.buildDeterminismSeed(
+                ShadowExtractionSourceType.DUNGEON_COMPLETION,
+                duplicateInstanceId.toString()
+            )
+            val candidateName = ShadowExtractionEngine.selectName(
+                ShadowExtractionEngine.selectClass(candidateSeed),
+                candidateSeed
+            )
+            if (candidateName.equals(firstName, ignoreCase = true)) break
+            duplicateInstanceId++
+        }
+
+        database.dungeonDao().insertInstance(
+            DungeonInstanceEntity(
+                id = firstInstanceId,
+                dungeonId = 901L,
+                statusName = "COMPLETED",
+                creationSourceName = "TEST",
+                cadenceKey = "DAILY",
+                startedAtEpochMs = now - 3600_000,
+                pausedAtEpochMs = null,
+                accumulatedPausedMs = 0L,
+                deadlineEpochMs = now + 3600_000,
+                completedAtEpochMs = now,
+                notes = "Clear Frost Dungeon #1"
+            )
+        )
+        database.dungeonDao().insertInstance(
+            DungeonInstanceEntity(
+                id = duplicateInstanceId,
+                dungeonId = 901L,
+                statusName = "COMPLETED",
+                creationSourceName = "TEST",
+                cadenceKey = "DAILY",
+                startedAtEpochMs = now - 3600_000,
+                pausedAtEpochMs = null,
+                accumulatedPausedMs = 0L,
+                deadlineEpochMs = now + 3600_000,
+                completedAtEpochMs = now,
+                notes = "Clear Frost Dungeon #2"
+            )
+        )
+
         // Extraction evaluation
         val pending = extractionEngine.evaluateExtractionEligibility(
             sourceType = ShadowExtractionSourceType.DUNGEON_COMPLETION,
-            sourceEventId = "regression_dg_001",
+            sourceEventId = firstInstanceId.toString(),
             evidenceSummary = "Clear Frost Dungeon",
             accountOwnerId = accountA
         )
@@ -539,10 +624,11 @@ class ShadowPhase63GrowthRobolectricTest {
         // Second extraction with identical archetype -> DUPLICATE_RESOLVED
         val duplicatePending = extractionEngine.evaluateExtractionEligibility(
             sourceType = ShadowExtractionSourceType.DUNGEON_COMPLETION,
-            sourceEventId = "regression_dg_001_replay",
+            sourceEventId = duplicateInstanceId.toString(),
             evidenceSummary = "Clear Frost Dungeon",
             accountOwnerId = accountA
         )
+        assertEquals(ShadowExtractionOutcome.PENDING_CONFIRMATION, duplicatePending.outcome)
         val duplicateConfirm = extractionEngine.confirmExtraction(duplicatePending, accountA)
         assertTrue(duplicateConfirm.isSuccess)
         val duplicateEvent = duplicateConfirm.getOrNull()

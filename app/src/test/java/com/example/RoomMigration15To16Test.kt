@@ -125,6 +125,29 @@ class RoomMigration15To16Test {
                             )
                             """.trimIndent()
                         )
+                        db.execSQL(
+                            """
+                            CREATE TABLE IF NOT EXISTS `quests` (
+                                `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                                `title` TEXT NOT NULL,
+                                `description` TEXT NOT NULL,
+                                `typeName` TEXT NOT NULL,
+                                `categoryName` TEXT NOT NULL,
+                                `targetValue` INTEGER NOT NULL,
+                                `currentValue` INTEGER NOT NULL,
+                                `unit` TEXT NOT NULL,
+                                `xpReward` INTEGER NOT NULL,
+                                `primaryAttrName` TEXT NOT NULL,
+                                `primaryAttrXpReward` INTEGER NOT NULL,
+                                `secondaryAttrName` TEXT,
+                                `secondaryAttrXpReward` INTEGER NOT NULL,
+                                `isCompleted` INTEGER NOT NULL,
+                                `verificationStatusName` TEXT NOT NULL,
+                                `createdAtEpochMs` INTEGER NOT NULL,
+                                `completedAtEpochMs` INTEGER
+                            )
+                            """.trimIndent()
+                        )
 
                         listOf(
                             SoloLevelingDatabase.MIGRATION_1_2,
@@ -247,7 +270,11 @@ class RoomMigration15To16Test {
 
         // Open through Room v16 with MIGRATION_15_16 -> validates exact Room schema!
         val migratedDb = Room.databaseBuilder(context, SoloLevelingDatabase::class.java, dbName)
-            .addMigrations(SoloLevelingDatabase.MIGRATION_15_16, SoloLevelingDatabase.MIGRATION_16_17)
+            .addMigrations(
+                SoloLevelingDatabase.MIGRATION_15_16,
+                SoloLevelingDatabase.MIGRATION_16_17,
+                SoloLevelingDatabase.MIGRATION_17_18
+            )
             .allowMainThreadQueries()
             .build()
 

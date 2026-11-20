@@ -22,12 +22,15 @@ import java.util.concurrent.TimeUnit
 @Serializable
 data class BackendAiProxyRequest(
     val model: String,
-    val requestType: String, // "CHAT", "QUEST_PROPOSALS", "DAILY_PLAN"
+    val requestType: String, // "CHAT", "QUEST_PROPOSALS", "DAILY_PLAN", "VOICE_INTENT"
     val systemPrompt: String,
     val contextSummary: String,
     val recentTurns: List<OpenRouterMessage> = emptyList(),
     val userPrompt: String,
-    val stream: Boolean = false
+    val stream: Boolean = false,
+    val temperature: Float? = null,
+    val maxOutputTokens: Int? = null,
+    val responseSchemaType: String? = null
 )
 
 @Serializable
@@ -67,6 +70,12 @@ sealed interface AiStreamEvent {
 }
 
 interface BackendAiGateway {
+    /**
+     * True when the gateway can reach Gemini securely via Firebase AI Logic without requiring a custom proxy URL.
+     */
+    val supportsDirectCloud: Boolean
+        get() = false
+
     fun streamChat(
         backendBaseUrl: String,
         request: BackendAiProxyRequest

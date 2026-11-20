@@ -74,6 +74,7 @@ object ShadowColors {
     val PureIce = Color(0xFFF1F5F9)
     val Muted = Color(0xFF7D8BA3)
     val Gold = Color(0xFFFBBF24)
+    val Amber = Color(0xFFF59E0B)
     val Crimson = Color(0xFFEF4444)
     val Emerald = Color(0xFF10B981)
 

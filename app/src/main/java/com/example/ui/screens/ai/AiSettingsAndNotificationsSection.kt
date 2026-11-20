@@ -86,13 +86,13 @@ fun AiSettingsSection(
         verticalArrangement = Arrangement.spacedBy(12.dp),
         contentPadding = PaddingValues(bottom = 20.dp)
     ) {
-        // 1. Model Management & Secure Backend Proxy URL
+        // 1. Google Gemini AI Engine & Optional Custom Proxy URL
         item {
             HolographicPanel(modifier = Modifier.fillMaxWidth(), accentColor = SystemColors.ArcaneViolet) {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("AI MODEL & SECURE PROXY", style = MaterialTheme.typography.titleMedium, color = SystemColors.PureIce)
+                    Text("GEMINI AI ENGINE & SECURE PROXY", style = MaterialTheme.typography.titleMedium, color = SystemColors.PureIce)
                     Text(
-                        text = "OpenRouter API keys live strictly on your backend Supabase Edge Function and are never stored in this app.",
+                        text = "Powered by Google Gemini via Firebase AI Logic + App Check with zero client-side API keys. Optionally specify a self-hosted Supabase Edge Function URL to route through your own Gemini backend proxy.",
                         style = MaterialTheme.typography.bodySmall,
                         color = SystemColors.MutedSilver
                     )
@@ -104,7 +104,7 @@ fun AiSettingsSection(
                         testTag = "ai_master_toggle"
                     )
                     SettingSwitchRow(
-                        label = "Streaming Responses (SSE)",
+                        label = "Streaming Responses",
                         checked = state.modelPreferences.streamingEnabled,
                         onCheckedChange = onSetStreamingEnabled,
                         testTag = "ai_streaming_toggle"
@@ -113,7 +113,7 @@ fun AiSettingsSection(
                     OutlinedTextField(
                         value = backendUrlInput,
                         onValueChange = { backendUrlInput = it },
-                        label = { Text("Backend Proxy Base URL (https://...supabase.co)") },
+                        label = { Text("Optional Custom Proxy URL (leave blank for Firebase AI Logic)") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth().testTag("ai_backend_url_input")
                     )
@@ -128,9 +128,10 @@ fun AiSettingsSection(
                         Text("Save Backend Proxy URL")
                     }
 
-                    Text("Select OpenRouter Model", style = MaterialTheme.typography.labelLarge, color = SystemColors.ElectricCyan)
+                    Text("Select Google Gemini Model", style = MaterialTheme.typography.labelLarge, color = SystemColors.ElectricCyan)
                     SupportedAiModels.catalog.forEach { model ->
-                        val selected = state.modelPreferences.selectedModelId == model.id
+                        val selected = SupportedAiModels.resolveGeminiModelId(state.modelPreferences.selectedModelId) == model.id ||
+                            state.modelPreferences.selectedModelId == model.id
                         Surface(
                             color = if (selected) SystemColors.ArcaneViolet.copy(alpha = 0.16f) else SystemColors.ObsidianBlack.copy(alpha = 0.45f),
                             shape = RoundedCornerShape(8.dp),
@@ -151,8 +152,13 @@ fun AiSettingsSection(
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(model.displayName, style = MaterialTheme.typography.titleSmall, color = SystemColors.PureIce)
                                     Text(
-                                        text = "${model.id} • JSON: ${if (model.supportsStructuredJson) "Yes" else "Prompt Fallback"}",
+                                        text = "${model.id} • ${model.provider}",
                                         style = MaterialTheme.typography.labelSmall,
+                                        color = SystemColors.ElectricCyan
+                                    )
+                                    Text(
+                                        text = model.description,
+                                        style = MaterialTheme.typography.bodySmall,
                                         color = SystemColors.MutedSilver
                                     )
                                 }
@@ -164,7 +170,7 @@ fun AiSettingsSection(
                         OutlinedTextField(
                             value = customModelInput,
                             onValueChange = { customModelInput = it },
-                            label = { Text("Custom OpenRouter Model ID") },
+                            label = { Text("Custom Proxy Model ID") },
                             singleLine = true,
                             modifier = Modifier.weight(1f)
                         )

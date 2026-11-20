@@ -10,7 +10,9 @@ import com.example.data.healthconnect.HealthConnectDataSource
 import com.example.data.integration.AndroidHealthConnectAdapter
 import com.example.data.integration.BackendAiGateway
 import com.example.data.integration.DeterministicSystemAdvisor
+import com.example.data.integration.FirebaseGeminiAiGateway
 import com.example.data.integration.HttpBackendAiGateway
+import com.example.data.integration.HybridGeminiAiGateway
 import com.example.data.integration.SupabaseSyncAdapter
 import com.example.data.local.SoloLevelingDatabase
 import com.example.data.preferences.UserPreferencesRepository
@@ -40,10 +42,12 @@ import com.example.service.SocialArtifactStorageManager
 import com.example.service.SocialMasteryAiCoach
 import com.example.service.SocialPrivacyService
 import com.example.service.SocialVoiceCoachController
+import com.example.domain.engine.GeminiIntentEngine
 import com.example.domain.engine.MonarchProgressionEngine
 import com.example.domain.engine.ShadowDeploymentEngine
 import com.example.domain.engine.ShadowEvolutionEngine
 import com.example.domain.engine.ShadowExtractionEngine
+import com.example.domain.engine.SystemCommandExecutor
 import com.example.data.sync.CloudSyncEngine
 import com.example.data.sync.SyncQueueManager
 import com.example.data.sync.SyncStatusTracker
@@ -117,7 +121,23 @@ class AppContainer(application: Application) {
     }
     private val cloudSyncPort by lazy { SupabaseSyncAdapter { supabaseApiPort.isConfigured() } }
     val aiGameMasterPort by lazy { DeterministicSystemAdvisor() }
-    val backendAiGateway: BackendAiGateway by lazy { HttpBackendAiGateway() }
+    val firebaseGeminiAiGateway: FirebaseGeminiAiGateway by lazy {
+        FirebaseGeminiAiGateway(
+            isNetworkAvailable = {
+                runCatching {
+                    val cm = application.getSystemService(Application.CONNECTIVITY_SERVICE) as? ConnectivityManager
+                    val caps = cm?.activeNetwork?.let { cm.getNetworkCapabilities(it) }
+                    caps?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
+                }.getOrDefault(true)
+            }
+        )
+    }
+    val backendAiGateway: BackendAiGateway by lazy {
+        HybridGeminiAiGateway(
+            firebaseGateway = firebaseGeminiAiGateway,
+            httpGateway = HttpBackendAiGateway()
+        )
+    }
 
     val repository: RealityOsRepository by lazy {
         RealityOsRepository(
@@ -161,7 +181,10 @@ class AppContainer(application: Application) {
             preferencesRepository = preferencesRepository,
             realityOsRepository = repository,
             academicRepository = academicRepository,
-            backendAiGateway = backendAiGateway
+            backendAiGateway = backendAiGateway,
+            activeAccountOwnerIdProvider = {
+                activeAccountOwnerIdFlow.firstOrNull() ?: DEFAULT_LOCAL_ACCOUNT_OWNER_ID
+            }
         )
     }
 
@@ -206,12 +229,34 @@ class AppContainer(application: Application) {
         AndroidSystemVoiceEngine(application)
     }
 
+    val geminiIntentEngine: GeminiIntentEngine by lazy {
+        GeminiIntentEngine(backendAiGateway = backendAiGateway)
+    }
+
+    val systemCommandExecutor: SystemCommandExecutor by lazy {
+        SystemCommandExecutor(
+            database = database,
+            preferencesRepository = preferencesRepository,
+            realityOsRepository = repository,
+            lifeManagementRepository = lifeManagementRepository,
+            academicRepository = academicRepository,
+            aiSystemRepository = aiSystemRepository,
+            shadowArmyRepository = shadowArmyRepository,
+            activeAccountOwnerIdProvider = {
+                activeAccountOwnerIdFlow.firstOrNull() ?: DEFAULT_LOCAL_ACCOUNT_OWNER_ID
+            }
+        )
+    }
+
     val systemExperienceRepository: SystemExperienceRepository by lazy {
         SystemExperienceRepository(
             context = application,
             database = database,
             preferencesRepository = preferencesRepository,
-            voiceEngine = voiceEngine
+            voiceEngine = voiceEngine,
+            geminiIntentEngine = geminiIntentEngine,
+            systemCommandExecutor = systemCommandExecutor,
+            aiSystemRepository = aiSystemRepository
         )
     }
 

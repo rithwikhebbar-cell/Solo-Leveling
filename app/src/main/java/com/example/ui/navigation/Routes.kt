@@ -38,6 +38,16 @@ data object SettingsRoute
 @Serializable
 data object ModulesHubRoute
 
+// Milestone 12: Penalty System (Phase 3, 4 & 5)
+@Serializable
+data object PenaltyStatusRoute
+
+@Serializable
+data object RedemptionDashboardRoute
+
+@Serializable
+data object PenaltyAuditRoute
+
 // Milestone 3: Academic Development Engine (10 screens)
 @Serializable
 data object AcademicDashboardRoute

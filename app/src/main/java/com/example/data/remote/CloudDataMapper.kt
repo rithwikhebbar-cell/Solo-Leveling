@@ -16,6 +16,9 @@ import com.example.data.local.entity.ShadowResourceTransactionEntity
 import com.example.data.local.entity.ShadowSkillUnlockEntity
 import com.example.data.local.entity.ShadowEvidenceClaimEntity
 import com.example.data.local.entity.ShadowResonanceEntity
+import com.example.data.local.entity.ShadowBondProfileEntity
+import com.example.data.local.entity.ShadowBondEventEntity
+import com.example.data.local.entity.ShadowBondMilestoneEntity
 import com.example.domain.model.CloudProgressionEventPayload
 import com.example.domain.model.CloudSettingsPayload
 import com.example.domain.model.CloudTaskPayload
@@ -224,6 +227,52 @@ data class CloudShadowResonancePayload(
     val resonanceLevel: Int,
     val resonanceShards: Int,
     val lastResonanceEpochMs: Long
+)
+
+@Serializable
+data class CloudShadowBondProfilePayload(
+    val cloudUuid: String,
+    val accountOwnerId: String,
+    val shadowId: String,
+    val bondLevel: Int,
+    val bondPoints: Long,
+    val loyaltyRating: Int,
+    val trustRating: Int,
+    val relationshipStageName: String,
+    val personalityCharacteristicName: String,
+    val totalActivitiesCount: Int,
+    val lastBondActivityEpochMs: Long,
+    val updatedAtEpochMs: Long
+)
+
+@Serializable
+data class CloudShadowBondEventPayload(
+    val cloudUuid: String,
+    val accountOwnerId: String,
+    val eventId: String,
+    val shadowId: String,
+    val activityTypeName: String,
+    val sourceEventId: String,
+    val bondPointsAwarded: Int,
+    val loyaltyDelta: Int,
+    val trustDelta: Int,
+    val description: String,
+    val timestampEpochMs: Long,
+    val idempotencyKey: String
+)
+
+@Serializable
+data class CloudShadowBondMilestonePayload(
+    val cloudUuid: String,
+    val accountOwnerId: String,
+    val milestoneId: String,
+    val shadowId: String,
+    val milestoneTypeName: String,
+    val title: String,
+    val description: String,
+    val sourceEventId: String,
+    val timestampEpochMs: Long,
+    val verificationStatus: String
 )
 
 @Serializable
@@ -494,6 +543,58 @@ object CloudDataMapper {
         lastResonanceEpochMs = entity.lastResonanceEpochMs
     )
 
+    fun shadowBondProfileToPayload(
+        entity: ShadowBondProfileEntity,
+        cloudUuid: String
+    ): CloudShadowBondProfilePayload = CloudShadowBondProfilePayload(
+        cloudUuid = cloudUuid,
+        accountOwnerId = entity.accountOwnerId,
+        shadowId = entity.shadowId,
+        bondLevel = entity.bondLevel,
+        bondPoints = entity.bondPoints,
+        loyaltyRating = entity.loyaltyRating,
+        trustRating = entity.trustRating,
+        relationshipStageName = entity.relationshipStageName,
+        personalityCharacteristicName = entity.personalityCharacteristicName,
+        totalActivitiesCount = entity.totalActivitiesCount,
+        lastBondActivityEpochMs = entity.lastBondActivityEpochMs,
+        updatedAtEpochMs = entity.updatedAtEpochMs
+    )
+
+    fun shadowBondEventToPayload(
+        entity: ShadowBondEventEntity,
+        cloudUuid: String
+    ): CloudShadowBondEventPayload = CloudShadowBondEventPayload(
+        cloudUuid = cloudUuid,
+        accountOwnerId = entity.accountOwnerId,
+        eventId = entity.eventId,
+        shadowId = entity.shadowId,
+        activityTypeName = entity.activityTypeName,
+        sourceEventId = entity.sourceEventId,
+        bondPointsAwarded = entity.bondPointsAwarded,
+        loyaltyDelta = entity.loyaltyDelta,
+        trustDelta = entity.trustDelta,
+        description = entity.description,
+        timestampEpochMs = entity.timestampEpochMs,
+        idempotencyKey = entity.idempotencyKey
+    )
+
+    fun shadowBondMilestoneToPayload(
+        entity: ShadowBondMilestoneEntity,
+        cloudUuid: String
+    ): CloudShadowBondMilestonePayload = CloudShadowBondMilestonePayload(
+        cloudUuid = cloudUuid,
+        accountOwnerId = entity.accountOwnerId,
+        milestoneId = entity.milestoneId,
+        shadowId = entity.shadowId,
+        milestoneTypeName = entity.milestoneTypeName,
+        title = entity.title,
+        description = entity.description,
+        sourceEventId = entity.sourceEventId,
+        timestampEpochMs = entity.timestampEpochMs,
+        verificationStatus = entity.verificationStatus
+    )
+
     fun taskPayloadToPostgrestRow(userId: String, payload: CloudTaskPayload): JsonObject = buildJsonObject {
         put("id", payload.cloudUuid)
         put("user_id", userId)
@@ -714,6 +815,58 @@ object CloudDataMapper {
         put("resonance_level", payload.resonanceLevel)
         put("resonance_shards", payload.resonanceShards)
         put("last_resonance_epoch_ms", payload.lastResonanceEpochMs)
+    }
+
+    fun shadowBondProfileToPostgrestRow(
+        userId: String,
+        payload: CloudShadowBondProfilePayload
+    ): JsonObject = buildJsonObject {
+        put("id", payload.cloudUuid)
+        put("user_id", userId)
+        put("shadow_id", payload.shadowId)
+        put("bond_level", payload.bondLevel)
+        put("bond_points", payload.bondPoints)
+        put("loyalty_rating", payload.loyaltyRating)
+        put("trust_rating", payload.trustRating)
+        put("relationship_stage", payload.relationshipStageName)
+        put("personality", payload.personalityCharacteristicName)
+        put("total_activities_count", payload.totalActivitiesCount)
+        put("last_bond_activity_epoch_ms", payload.lastBondActivityEpochMs)
+        put("updated_at_epoch_ms", payload.updatedAtEpochMs)
+    }
+
+    fun shadowBondEventToPostgrestRow(
+        userId: String,
+        payload: CloudShadowBondEventPayload
+    ): JsonObject = buildJsonObject {
+        put("id", payload.cloudUuid)
+        put("user_id", userId)
+        put("event_id", payload.eventId)
+        put("shadow_id", payload.shadowId)
+        put("activity_type", payload.activityTypeName)
+        put("source_event_id", payload.sourceEventId)
+        put("bond_points_awarded", payload.bondPointsAwarded)
+        put("loyalty_delta", payload.loyaltyDelta)
+        put("trust_delta", payload.trustDelta)
+        put("description", payload.description)
+        put("timestamp_epoch_ms", payload.timestampEpochMs)
+        put("idempotency_key", payload.idempotencyKey)
+    }
+
+    fun shadowBondMilestoneToPostgrestRow(
+        userId: String,
+        payload: CloudShadowBondMilestonePayload
+    ): JsonObject = buildJsonObject {
+        put("id", payload.cloudUuid)
+        put("user_id", userId)
+        put("milestone_id", payload.milestoneId)
+        put("shadow_id", payload.shadowId)
+        put("milestone_type", payload.milestoneTypeName)
+        put("title", payload.title)
+        put("description", payload.description)
+        put("source_event_id", payload.sourceEventId)
+        put("timestamp_epoch_ms", payload.timestampEpochMs)
+        put("verification_status", payload.verificationStatus)
     }
 
     fun joggingToPostgrestRow(userId: String, entity: JoggingSessionEntity, cloudUuid: String): JsonObject =

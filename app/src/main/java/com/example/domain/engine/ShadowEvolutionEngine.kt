@@ -15,6 +15,7 @@ import com.example.data.local.entity.toDomain
 import com.example.data.local.entity.toEntity
 import com.example.domain.model.DEFAULT_SHADOW_ACCOUNT_OWNER_ID
 import com.example.domain.model.Shadow
+import com.example.domain.model.ShadowBondActivityType
 import com.example.domain.model.ShadowEvolutionEvaluation
 import com.example.domain.model.ShadowEvolutionStage
 import com.example.domain.model.ShadowEvolutionState
@@ -46,6 +47,7 @@ class ShadowEvolutionEngine(
     private val shadowXpTraceDao: ShadowXpTraceDao? = null,
     private val shadowResourceDao: ShadowResourceDao? = null,
     private val systemExperienceDao: SystemExperienceDao? = null,
+    private val shadowBondEngine: ShadowBondEngine? = null,
     private val database: SoloLevelingDatabase? = null,
     private val mutex: Mutex = Mutex()
 ) {
@@ -215,34 +217,67 @@ class ShadowEvolutionEngine(
         shadowId: String,
         dungeonId: String,
         accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID
-    ): Boolean = awardShadowXp(
-        shadowId = shadowId,
-        xpAmount = ShadowGrowthConfig.XP_DUNGEON_COMPLETION,
-        sourceTag = "dungeon_$dungeonId",
-        accountOwnerId = accountOwnerId
-    )
+    ): Boolean {
+        val success = awardShadowXp(
+            shadowId = shadowId,
+            xpAmount = ShadowGrowthConfig.XP_DUNGEON_COMPLETION,
+            sourceTag = "dungeon_$dungeonId",
+            accountOwnerId = accountOwnerId
+        )
+        if (success) {
+            shadowBondEngine?.recordBondActivity(
+                shadowId = shadowId,
+                accountOwnerId = accountOwnerId,
+                activityType = ShadowBondActivityType.DUNGEON_COMPLETION,
+                sourceEventId = "dungeon_$dungeonId"
+            )
+        }
+        return success
+    }
 
     suspend fun awardShadowXpFromBoss(
         shadowId: String,
         bossId: String,
         accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID
-    ): Boolean = awardShadowXp(
-        shadowId = shadowId,
-        xpAmount = ShadowGrowthConfig.XP_BOSS_DEFEAT,
-        sourceTag = "boss_$bossId",
-        accountOwnerId = accountOwnerId
-    )
+    ): Boolean {
+        val success = awardShadowXp(
+            shadowId = shadowId,
+            xpAmount = ShadowGrowthConfig.XP_BOSS_DEFEAT,
+            sourceTag = "boss_$bossId",
+            accountOwnerId = accountOwnerId
+        )
+        if (success) {
+            shadowBondEngine?.recordBondActivity(
+                shadowId = shadowId,
+                accountOwnerId = accountOwnerId,
+                activityType = ShadowBondActivityType.BOSS_BATTLE,
+                sourceEventId = "boss_$bossId"
+            )
+        }
+        return success
+    }
 
     suspend fun awardShadowXpFromQuest(
         shadowId: String,
         questId: String,
         accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID
-    ): Boolean = awardShadowXp(
-        shadowId = shadowId,
-        xpAmount = ShadowGrowthConfig.XP_QUEST_COMPLETION,
-        sourceTag = "quest_$questId",
-        accountOwnerId = accountOwnerId
-    )
+    ): Boolean {
+        val success = awardShadowXp(
+            shadowId = shadowId,
+            xpAmount = ShadowGrowthConfig.XP_QUEST_COMPLETION,
+            sourceTag = "quest_$questId",
+            accountOwnerId = accountOwnerId
+        )
+        if (success) {
+            shadowBondEngine?.recordBondActivity(
+                shadowId = shadowId,
+                accountOwnerId = accountOwnerId,
+                activityType = ShadowBondActivityType.QUEST_COMPLETION,
+                sourceEventId = "quest_$questId"
+            )
+        }
+        return success
+    }
 
     // -------------------------------------------------------------------------
     // EVOLUTION EVALUATION (Non-destructive Requirements & Balance Check)
@@ -478,6 +513,15 @@ class ShadowEvolutionEngine(
                     title = "SHADOW EVOLVED",
                     message = "Shadow ${shadow.name} has evolved to ${nextStage.label}!",
                     deepLinkRoute = "shadow_realm"
+                )
+
+                // Record Shadow Bond Progression
+                shadowBondEngine?.recordBondActivity(
+                    shadowId = shadowId,
+                    accountOwnerId = owner,
+                    activityType = ShadowBondActivityType.SHADOW_EVOLUTION,
+                    sourceEventId = txKey,
+                    customDescription = "Ascended to ${nextStage.label} under Monarch's guidance"
                 )
 
                 evolved

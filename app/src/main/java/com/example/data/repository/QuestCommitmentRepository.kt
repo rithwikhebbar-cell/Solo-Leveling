@@ -2,6 +2,8 @@ package com.example.data.repository
 
 import androidx.room.withTransaction
 import com.example.data.local.SoloLevelingDatabase
+import com.example.data.local.entity.PenaltyPointAccountEntity
+import com.example.data.local.entity.PenaltyTransactionEntity
 import com.example.data.local.entity.toDomain
 import com.example.data.local.entity.toEntity
 import com.example.domain.engine.DeadlineCalculator
@@ -13,6 +15,8 @@ import com.example.domain.model.ConfirmedFailureRecord
 import com.example.domain.model.ExemptionLifecycleState
 import com.example.domain.model.ExemptionReasonCategory
 import com.example.domain.model.FailureDecisionOutcome
+import com.example.domain.model.PenaltyStatus
+import com.example.domain.model.PenaltyTransactionType
 import com.example.domain.model.QuestCategory
 import com.example.domain.model.QuestCommitment
 import com.example.domain.model.QuestExemption
@@ -46,6 +50,16 @@ class QuestCommitmentRepository(
         return commitmentDao.observeCommitmentsForCycle(logicalCycleId).map { list ->
             list.map { it.toDomain() }
         }
+    }
+
+    fun observeAllCommitments(accountOwnerId: String): Flow<List<QuestCommitment>> {
+        return commitmentDao.observeAllCommitments(accountOwnerId).map { list ->
+            list.map { it.toDomain() }
+        }
+    }
+
+    suspend fun getAllCommitmentsOnce(accountOwnerId: String): List<QuestCommitment> {
+        return commitmentDao.getAllCommitmentsOnce(accountOwnerId).map { it.toDomain() }
     }
 
     suspend fun getCommitmentForQuestAndCycle(questId: Long, logicalCycleId: String): QuestCommitment? {
@@ -185,21 +199,23 @@ class QuestCommitmentRepository(
      * Requests an exemption for an active commitment.
      * Transitions exemption to PENDING_REVIEW which pauses failure confirmation.
      */
+    /**
+     * Submits an emergency exemption request (preventive or retroactive).
+     * Transitions exemption to PENDING_REVIEW which pauses failure confirmation.
+     */
     suspend fun requestExemption(
         commitmentId: String,
         category: ExemptionReasonCategory,
         explanation: String,
         accountOwnerId: String
     ): Result<QuestExemption> {
-        return database.withTransaction {
+        val now = clock.nowEpochMs()
+        val result = database.withTransaction {
             val commitment = commitmentDao.getCommitmentById(commitmentId)
                 ?: return@withTransaction Result.failure(IllegalArgumentException("Commitment $commitmentId not found"))
 
             if (commitment.stateName == CommitmentState.COMPLETED.name) {
                 return@withTransaction Result.failure(IllegalStateException("Completed commitments do not require exemption"))
-            }
-            if (commitment.stateName == CommitmentState.FAILED.name) {
-                return@withTransaction Result.failure(IllegalStateException("Cannot request exemption for already confirmed failure"))
             }
 
             val exemption = QuestExemption(
@@ -210,26 +226,97 @@ class QuestCommitmentRepository(
                 category = category,
                 lifecycleState = ExemptionLifecycleState.PENDING_REVIEW,
                 explanation = explanation.trim(),
-                requestedAtEpochMs = clock.nowEpochMs()
+                requestedAtEpochMs = now
             )
             exemptionDao.insertExemption(exemption.toEntity())
             Result.success(exemption)
         }
+
+        if (result.isSuccess) {
+            val exemption = result.getOrThrow()
+            systemEventRepository.publishEvent(
+                eventType = SystemEventType.EXEMPTION_REQUEST_CREATED,
+                relatedEntityId = exemption.exemptionId,
+                sourceModule = "PENALTY",
+                metadata = mapOf(
+                    "commitmentId" to commitmentId,
+                    "questId" to exemption.questId.toString(),
+                    "category" to category.name,
+                    "accountOwnerId" to accountOwnerId
+                ),
+                processImmediately = false,
+                nowEpochMs = now
+            )
+        }
+        return result
+    }
+
+    /**
+     * Withdraws an active exemption request if still under review or requested.
+     */
+    suspend fun withdrawExemption(
+        exemptionId: String
+    ): Result<QuestExemption> {
+        val now = clock.nowEpochMs()
+        val result = database.withTransaction {
+            val exemptionEntity = exemptionDao.getExemptionById(exemptionId)
+                ?: return@withTransaction Result.failure(IllegalArgumentException("Exemption $exemptionId not found"))
+
+            if (exemptionEntity.lifecycleStateName in setOf(ExemptionLifecycleState.APPROVED.name, ExemptionLifecycleState.DENIED.name, ExemptionLifecycleState.CLOSED.name)) {
+                return@withTransaction Result.failure(IllegalStateException("Cannot withdraw a finalized exemption (${exemptionEntity.lifecycleStateName})"))
+            }
+
+            exemptionDao.updateExemptionStatus(
+                exemptionId = exemptionId,
+                lifecycleStateName = ExemptionLifecycleState.WITHDRAWN.name,
+                reviewedAtEpochMs = now,
+                reviewerNotes = "Withdrawn by player"
+            )
+
+            val updated = exemptionDao.getExemptionById(exemptionId)!!.toDomain()
+            Result.success(updated)
+        }
+
+        if (result.isSuccess) {
+            val exemption = result.getOrThrow()
+            systemEventRepository.publishEvent(
+                eventType = SystemEventType.EXEMPTION_WITHDRAWN,
+                relatedEntityId = exemption.exemptionId,
+                sourceModule = "PENALTY",
+                metadata = mapOf(
+                    "commitmentId" to exemption.commitmentId,
+                    "questId" to exemption.questId.toString(),
+                    "accountOwnerId" to exemption.accountOwnerId
+                ),
+                processImmediately = false,
+                nowEpochMs = now
+            )
+        }
+        return result
     }
 
     /**
      * Reviews and decides on an exemption request.
+     * If approved, updates commitment state to EXEMPTED, and if an associated penalty was
+     * already allocated (retroactive exemption), executes an auditable REVERSAL transaction
+     * on the double-entry ledger within the same atomic Room transaction.
      */
     suspend fun reviewExemption(
         exemptionId: String,
         isApproved: Boolean,
         reviewerNotes: String? = null
     ): Result<QuestExemption> {
-        return database.withTransaction {
+        val now = clock.nowEpochMs()
+        var penaltyReversed = false
+        var reversedPenaltyId = ""
+        var reversedPoints = 0
+        var newAccountBal = 0
+        var penaltyOwnerId = ""
+
+        val result = database.withTransaction {
             val exemptionEntity = exemptionDao.getExemptionById(exemptionId)
                 ?: return@withTransaction Result.failure(IllegalArgumentException("Exemption $exemptionId not found"))
 
-            val now = clock.nowEpochMs()
             val newState = if (isApproved) ExemptionLifecycleState.APPROVED else ExemptionLifecycleState.DENIED
             exemptionDao.updateExemptionStatus(
                 exemptionId = exemptionId,
@@ -244,24 +331,160 @@ class QuestCommitmentRepository(
                     stateName = CommitmentState.EXEMPTED.name,
                     updatedAtEpochMs = now
                 )
-                systemEventRepository.publishEvent(
-                    eventType = SystemEventType.PENALTY_EXEMPTED,
-                    relatedEntityId = exemptionEntity.commitmentId,
-                    sourceModule = "PENALTY",
-                    metadata = mapOf(
-                        "commitmentId" to exemptionEntity.commitmentId,
-                        "questId" to exemptionEntity.questId.toString(),
-                        "category" to exemptionEntity.categoryName,
-                        "idempotencyKey" to "exemption_${exemptionEntity.commitmentId}"
-                    ),
-                    processImmediately = false,
-                    nowEpochMs = now
-                )
+
+                // Check for retroactive penalty reversal
+                val penalty = database.penaltyDao().getPenaltyByCommitmentId(exemptionEntity.commitmentId)
+                if (penalty != null && penalty.penaltyStatusName != PenaltyStatus.EXEMPTED.name) {
+                    val penaltyTransactions = database.penaltyTransactionDao().getTransactionsForPenalty(penalty.penaltyId)
+                    val allocatedPoints = penaltyTransactions
+                        .filter { it.transactionTypeName == PenaltyTransactionType.ALLOCATION.name }
+                        .sumOf { it.pointsDelta }
+                    val alreadyDeductedPoints = penaltyTransactions
+                        .filter {
+                            it.transactionTypeName == PenaltyTransactionType.REDEMPTION_RESOLUTION.name ||
+                                    it.transactionTypeName == PenaltyTransactionType.REVERSAL.name
+                        }
+                        .sumOf { it.pointsDelta }
+                    val outstandingPoints = (allocatedPoints - alreadyDeductedPoints).coerceAtLeast(0)
+
+                    val account = database.penaltyAccountDao().getAccountOnce(penalty.accountOwnerId)
+                    val currentBal = account?.currentBalance ?: 0
+                    val newBal = (currentBal - outstandingPoints).coerceAtLeast(0)
+                    val isCurrentlyActive = penalty.penaltyStatusName in setOf(PenaltyStatus.ACTIVE.name, PenaltyStatus.ESCALATED.name)
+                    val newActiveCount = if (isCurrentlyActive) ((account?.activePenaltiesCount ?: 1) - 1).coerceAtLeast(0) else (account?.activePenaltiesCount ?: 0)
+
+                    if (outstandingPoints > 0) {
+                        val tx = PenaltyTransactionEntity(
+                            transactionId = UUID.randomUUID().toString(),
+                            accountOwnerId = penalty.accountOwnerId,
+                            penaltyId = penalty.penaltyId,
+                            transactionTypeName = PenaltyTransactionType.REVERSAL.name,
+                            pointsDelta = outstandingPoints,
+                            balanceAfter = newBal,
+                            reason = "Reversal due to approved retroactive exemption: ${exemptionEntity.explanation}",
+                            idempotencyKey = "tx_reversal_${penalty.penaltyId}_${exemptionEntity.exemptionId}",
+                            timestampEpochMs = now
+                        )
+                        database.penaltyTransactionDao().insertTransaction(tx)
+
+                        penaltyReversed = true
+                        reversedPenaltyId = penalty.penaltyId
+                        reversedPoints = outstandingPoints
+                        newAccountBal = newBal
+                        penaltyOwnerId = penalty.accountOwnerId
+                    }
+
+                    if (account != null) {
+                        database.penaltyAccountDao().upsertAccount(
+                            account.copy(
+                                currentBalance = newBal,
+                                activePenaltiesCount = newActiveCount,
+                                lastUpdatedEpochMs = now
+                            )
+                        )
+                    }
+
+                    database.penaltyDao().updatePenaltyStatus(
+                        penaltyId = penalty.penaltyId,
+                        statusName = PenaltyStatus.EXEMPTED.name,
+                        resolvedAtEpochMs = now
+                    )
+                }
             }
 
             val updated = exemptionDao.getExemptionById(exemptionId)!!.toDomain()
             Result.success(updated)
         }
+
+        if (result.isSuccess) {
+            val updated = result.getOrThrow()
+            if (isApproved) {
+                systemEventRepository.publishEvent(
+                    eventType = SystemEventType.EXEMPTION_APPROVED,
+                    relatedEntityId = updated.exemptionId,
+                    sourceModule = "PENALTY",
+                    metadata = mapOf(
+                        "commitmentId" to updated.commitmentId,
+                        "questId" to updated.questId.toString(),
+                        "category" to updated.category.name,
+                        "accountOwnerId" to updated.accountOwnerId
+                    ),
+                    processImmediately = false,
+                    nowEpochMs = now
+                )
+                systemEventRepository.publishEvent(
+                    eventType = SystemEventType.PENALTY_EXEMPTED,
+                    relatedEntityId = updated.commitmentId,
+                    sourceModule = "PENALTY",
+                    metadata = mapOf(
+                        "commitmentId" to updated.commitmentId,
+                        "questId" to updated.questId.toString(),
+                        "category" to updated.category.name,
+                        "idempotencyKey" to "exemption_${updated.commitmentId}"
+                    ),
+                    processImmediately = false,
+                    nowEpochMs = now
+                )
+
+                if (penaltyReversed) {
+                    systemEventRepository.publishEvent(
+                        eventType = SystemEventType.PENALTY_REVERSED_DUE_TO_EXEMPTION,
+                        relatedEntityId = reversedPenaltyId,
+                        sourceModule = "PENALTY",
+                        metadata = mapOf(
+                            "accountOwnerId" to penaltyOwnerId,
+                            "exemptionId" to updated.exemptionId,
+                            "reversedPoints" to reversedPoints.toString(),
+                            "newBalance" to newAccountBal.toString()
+                        ),
+                        processImmediately = false,
+                        nowEpochMs = now
+                    )
+                    systemEventRepository.publishEvent(
+                        eventType = SystemEventType.PENALTY_BALANCE_UPDATED,
+                        relatedEntityId = penaltyOwnerId,
+                        sourceModule = "PENALTY",
+                        metadata = mapOf(
+                            "newBalance" to newAccountBal.toString()
+                        ),
+                        processImmediately = false,
+                        nowEpochMs = now
+                    )
+                }
+            } else {
+                systemEventRepository.publishEvent(
+                    eventType = SystemEventType.EXEMPTION_DENIED,
+                    relatedEntityId = updated.exemptionId,
+                    sourceModule = "PENALTY",
+                    metadata = mapOf(
+                        "commitmentId" to updated.commitmentId,
+                        "questId" to updated.questId.toString(),
+                        "accountOwnerId" to updated.accountOwnerId,
+                        "reviewerNotes" to (reviewerNotes ?: "")
+                    ),
+                    processImmediately = false,
+                    nowEpochMs = now
+                )
+            }
+        }
+
+        return result
+    }
+
+    /**
+     * Observes all exemption requests for an account.
+     */
+    fun observeAllExemptions(accountOwnerId: String): Flow<List<QuestExemption>> {
+        return exemptionDao.observeAllExemptions(accountOwnerId).map { list ->
+            list.map { it.toDomain() }
+        }
+    }
+
+    /**
+     * Retrieves all exemption requests for an account snapshot.
+     */
+    suspend fun getAllExemptionsOnce(accountOwnerId: String): List<QuestExemption> {
+        return exemptionDao.getAllExemptionsOnce(accountOwnerId).map { it.toDomain() }
     }
 
     /**

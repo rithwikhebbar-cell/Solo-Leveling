@@ -52,7 +52,10 @@ enum class SyncEntityType(val wireTable: String, val label: String) {
     SHADOW_QUEST_PROGRESS("shadow_quest_progress", "Shadow Quest Progress"),
     SHADOW_RESOURCE_TRANSACTION("shadow_resource_transactions", "Shadow Resource Ledger"),
     SHADOW_EVIDENCE_CLAIM("shadow_evidence_claims", "Shadow Evidence Claim"),
-    SHADOW_RESONANCE_RECORD("shadow_resonance_records", "Shadow Resonance Record")
+    SHADOW_RESONANCE_RECORD("shadow_resonance_records", "Shadow Resonance Record"),
+    SHADOW_BOND_PROFILE("shadow_bond_profiles", "Shadow Bond Profile"),
+    SHADOW_BOND_EVENT("shadow_bond_events", "Shadow Bond Event"),
+    SHADOW_BOND_MILESTONE("shadow_bond_milestones", "Shadow Bond Milestone")
 }
 
 enum class SyncOperationType {

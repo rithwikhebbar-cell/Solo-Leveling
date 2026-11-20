@@ -54,6 +54,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.example.domain.engine.HomeNextActionEngine
 import com.example.domain.model.AcademicDashboardSummary
 import com.example.domain.model.LifeDashboardSummary
 import com.example.domain.model.NotificationCategory
@@ -62,20 +63,23 @@ import com.example.domain.model.QuestType
 import com.example.domain.model.ShadowMonarchProfile
 import com.example.domain.model.SystemAnnouncementRecord
 import com.example.domain.model.SystemNotification
+import com.example.domain.model.WorkoutStatus
 import com.example.ui.components.HolographicPanel
 import com.example.ui.components.ProvenanceChip
 import com.example.ui.components.SystemEmptyState
 import com.example.ui.components.SystemSectionTitle
+import com.example.ui.screens.home.components.ActiveSessionAlertBanner
 import com.example.ui.screens.home.components.AttributeMatrixSection
 import com.example.ui.screens.home.components.CinematicSystemHeader
-import com.example.ui.screens.home.components.DailyQuestTacticalSection
+import com.example.ui.screens.home.components.DailyProgressSnapshotSection
+import com.example.ui.screens.home.components.DomainCommandCentresSection
 import com.example.ui.screens.home.components.HunterHeroOverviewCard
-import com.example.ui.screens.home.components.PhysicalTelemetrySection
+import com.example.ui.screens.home.components.NextActionRecommendationCard
 import com.example.ui.screens.home.components.QuickActionCommandDeck
-import com.example.ui.screens.home.components.ShadowMonarchGatewayCard
 import com.example.ui.screens.home.components.SystemAnnouncementBanner
-import com.example.ui.screens.home.components.XpProgressSection
+import com.example.ui.screens.home.components.TodayMissionCard
 import com.example.ui.theme.SystemColors
+import com.example.ui.theme.SystemSpacing
 import com.example.ui.viewmodel.RealityOsUiState
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -121,13 +125,33 @@ fun HomeScreen(
         state.quests.filter { it.type == QuestType.DAILY }
     }
     val completedDailyCount = dailyQuests.count { it.isCompleted }
-    val pendingDailyCount = dailyQuests.count { !it.isCompleted }
-    val dailyCompletionFraction = if (dailyQuests.isEmpty()) 0f else {
-        completedDailyCount.toFloat() / dailyQuests.size
-    }
 
     val activeNotifications = remember(state.notifications) {
         state.notifications.take(5)
+    }
+
+    // Deterministic Next Best Action Evaluator
+    val nextAction = remember(state.physicalState, state.quests, academicSummary, lifeSummary) {
+        HomeNextActionEngine.evaluate(
+            physicalState = state.physicalState,
+            quests = state.quests,
+            academicSummary = academicSummary,
+            lifeSummary = lifeSummary
+        )
+    }
+
+    // Router for Next Best Action
+    val handleNextActionClick: (String) -> Unit = { destination ->
+        when (destination) {
+            "physical" -> onNavigateToPhysical()
+            "quests" -> onNavigateToQuestBoard()
+            "academic" -> onNavigateToAcademic()
+            "life" -> onNavigateToLife()
+            "status" -> onNavigateToStatus()
+            "shadow" -> onNavigateToShadowRealm()
+            "intelligence" -> onNavigateToIntelligence()
+            else -> onNavigateRoute(destination)
+        }
     }
 
     Box(
@@ -140,20 +164,40 @@ fun HomeScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .widthIn(max = 760.dp),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            contentPadding = PaddingValues(
+                horizontal = SystemSpacing.screenEdgePadding,
+                vertical = SystemSpacing.verticalPageSpacing
+            ),
+            verticalArrangement = Arrangement.spacedBy(SystemSpacing.sectionSpacing)
         ) {
-            // 1. CINEMATIC SYSTEM HEADER
+            // 1. ACTIVE RUNNING / WORKOUT SESSION ALERT (Contextual)
+            if (state.physicalState.activeJoggingSession != null ||
+                (state.physicalState.todayWorkout != null && state.physicalState.todayWorkout.status == WorkoutStatus.IN_PROGRESS)
+            ) {
+                item {
+                    ActiveSessionAlertBanner(
+                        activeJoggingSession = state.physicalState.activeJoggingSession,
+                        activeWorkout = state.physicalState.todayWorkout,
+                        onContinueSession = handleNextActionClick,
+                        reducedMotionEnabled = reducedMotionEnabled
+                    )
+                }
+            }
+
+            // 2. CINEMATIC PLAYER HEADER
             item {
                 CinematicSystemHeader(
                     dateLabel = dateString,
                     level = state.player.level,
                     rank = state.player.rank,
+                    codename = state.player.codename,
+                    title = state.player.title,
+                    levelProgressFraction = state.player.levelProgressFraction,
                     reducedMotionEnabled = reducedMotionEnabled
                 )
             }
 
-            // 2. SYSTEM BROADCAST / ANNOUNCEMENTS
+            // 3. SYSTEM BROADCAST / ANNOUNCEMENTS
             if (announcements.isNotEmpty()) {
                 item {
                     SystemAnnouncementBanner(
@@ -163,7 +207,7 @@ fun HomeScreen(
                 }
             }
 
-            // 3. HUNTER HERO OVERVIEW
+            // 4. PLAYER OVERVIEW HERO (Rank, Level, XP to Next, 7 Canonical Attributes, Status Link)
             item {
                 HunterHeroOverviewCard(
                     player = state.player,
@@ -171,15 +215,56 @@ fun HomeScreen(
                 )
             }
 
-            // 4. XP PROGRESSION & NEXT RANK
+            // 5. NEXT BEST ACTION — SYSTEM RECOMMENDATION
             item {
-                XpProgressSection(
-                    player = state.player,
-                    nextRankProgress = state.nextRankProgress
+                NextActionRecommendationCard(
+                    action = nextAction,
+                    onActionClick = handleNextActionClick
                 )
             }
 
-            // 5. ATTRIBUTE MATRIX (7 CANONICAL ATTRIBUTES & RADAR TOGGLE)
+            // 6. TODAY'S MISSION (Primary Active Daily Quest)
+            item {
+                TodayMissionCard(
+                    dailyQuests = dailyQuests,
+                    onCompleteQuest = onCompleteQuest,
+                    onOpenQuestBoard = onNavigateToQuestBoard
+                )
+            }
+
+            // 7. DAILY EXECUTION PROGRESS SNAPSHOT
+            item {
+                val isWorkoutDone = state.physicalState.todayWorkout?.status == WorkoutStatus.COMPLETED
+                val jogMinutes = state.physicalState.weeklyActivity.todayJoggingMinutes
+                DailyProgressSnapshotSection(
+                    dailyQuestsCompleted = completedDailyCount,
+                    dailyQuestsTotal = dailyQuests.size,
+                    physicalWorkoutCompleted = isWorkoutDone,
+                    physicalJogMinutes = jogMinutes,
+                    studyMinutesToday = academicSummary.todayStudyMinutes,
+                    studyMinutesGoal = academicSummary.dailyStudyGoalMinutes,
+                    habitsCompletedToday = lifeSummary.completedHabitsToday,
+                    habitsTotalToday = lifeSummary.activeHabitsCount,
+                    streakDays = state.player.streakDays
+                )
+            }
+
+            // 8. DOMAIN COMMAND CENTRES (Physical, Academic, Life & Habits, Shadow Army)
+            item {
+                DomainCommandCentresSection(
+                    physicalState = state.physicalState,
+                    academicSummary = academicSummary,
+                    lifeSummary = lifeSummary,
+                    monarchProfile = monarchProfile,
+                    shadowEssenceBalance = shadowEssenceBalance,
+                    onNavigateToPhysical = onNavigateToPhysical,
+                    onNavigateToAcademic = onNavigateToAcademic,
+                    onNavigateToLife = onNavigateToLife,
+                    onNavigateToShadowRealm = onNavigateToShadowRealm
+                )
+            }
+
+            // 9. ATTRIBUTE MATRIX (Radar Chart & Detailed Canonical Attributes)
             item {
                 AttributeMatrixSection(
                     attributes = state.player.attributes,
@@ -187,39 +272,7 @@ fun HomeScreen(
                 )
             }
 
-            // 6. DAILY QUEST TACTICAL DECK
-            item {
-                DailyQuestTacticalSection(
-                    dailyQuests = dailyQuests,
-                    completedCount = completedDailyCount,
-                    pendingCount = pendingDailyCount,
-                    progressFraction = dailyCompletionFraction,
-                    onCompleteQuest = onCompleteQuest,
-                    onOpenQuestBoard = onNavigateToQuestBoard
-                )
-            }
-
-            // 7. PHYSICAL DEVELOPMENT TELEMETRY
-            item {
-                PhysicalTelemetrySection(
-                    physical = state.physicalState,
-                    streakDays = state.player.streakDays,
-                    onOpenPhysicalHub = onNavigateToPhysical,
-                    onOpenLogSheet = { showLogSheet = true },
-                    onOpenAiAdvisory = onNavigateToAiSystem
-                )
-            }
-
-            // 8. SHADOW MONARCH GATEWAY
-            item {
-                ShadowMonarchGatewayCard(
-                    monarchProfile = monarchProfile,
-                    shadowEssenceBalance = shadowEssenceBalance,
-                    onNavigateToShadowRealm = onNavigateToShadowRealm
-                )
-            }
-
-            // 9. QUICK ACTION COMMAND DECK
+            // 10. QUICK ACTION COMMAND DECK (System Realm Shortcuts)
             item {
                 QuickActionCommandDeck(
                     onNavigateToPhysical = onNavigateToPhysical,
@@ -239,7 +292,7 @@ fun HomeScreen(
                 )
             }
 
-            // 10. SYSTEM NOTIFICATIONS
+            // 11. SYSTEM ALERTS & NOTIFICATIONS
             item {
                 SystemSectionTitle(
                     title = "System Alerts",
@@ -278,12 +331,12 @@ fun HomeScreen(
             }
 
             item {
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(SystemSpacing.verticalPageSpacing))
             }
         }
     }
 
-    // Modal Bottom Sheet for logging real-world physical / academic activity
+    // Modal Bottom Sheet for logging real-world activity
     if (showLogSheet) {
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         ModalBottomSheet(

@@ -46,7 +46,32 @@ enum class SystemEventType(val label: String, val defaultModule: String) {
     PENALTY_CALCULATED("Penalty Calculated", "PENALTY"),
     PENALTY_ALLOCATED("Penalty Allocated", "PENALTY"),
     PENALTY_ESCALATED("Penalty Escalated", "PENALTY"),
-    PENALTY_BALANCE_UPDATED("Penalty Balance Updated", "PENALTY")
+    PENALTY_BALANCE_UPDATED("Penalty Balance Updated", "PENALTY"),
+    // Milestone 12 — Corrective Activity & Redemption Events (Phase 4)
+    CORRECTIVE_ACTIVITY_GENERATED("Corrective Activity Generated", "REDEMPTION"),
+    CORRECTIVE_ACTIVITY_ACCEPTED("Corrective Activity Accepted", "REDEMPTION"),
+    CORRECTIVE_ACTIVITY_RESCHEDULED("Corrective Activity Rescheduled", "REDEMPTION"),
+    REDEMPTION_STARTED("Redemption Started", "REDEMPTION"),
+    REDEMPTION_COMPLETION_SUBMITTED("Redemption Completion Submitted", "REDEMPTION"),
+    REDEMPTION_VERIFIED("Redemption Verified", "REDEMPTION"),
+    REDEMPTION_REJECTED("Redemption Rejected", "REDEMPTION"),
+    PENALTY_PARTIALLY_RESOLVED("Penalty Partially Resolved", "REDEMPTION"),
+    PENALTY_RESOLVED("Penalty Resolved", "REDEMPTION"),
+    REDEMPTION_PAUSED("Redemption Paused", "REDEMPTION"),
+    // Milestone 12 — Penalty Analytics, Exemptions & System Integrity Events (Phase 5)
+    PENALTY_ANALYTICS_UPDATED("Penalty Analytics Updated", "PENALTY"),
+    FAILURE_PATTERN_DETECTED("Failure Pattern Detected", "PENALTY"),
+    CONSISTENCY_TREND_CHANGED("Consistency Trend Changed", "PENALTY"),
+    EXEMPTION_REQUEST_CREATED("Exemption Request Created", "PENALTY"),
+    EXEMPTION_REQUEST_UPDATED("Exemption Request Updated", "PENALTY"),
+    EXEMPTION_APPROVED("Exemption Approved", "PENALTY"),
+    EXEMPTION_DENIED("Exemption Denied", "PENALTY"),
+    EXEMPTION_WITHDRAWN("Exemption Withdrawn", "PENALTY"),
+    PENALTY_REVERSED_DUE_TO_EXEMPTION("Penalty Reversed Due To Exemption", "PENALTY"),
+    PENALTY_AUDIT_COMPLETED("Penalty Audit Completed", "PENALTY"),
+    LEDGER_RECONCILIATION_FAILED("Ledger Reconciliation Failed", "PENALTY"),
+    REDEMPTION_INTEGRITY_WARNING("Redemption Integrity Warning", "REDEMPTION"),
+    SYSTEM_INTEGRITY_WARNING("System Integrity Warning", "SYSTEM")
 }
 
 enum class EventProcessingStatus(val label: String) {

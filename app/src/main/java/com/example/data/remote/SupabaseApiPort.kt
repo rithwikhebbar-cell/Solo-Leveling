@@ -13,6 +13,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import okhttp3.ConnectionSpec
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -172,18 +173,33 @@ interface SupabaseApiPort {
 class HttpSupabaseClient(
     private val supabaseUrl: String = BuildConfig.SUPABASE_URL,
     private val anonKey: String = BuildConfig.SUPABASE_ANON_KEY,
-    private val httpClient: OkHttpClient = OkHttpClient.Builder()
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(25, TimeUnit.SECONDS)
-        .writeTimeout(20, TimeUnit.SECONDS)
-        .build()
+    private val httpClient: OkHttpClient = defaultHttpClient()
 ) : SupabaseApiPort {
+
+    companion object {
+        fun defaultHttpClient(): OkHttpClient = OkHttpClient.Builder()
+            .connectionSpecs(listOf(ConnectionSpec.MODERN_TLS))
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(25, TimeUnit.SECONDS)
+            .writeTimeout(20, TimeUnit.SECONDS)
+            .build()
+
+        fun normalizeBaseUrl(url: String): String {
+            val trimmed = url.trim().replace("\\s+".toRegex(), "").trimEnd('/')
+            return when {
+                trimmed.endsWith("/auth/v1") -> trimmed.removeSuffix("/auth/v1")
+                trimmed.endsWith("/rest/v1") -> trimmed.removeSuffix("/rest/v1")
+                trimmed.endsWith("/functions/v1") -> trimmed.removeSuffix("/functions/v1")
+                else -> trimmed
+            }.trimEnd('/')
+        }
+    }
 
     private val json = Json { ignoreUnknownKeys = true; isLenient = true; encodeDefaults = true }
     private val mediaType = "application/json; charset=utf-8".toMediaType()
 
     override fun isConfigured(): Boolean {
-        val cleanUrl = supabaseUrl.trim().trimEnd('/')
+        val cleanUrl = normalizeBaseUrl(supabaseUrl)
         val cleanKey = anonKey.trim()
         return cleanUrl.startsWith("https://") &&
             !cleanUrl.contains("YOUR_PROJECT_REF") &&
@@ -197,7 +213,7 @@ class HttpSupabaseClient(
         return "${baseUrl()}/auth/v1/authorize?provider=$provider&redirect_to=$encodedRedirect"
     }
 
-    private fun baseUrl(): String = supabaseUrl.trim().trimEnd('/')
+    private fun baseUrl(): String = normalizeBaseUrl(supabaseUrl)
 
     private fun guardConfigured(): CloudCallResult.Failure? {
         if (!isConfigured()) {
@@ -491,11 +507,48 @@ class HttpSupabaseClient(
                 }
             }
         }.getOrElse { err ->
+            val (category, safeMessage) = classifyException(err)
             CloudCallResult.Failure(
                 code = -1,
-                category = "NETWORK_ERROR",
-                message = AuthValidator.sanitizeLogMessage(err.message ?: "Network unreachable")
+                category = category,
+                message = safeMessage
             )
+        }
+    }
+
+    private fun classifyException(err: Throwable): Pair<String, String> {
+        val rootCause = generateSequence(err) { it.cause }.last()
+        val errMsg = err.message.orEmpty()
+        val rootMsg = rootCause.message.orEmpty()
+        val fullText = "$errMsg $rootMsg ${err::class.java.simpleName} ${rootCause::class.java.simpleName}"
+
+        return when {
+            fullText.contains("CertPathValidatorException", ignoreCase = true) ||
+            fullText.contains("Trust anchor", ignoreCase = true) ||
+            fullText.contains("SSLHandshakeException", ignoreCase = true) ||
+            fullText.contains("CertificateException", ignoreCase = true) ||
+            fullText.contains("SSLPeerUnverifiedException", ignoreCase = true) ||
+            err is javax.net.ssl.SSLException -> {
+                "SSL_ERROR" to AuthValidator.sanitizeLogMessage(
+                    if (fullText.contains("Trust anchor", ignoreCase = true)) {
+                        "SSL certificate validation failed: Trust anchor not found. Verify network security, intermediate chain, or device date/time."
+                    } else {
+                        err.message ?: "SSL handshake failed"
+                    }
+                )
+            }
+            err is java.net.UnknownHostException -> {
+                "DNS_ERROR" to "Unable to resolve backend hostname. Check internet connectivity."
+            }
+            err is java.net.SocketTimeoutException -> {
+                "TIMEOUT_ERROR" to "Connection timed out. Please check network speed."
+            }
+            err is java.net.ConnectException -> {
+                "NETWORK_ERROR" to "Could not connect to authentication server. Check network connection."
+            }
+            else -> {
+                "NETWORK_ERROR" to AuthValidator.sanitizeLogMessage(err.message ?: "Network unreachable")
+            }
         }
     }
 

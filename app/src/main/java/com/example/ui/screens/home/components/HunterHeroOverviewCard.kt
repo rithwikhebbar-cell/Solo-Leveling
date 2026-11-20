@@ -7,6 +7,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -30,18 +32,22 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.R
 import com.example.domain.model.PlayerProfile
+import com.example.ui.components.GlowingProgressBar
 import com.example.ui.components.HolographicPanel
 import com.example.ui.components.RankBadge
 import com.example.ui.theme.SystemColors
+import com.example.ui.theme.SystemSpacing
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun HunterHeroOverviewCard(
     player: PlayerProfile,
@@ -49,10 +55,12 @@ fun HunterHeroOverviewCard(
     modifier: Modifier = Modifier
 ) {
     val rankAccent = SystemColors.rankAccent(player.rank)
+    val canonicalAttrs = player.attributes.asList()
 
     HolographicPanel(
         modifier = modifier
             .fillMaxWidth()
+            .clip(RoundedCornerShape(SystemSpacing.cornerLarge))
             .clickable(onClick = onInspectStatus)
             .testTag("player_overview_card"),
         accentColor = rankAccent,
@@ -68,7 +76,7 @@ fun HunterHeroOverviewCard(
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
                     .matchParentSize()
-                    .alpha(0.20f)
+                    .alpha(0.18f)
             )
 
             // Cybernetic HUD radial illumination overlay
@@ -78,7 +86,7 @@ fun HunterHeroOverviewCard(
                     .background(
                         Brush.radialGradient(
                             colors = listOf(
-                                rankAccent.copy(alpha = 0.14f),
+                                rankAccent.copy(alpha = 0.15f),
                                 SystemColors.DeepNavy.copy(alpha = 0.88f),
                                 SystemColors.ObsidianBlack.copy(alpha = 0.96f)
                             )
@@ -89,9 +97,10 @@ fun HunterHeroOverviewCard(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(18.dp)
+                    .padding(SystemSpacing.cardPadding),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                // Top row: Player identity & Hunter Rank Sigil
+                // 1. Top row: Player identity & Hunter Rank Sigil
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -107,7 +116,7 @@ fun HunterHeroOverviewCard(
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "AWAKENED HUNTER",
+                                text = "AWAKENED HUNTER // STATUS ACTIVE",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = SystemColors.ElectricCyan
                             )
@@ -117,13 +126,12 @@ fun HunterHeroOverviewCard(
 
                         Text(
                             text = player.codename,
-                            style = MaterialTheme.typography.headlineLarge,
+                            style = MaterialTheme.typography.headlineMedium,
+                            fontWeight = FontWeight.Bold,
                             color = SystemColors.PureIce,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
-
-                        Spacer(modifier = Modifier.height(2.dp))
 
                         Text(
                             text = "${player.rank.displayName} • ${player.title}",
@@ -132,13 +140,110 @@ fun HunterHeroOverviewCard(
                         )
                     }
 
-                    // Rank Crest
+                    // Rank Crest Badge
                     RankBadge(rank = player.rank)
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                // 2. Level & XP Telemetry Bar
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = SystemColors.ObsidianBlack.copy(alpha = 0.60f),
+                    shape = RoundedCornerShape(SystemSpacing.cornerMedium),
+                    border = BorderStroke(1.dp, SystemColors.SubtleBorder)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "LEVEL ${player.level} PROGRESSION",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = SystemColors.MutedSilver
+                            )
+                            Text(
+                                text = "${player.currentLevelXp} / ${player.xpToNextLevel} XP (${(player.levelProgressFraction * 100).toInt()}%)",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = FontWeight.SemiBold,
+                                color = SystemColors.ElectricCyan
+                            )
+                        }
 
-                // Bottom telemetry badges (Streak & Verified Ratio)
+                        GlowingProgressBar(
+                            progress = player.levelProgressFraction,
+                            height = 6.dp,
+                            startColor = SystemColors.ElectricCyan,
+                            endColor = SystemColors.MonarchGold
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "TOTAL XP ACCUMULATED",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = SystemColors.MutedSilver
+                            )
+                            Text(
+                                text = "${player.totalXp} XP",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontFamily = FontFamily.Monospace,
+                                color = SystemColors.MonarchGold
+                            )
+                        }
+                    }
+                }
+
+                // 3. Seven Canonical RPG Attributes Summary Row
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        text = "CORE ATTRIBUTE MATRIX",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = SystemColors.MutedSilver
+                    )
+
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        canonicalAttrs.forEach { attr ->
+                            val attrAccent = SystemColors.attributeAccent(attr.type)
+                            Surface(
+                                color = attrAccent.copy(alpha = 0.12f),
+                                shape = RoundedCornerShape(SystemSpacing.cornerSmall),
+                                border = BorderStroke(1.dp, attrAccent.copy(alpha = 0.35f))
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Text(
+                                        text = attr.type.code,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = attrAccent
+                                    )
+                                    Text(
+                                        text = "${attr.totalValue}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontFamily = FontFamily.Monospace,
+                                        color = SystemColors.PureIce
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 4. Bottom row: Telemetry badges (Streak & Verified Ratio) and STATUS link
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -152,7 +257,7 @@ fun HunterHeroOverviewCard(
                         // Streak badge
                         Surface(
                             color = SystemColors.ObsidianBlack.copy(alpha = 0.7f),
-                            shape = RoundedCornerShape(8.dp),
+                            shape = RoundedCornerShape(SystemSpacing.cornerSmall),
                             border = BorderStroke(0.75.dp, SystemColors.MonarchGold.copy(alpha = 0.5f))
                         ) {
                             Row(
@@ -169,6 +274,7 @@ fun HunterHeroOverviewCard(
                                 Text(
                                     text = "${player.streakDays}D STREAK",
                                     style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
                                     color = SystemColors.MonarchGold
                                 )
                             }
@@ -177,7 +283,7 @@ fun HunterHeroOverviewCard(
                         // Verified badge
                         Surface(
                             color = SystemColors.ObsidianBlack.copy(alpha = 0.7f),
-                            shape = RoundedCornerShape(8.dp),
+                            shape = RoundedCornerShape(SystemSpacing.cornerSmall),
                             border = BorderStroke(0.75.dp, SystemColors.VerifiedEmerald.copy(alpha = 0.4f))
                         ) {
                             Row(
@@ -200,25 +306,34 @@ fun HunterHeroOverviewCard(
                         }
                     }
 
-                    // Right: Inspect Status Action
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
+                    // Right: Inspect Status Action (Min 48dp touch target)
+                    Surface(
                         modifier = Modifier
-                            .padding(start = 4.dp)
-                            .testTag("inspect_attributes_button")
+                            .clip(RoundedCornerShape(SystemSpacing.cornerSmall))
+                            .clickable(onClick = onInspectStatus)
+                            .testTag("inspect_attributes_button"),
+                        color = SystemColors.ElectricCyan.copy(alpha = 0.12f),
+                        border = BorderStroke(1.dp, SystemColors.ElectricCyan.copy(alpha = 0.4f)),
+                        shape = RoundedCornerShape(SystemSpacing.cornerSmall)
                     ) {
-                        Text(
-                            text = "STATUS",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = SystemColors.ElectricCyan
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
-                            contentDescription = "Inspect Status",
-                            tint = SystemColors.ElectricCyan,
-                            modifier = Modifier.size(15.dp)
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                        ) {
+                            Text(
+                                text = "STATUS",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = SystemColors.ElectricCyan
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
+                                contentDescription = "Inspect Status",
+                                tint = SystemColors.ElectricCyan,
+                                modifier = Modifier.size(15.dp)
+                            )
+                        }
                     }
                 }
             }

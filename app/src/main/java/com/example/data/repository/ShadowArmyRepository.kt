@@ -21,7 +21,13 @@ import com.example.domain.model.DEFAULT_SHADOW_ACCOUNT_OWNER_ID
 import com.example.domain.model.MonarchSkillCatalog
 import com.example.domain.model.MonarchSkillDefinition
 import com.example.domain.model.Shadow
-import com.example.domain.model.ShadowArmyAnalytics
+import com.example.data.local.dao.ShadowBondDao
+import com.example.domain.engine.ShadowBondEngine
+import com.example.domain.model.ShadowArmyBondOverview
+import com.example.domain.model.ShadowBondActivityType
+import com.example.domain.model.ShadowBondEvent
+import com.example.domain.model.ShadowBondMilestone
+import com.example.domain.model.ShadowBondProfile
 import com.example.domain.model.ShadowClass
 import com.example.domain.model.ShadowDeploymentRecord
 import com.example.domain.model.ShadowEvolutionStage
@@ -55,14 +61,43 @@ class ShadowArmyRepository(
     private val monarchSkillUnlockDao: MonarchSkillUnlockDao,
     private val questProgressDao: ShadowQuestProgressDao,
     private val resourceDao: ShadowResourceDao,
+    private val shadowBondDao: ShadowBondDao? = null,
     // Engines
     val monarchProgressionEngine: MonarchProgressionEngine,
     val extractionEngine: ShadowExtractionEngine,
     val evolutionEngine: ShadowEvolutionEngine,
     val deploymentEngine: ShadowDeploymentEngine,
+    shadowBondEngine: ShadowBondEngine? = null,
     val database: SoloLevelingDatabase? = null,
     private val mutex: Mutex = Mutex()
 ) {
+
+    val bondEngine: ShadowBondEngine = shadowBondEngine ?: run {
+        val dao = shadowBondDao ?: database?.shadowBondDao()
+        if (dao != null) {
+            ShadowBondEngine(dao, shadowDao, database, mutex)
+        } else {
+            // In unit test stubs where database is mocked without bond dao
+            ShadowBondEngine(object : ShadowBondDao {
+                override suspend fun getBondProfile(shadowId: String, accountOwnerId: String) = null
+                override fun observeBondProfile(shadowId: String, accountOwnerId: String) = kotlinx.coroutines.flow.flowOf(null)
+                override suspend fun upsertBondProfile(entity: com.example.data.local.entity.ShadowBondProfileEntity) = 1L
+                override fun observeAllBondProfilesForOwner(accountOwnerId: String) = kotlinx.coroutines.flow.flowOf(emptyList())
+                override suspend fun getAllBondProfilesForOwner(accountOwnerId: String) = emptyList<com.example.data.local.entity.ShadowBondProfileEntity>()
+                override suspend fun insertBondEvent(entity: com.example.data.local.entity.ShadowBondEventEntity) = 1L
+                override suspend fun getBondEventByIdempotencyKey(idempotencyKey: String) = null
+                override suspend fun getBondEventsForShadow(shadowId: String, accountOwnerId: String) = emptyList<com.example.data.local.entity.ShadowBondEventEntity>()
+                override fun observeBondEventsForShadow(shadowId: String, accountOwnerId: String) = kotlinx.coroutines.flow.flowOf(emptyList())
+                override suspend fun insertBondMilestone(entity: com.example.data.local.entity.ShadowBondMilestoneEntity) = 1L
+                override suspend fun getBondMilestonesForShadow(shadowId: String, accountOwnerId: String) = emptyList<com.example.data.local.entity.ShadowBondMilestoneEntity>()
+                override fun observeBondMilestonesForShadow(shadowId: String, accountOwnerId: String) = kotlinx.coroutines.flow.flowOf(emptyList())
+                override suspend fun hasMilestone(shadowId: String, accountOwnerId: String, milestoneTypeName: String) = false
+                override fun observeAllMilestonesForOwner(accountOwnerId: String) = kotlinx.coroutines.flow.flowOf(emptyList())
+                override suspend fun getRecentMilestonesForOwner(accountOwnerId: String, limit: Int) = emptyList<com.example.data.local.entity.ShadowBondMilestoneEntity>()
+                override fun observeRecentMilestonesForOwner(accountOwnerId: String, limit: Int) = kotlinx.coroutines.flow.flowOf(emptyList())
+            }, shadowDao, database, mutex)
+        }
+    }
 
     private suspend fun <T> withLockedTransaction(block: suspend () -> T): T {
         return mutex.withLock {
@@ -575,5 +610,53 @@ class ShadowArmyRepository(
             highestLevelShadow = highestLevel,
             stageDistribution = stageDist
         )
+    }
+
+    // -------------------------------------------------------------------------
+    // SHADOW BOND & LOYALTY (Milestone 12 - Phase 6.4)
+    // -------------------------------------------------------------------------
+
+    fun observeShadowBondProfile(
+        shadowId: String,
+        accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID
+    ): Flow<ShadowBondProfile?> {
+        return bondEngine.observeBondProfile(shadowId, accountOwnerId)
+    }
+
+    suspend fun getOrCreateShadowBondProfile(
+        shadowId: String,
+        accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID
+    ): ShadowBondProfile {
+        return bondEngine.getOrCreateBondProfile(shadowId, accountOwnerId)
+    }
+
+    fun observeShadowBondEvents(
+        shadowId: String,
+        accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID
+    ): Flow<List<ShadowBondEvent>> {
+        return bondEngine.observeBondEventsForShadow(shadowId, accountOwnerId)
+    }
+
+    fun observeShadowBondMilestones(
+        shadowId: String,
+        accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID
+    ): Flow<List<ShadowBondMilestone>> {
+        return bondEngine.observeBondMilestonesForShadow(shadowId, accountOwnerId)
+    }
+
+    suspend fun recordShadowBondActivity(
+        shadowId: String,
+        accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID,
+        activityType: ShadowBondActivityType,
+        sourceEventId: String,
+        description: String? = null
+    ): Result<ShadowBondProfile> {
+        return bondEngine.recordBondActivity(shadowId, accountOwnerId, activityType, sourceEventId, description)
+    }
+
+    fun observeArmyBondOverview(
+        accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID
+    ): Flow<ShadowArmyBondOverview> {
+        return bondEngine.observeArmyBondOverview(accountOwnerId)
     }
 }

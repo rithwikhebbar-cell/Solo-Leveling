@@ -67,6 +67,7 @@ fun DailyQuestTacticalSection(
     progressFraction: Float,
     onCompleteQuest: (Long) -> Unit,
     onOpenQuestBoard: () -> Unit,
+    onOpenPenaltyStatus: (() -> Unit)? = null,
     commitments: Map<Long, QuestCommitment> = emptyMap(),
     onAcceptCommitment: ((Long) -> Unit)? = null,
     onRequestReschedule: ((String, Long, String) -> Unit)? = null,
@@ -92,15 +93,29 @@ fun DailyQuestTacticalSection(
             title = "Daily Quests",
             subtitle = "$completedCount completed • $pendingCount pending",
             trailing = {
-                TextButton(
-                    onClick = onOpenQuestBoard,
-                    modifier = Modifier.testTag("open_quest_board_button")
-                ) {
-                    Text(
-                        text = "QUEST BOARD",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = SystemColors.ElectricCyan
-                    )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (onOpenPenaltyStatus != null) {
+                        TextButton(
+                            onClick = onOpenPenaltyStatus,
+                            modifier = Modifier.testTag("open_penalty_status_button")
+                        ) {
+                            Text(
+                                text = "PENALTIES",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = SystemColors.ArcaneViolet
+                            )
+                        }
+                    }
+                    TextButton(
+                        onClick = onOpenQuestBoard,
+                        modifier = Modifier.testTag("open_quest_board_button")
+                    ) {
+                        Text(
+                            text = "QUEST BOARD",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = SystemColors.ElectricCyan
+                        )
+                    }
                 }
             }
         )

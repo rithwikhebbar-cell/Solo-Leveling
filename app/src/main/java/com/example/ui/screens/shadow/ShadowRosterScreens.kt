@@ -95,6 +95,13 @@ import com.example.domain.model.ShadowGrowthConfig
 import com.example.domain.model.ShadowEvolutionState
 import com.example.domain.model.ShadowEvolutionEvaluation
 import com.example.domain.model.ShadowGrowthOverview
+import com.example.domain.model.ShadowBondConfig
+import com.example.domain.model.ShadowBondProfile
+import com.example.domain.model.ShadowBondEvent
+import com.example.domain.model.ShadowBondMilestone
+import com.example.domain.model.ShadowArmyBondOverview
+import com.example.domain.model.ShadowPersonality
+import com.example.domain.model.ShadowRelationshipStage
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale

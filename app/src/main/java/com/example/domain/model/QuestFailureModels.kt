@@ -51,7 +51,10 @@ enum class ExemptionReasonCategory(val label: String, val requiresDocumentation:
     INJURY("Injury", false),
     EMERGENCY("Personal Emergency", false),
     SYSTEM_OUTAGE("System Outage", true),
-    FORCE_MAJEURE("Force Majeure", false)
+    FORCE_MAJEURE("Force Majeure", false),
+    RECOVERY_REQUIREMENT("Recovery Requirement", false),
+    UNEXPECTED_RESPONSIBILITY("Unexpected Responsibility", false),
+    OTHER_EXCEPTIONAL("Other Exceptional", false)
 }
 
 /**
@@ -62,6 +65,7 @@ enum class ExemptionLifecycleState(val label: String) {
     PENDING_REVIEW("Pending Review"),
     APPROVED("Approved"),
     DENIED("Denied"),
+    WITHDRAWN("Withdrawn"),
     CLOSED("Closed")
 }
 

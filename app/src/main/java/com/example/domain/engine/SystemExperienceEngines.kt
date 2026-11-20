@@ -272,6 +272,97 @@ object SystemAnnouncementEngine {
                 priority = TtsSpeechPriority.CRITICAL,
                 createdAtEpochMs = event.timestampEpochMs
             )
+            SystemEventType.PENALTY_ALLOCATED -> SystemAnnouncementRecord(
+                announcementKey = "EVENT|${event.eventId}",
+                eventId = event.eventId,
+                category = SystemAnnouncementCategory.RECOVERY,
+                channelSpec = SystemNotificationChannelSpec.RECOVERY_WARNING,
+                title = "System Notice: Penalty Points Recorded",
+                message = "${event.metadata["points"] ?: "Penalty"} points allocated for quest failure. Corrective activities available.",
+                voiceSummary = "System Notice. Penalty points recorded. Constructive redemption activities are available on the recovery board.",
+                deepLinkRoute = "penalty_status",
+                actionLabel = "View Penalties",
+                priority = TtsSpeechPriority.HIGH,
+                createdAtEpochMs = event.timestampEpochMs
+            )
+            SystemEventType.EXEMPTION_APPROVED -> SystemAnnouncementRecord(
+                announcementKey = "EVENT|${event.eventId}",
+                eventId = event.eventId,
+                category = SystemAnnouncementCategory.RECOMMENDATION,
+                channelSpec = SystemNotificationChannelSpec.DAILY_REPORT,
+                title = "Emergency Exemption Approved",
+                message = "System exemption approved. Associated quest commitment and penalty records have been cleared.",
+                voiceSummary = "Emergency exemption approved. Associated quest commitments have been cleared.",
+                deepLinkRoute = "penalty_audit",
+                actionLabel = "View Audit",
+                priority = TtsSpeechPriority.NORMAL,
+                createdAtEpochMs = event.timestampEpochMs
+            )
+            SystemEventType.EXEMPTION_DENIED -> SystemAnnouncementRecord(
+                announcementKey = "EVENT|${event.eventId}",
+                eventId = event.eventId,
+                category = SystemAnnouncementCategory.RECOMMENDATION,
+                channelSpec = SystemNotificationChannelSpec.DAILY_REPORT,
+                title = "Exemption Review Completed",
+                message = "Exemption review concluded. Standard commitment obligations remain in effect.",
+                voiceSummary = "Exemption review completed. Standard commitment obligations remain in effect.",
+                deepLinkRoute = "penalty_audit",
+                actionLabel = "View Audit",
+                priority = TtsSpeechPriority.LOW,
+                createdAtEpochMs = event.timestampEpochMs
+            )
+            SystemEventType.REDEMPTION_STARTED -> SystemAnnouncementRecord(
+                announcementKey = "EVENT|${event.eventId}",
+                eventId = event.eventId,
+                category = SystemAnnouncementCategory.QUEST_AVAILABLE,
+                channelSpec = SystemNotificationChannelSpec.QUEST_AVAILABLE,
+                title = "Redemption Activity Commenced",
+                message = "Corrective recovery task active. Complete requirements to resolve outstanding points.",
+                voiceSummary = "Redemption activity commenced. Complete requirements to resolve outstanding points.",
+                deepLinkRoute = "redemption_dashboard",
+                actionLabel = "View Tasks",
+                priority = TtsSpeechPriority.NORMAL,
+                createdAtEpochMs = event.timestampEpochMs
+            )
+            SystemEventType.REDEMPTION_VERIFIED -> SystemAnnouncementRecord(
+                announcementKey = "EVENT|${event.eventId}",
+                eventId = event.eventId,
+                category = SystemAnnouncementCategory.QUEST_COMPLETED,
+                channelSpec = SystemNotificationChannelSpec.QUEST_COMPLETED,
+                title = "Redemption Verified",
+                message = "Corrective recovery activity successfully completed and verified.",
+                voiceSummary = "Redemption verified. Corrective activity criteria successfully met.",
+                deepLinkRoute = "redemption_dashboard",
+                actionLabel = "View Tasks",
+                priority = TtsSpeechPriority.NORMAL,
+                createdAtEpochMs = event.timestampEpochMs
+            )
+            SystemEventType.PENALTY_RESOLVED -> SystemAnnouncementRecord(
+                announcementKey = "EVENT|${event.eventId}",
+                eventId = event.eventId,
+                category = SystemAnnouncementCategory.QUEST_COMPLETED,
+                channelSpec = SystemNotificationChannelSpec.QUEST_COMPLETED,
+                title = "Penalty Protocol Cleared",
+                message = "All corrective recovery objectives have been met and penalty points deducted.",
+                voiceSummary = "Penalty protocol cleared. All corrective recovery objectives have been met.",
+                deepLinkRoute = "penalty_status",
+                actionLabel = "View Dashboard",
+                priority = TtsSpeechPriority.HIGH,
+                createdAtEpochMs = event.timestampEpochMs
+            )
+            SystemEventType.PENALTY_REVERSED_DUE_TO_EXEMPTION -> SystemAnnouncementRecord(
+                announcementKey = "EVENT|${event.eventId}",
+                eventId = event.eventId,
+                category = SystemAnnouncementCategory.DAILY_SUMMARY,
+                channelSpec = SystemNotificationChannelSpec.DAILY_REPORT,
+                title = "Penalty Reversal Processed",
+                message = "${event.metadata["reversedPoints"] ?: "Points"} PP reversed in ledger following approved exemption.",
+                voiceSummary = "Penalty reversal processed. Points have been credited back to your account.",
+                deepLinkRoute = "penalty_audit",
+                actionLabel = "View Audit",
+                priority = TtsSpeechPriority.NORMAL,
+                createdAtEpochMs = event.timestampEpochMs
+            )
             else -> null
         }
     }

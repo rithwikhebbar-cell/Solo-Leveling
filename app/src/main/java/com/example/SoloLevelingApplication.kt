@@ -24,7 +24,9 @@ import com.example.data.repository.AcademicRepository
 import com.example.data.repository.AiSystemRepository
 import com.example.data.repository.IntelligenceRepository
 import com.example.data.repository.LifeManagementRepository
+import com.example.data.repository.PenaltyRepository
 import com.example.data.repository.QuestCommitmentRepository
+import com.example.data.repository.RedemptionRepository
 import com.example.data.repository.RealityOsRepository
 import com.example.data.repository.RpgRepository
 import com.example.data.repository.SyncRepository
@@ -203,6 +205,20 @@ class AppContainer(application: Application) {
         )
     }
 
+    val penaltyRepository: PenaltyRepository by lazy {
+        PenaltyRepository(
+            database = database,
+            systemEventRepository = systemEventRepository
+        )
+    }
+
+    val redemptionRepository: RedemptionRepository by lazy {
+        RedemptionRepository(
+            database = database,
+            systemEventRepository = systemEventRepository
+        )
+    }
+
     val automationOrchestrator: AutomationOrchestrator by lazy {
         AutomationOrchestrator(
             context = application,
@@ -272,6 +288,12 @@ class AppContainer(application: Application) {
             database = database,
             mutex = shadowMutex
         )
+        val bondEngine = com.example.domain.engine.ShadowBondEngine(
+            shadowBondDao = database.shadowBondDao(),
+            shadowDao = database.shadowDao(),
+            database = database,
+            mutex = shadowMutex
+        )
         val extractionEngine = ShadowExtractionEngine(
             database = database,
             shadowDao = database.shadowDao(),
@@ -285,6 +307,7 @@ class AppContainer(application: Application) {
             shadowSkillUnlockDao = database.shadowSkillUnlockDao(),
             monarchProgressionEngine = monarchProgressionEngine,
             shadowXpTraceDao = database.shadowXpTraceDao(),
+            shadowBondEngine = bondEngine,
             database = database,
             mutex = shadowMutex
         )
@@ -293,6 +316,7 @@ class AppContainer(application: Application) {
             deploymentDao = database.shadowDeploymentDao(),
             formationDao = database.shadowFormationDao(),
             monarchProgressionEngine = monarchProgressionEngine,
+            shadowBondEngine = bondEngine,
             database = database,
             mutex = shadowMutex
         )
@@ -306,10 +330,12 @@ class AppContainer(application: Application) {
             monarchSkillUnlockDao = database.monarchSkillUnlockDao(),
             questProgressDao = database.shadowQuestProgressDao(),
             resourceDao = database.shadowResourceDao(),
+            shadowBondDao = database.shadowBondDao(),
             monarchProgressionEngine = monarchProgressionEngine,
             extractionEngine = extractionEngine,
             evolutionEngine = evolutionEngine,
             deploymentEngine = deploymentEngine,
+            shadowBondEngine = bondEngine,
             database = database,
             mutex = shadowMutex
         )

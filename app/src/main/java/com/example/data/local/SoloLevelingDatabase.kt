@@ -17,13 +17,23 @@ import com.example.data.local.dao.SocialRecommendationDao
 import com.example.data.local.dao.SocialTrainingPlanDao
 import com.example.data.local.dao.SocialCompetencyProgressDao
 import com.example.data.local.dao.ConfirmedFailureDao
+import com.example.data.local.dao.PenaltyAccountDao
+import com.example.data.local.dao.PenaltyDao
+import com.example.data.local.dao.PenaltyTransactionDao
 import com.example.data.local.dao.QuestCommitmentDao
 import com.example.data.local.dao.QuestExemptionDao
 import com.example.data.local.dao.QuestRescheduleDao
+import com.example.data.local.dao.RedemptionDao
+import com.example.data.local.dao.RedemptionVerificationDao
 import com.example.data.local.entity.ConfirmedFailureRecordEntity
+import com.example.data.local.entity.PenaltyEntity
+import com.example.data.local.entity.PenaltyPointAccountEntity
+import com.example.data.local.entity.PenaltyTransactionEntity
 import com.example.data.local.entity.QuestCommitmentEntity
 import com.example.data.local.entity.QuestExemptionEntity
 import com.example.data.local.entity.QuestRescheduleEntity
+import com.example.data.local.entity.RedemptionEntity
+import com.example.data.local.entity.RedemptionVerificationEntity
 import com.example.data.local.entity.SocialAssessmentEntity
 import com.example.data.local.entity.SocialMissionRecordEntity
 import com.example.data.local.entity.SocialModuleProgressEntity
@@ -86,6 +96,7 @@ import com.example.data.local.dao.ShadowSkillUnlockDao
 import com.example.data.local.dao.ShadowXpTraceDao
 import com.example.data.local.dao.ShadowEvidenceClaimDao
 import com.example.data.local.dao.ShadowResonanceDao
+import com.example.data.local.dao.ShadowBondDao
 import com.example.data.local.dao.SkillDao
 import com.example.data.local.dao.StudySessionDao
 import com.example.data.local.dao.SyncConflictDao
@@ -113,6 +124,9 @@ import com.example.data.local.entity.ShadowSkillUnlockEntity
 import com.example.data.local.entity.ShadowXpTraceEntity
 import com.example.data.local.entity.ShadowEvidenceClaimEntity
 import com.example.data.local.entity.ShadowResonanceEntity
+import com.example.data.local.entity.ShadowBondProfileEntity
+import com.example.data.local.entity.ShadowBondEventEntity
+import com.example.data.local.entity.ShadowBondMilestoneEntity
 import com.example.data.local.entity.AcademicChapterEntity
 import com.example.data.local.entity.AcademicExamEntity
 import com.example.data.local.entity.AcademicModuleEntity
@@ -345,9 +359,20 @@ import com.example.domain.model.VerificationStatus
         QuestCommitmentEntity::class,
         ConfirmedFailureRecordEntity::class,
         QuestExemptionEntity::class,
-        QuestRescheduleEntity::class
+        QuestRescheduleEntity::class,
+        // Milestone 12 — Penalty Point System (Phase 3)
+        PenaltyEntity::class,
+        PenaltyTransactionEntity::class,
+        PenaltyPointAccountEntity::class,
+        // Milestone 12 — Corrective Activity & Redemption (Phase 4)
+        RedemptionEntity::class,
+        RedemptionVerificationEntity::class,
+        // Milestone 12 — Shadow Bond & Loyalty (Phase 6.4)
+        ShadowBondProfileEntity::class,
+        ShadowBondEventEntity::class,
+        ShadowBondMilestoneEntity::class
     ],
-    version = 18,
+    version = 21,
     exportSchema = false
 )
 abstract class SoloLevelingDatabase : RoomDatabase() {
@@ -415,6 +440,7 @@ abstract class SoloLevelingDatabase : RoomDatabase() {
     abstract fun shadowXpTraceDao(): ShadowXpTraceDao
     abstract fun shadowEvidenceClaimDao(): ShadowEvidenceClaimDao
     abstract fun shadowResonanceDao(): ShadowResonanceDao
+    abstract fun shadowBondDao(): ShadowBondDao
 
     // Milestone 12 — Social Mastery DAOs
     abstract fun socialProfileDao(): SocialProfileDao
@@ -433,6 +459,15 @@ abstract class SoloLevelingDatabase : RoomDatabase() {
     abstract fun confirmedFailureDao(): ConfirmedFailureDao
     abstract fun questExemptionDao(): QuestExemptionDao
     abstract fun questRescheduleDao(): QuestRescheduleDao
+
+    // Milestone 12 — Penalty Point System DAOs (Phase 3)
+    abstract fun penaltyDao(): PenaltyDao
+    abstract fun penaltyTransactionDao(): PenaltyTransactionDao
+    abstract fun penaltyAccountDao(): PenaltyAccountDao
+
+    // Milestone 12 — Corrective Activity & Redemption DAOs (Phase 4)
+    abstract fun redemptionDao(): RedemptionDao
+    abstract fun redemptionVerificationDao(): RedemptionVerificationDao
 
     companion object {
         @Volatile
@@ -3545,6 +3580,217 @@ abstract class SoloLevelingDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_18_19: Migration = object : Migration(18, 19) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // 1. Create penalties table
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `penalties` (
+                        `penaltyId` TEXT NOT NULL,
+                        `failureRecordId` TEXT NOT NULL,
+                        `commitmentId` TEXT NOT NULL,
+                        `questId` INTEGER NOT NULL,
+                        `accountOwnerId` TEXT NOT NULL,
+                        `questTitleSnapshot` TEXT NOT NULL,
+                        `severityCode` TEXT NOT NULL,
+                        `basePenaltyPoints` INTEGER NOT NULL,
+                        `escalationBonusPoints` INTEGER NOT NULL,
+                        `totalPenaltyPoints` INTEGER NOT NULL,
+                        `penaltyStatusName` TEXT NOT NULL,
+                        `reason` TEXT NOT NULL,
+                        `policyVersion` TEXT NOT NULL,
+                        `createdAtEpochMs` INTEGER NOT NULL,
+                        `resolvedAtEpochMs` INTEGER,
+                        PRIMARY KEY(`penaltyId`)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_penalties_failureRecordId` ON `penalties` (`failureRecordId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_penalties_commitmentId` ON `penalties` (`commitmentId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_penalties_accountOwnerId` ON `penalties` (`accountOwnerId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_penalties_penaltyStatusName` ON `penalties` (`penaltyStatusName`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_penalties_createdAtEpochMs` ON `penalties` (`createdAtEpochMs`)")
+
+                // 2. Create penalty_transactions table
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `penalty_transactions` (
+                        `transactionId` TEXT NOT NULL,
+                        `accountOwnerId` TEXT NOT NULL,
+                        `penaltyId` TEXT NOT NULL,
+                        `transactionTypeName` TEXT NOT NULL,
+                        `pointsDelta` INTEGER NOT NULL,
+                        `balanceAfter` INTEGER NOT NULL,
+                        `reason` TEXT NOT NULL,
+                        `timestampEpochMs` INTEGER NOT NULL,
+                        `idempotencyKey` TEXT NOT NULL,
+                        PRIMARY KEY(`transactionId`)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_penalty_transactions_idempotencyKey` ON `penalty_transactions` (`idempotencyKey`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_penalty_transactions_accountOwnerId` ON `penalty_transactions` (`accountOwnerId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_penalty_transactions_penaltyId` ON `penalty_transactions` (`penaltyId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_penalty_transactions_timestampEpochMs` ON `penalty_transactions` (`timestampEpochMs`)")
+
+                // 3. Create penalty_point_accounts table
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `penalty_point_accounts` (
+                        `accountOwnerId` TEXT NOT NULL,
+                        `currentBalance` INTEGER NOT NULL,
+                        `lifetimePointsAccrued` INTEGER NOT NULL,
+                        `activePenaltiesCount` INTEGER NOT NULL,
+                        `lastUpdatedEpochMs` INTEGER NOT NULL,
+                        PRIMARY KEY(`accountOwnerId`)
+                    )
+                    """.trimIndent()
+                )
+            }
+        }
+
+        val MIGRATION_19_20: Migration = object : Migration(19, 20) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // 1. Create redemption_activities table
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `redemption_activities` (
+                        `redemptionId` TEXT NOT NULL,
+                        `penaltyId` TEXT NOT NULL,
+                        `failureRecordId` TEXT NOT NULL,
+                        `questId` INTEGER NOT NULL,
+                        `accountOwnerId` TEXT NOT NULL,
+                        `activityId` TEXT NOT NULL,
+                        `categoryName` TEXT NOT NULL,
+                        `activityTitle` TEXT NOT NULL,
+                        `instructions` TEXT NOT NULL,
+                        `difficultyName` TEXT NOT NULL,
+                        `estimatedDurationMinutes` INTEGER NOT NULL,
+                        `verificationMethodName` TEXT NOT NULL,
+                        `lifecycleStateName` TEXT NOT NULL,
+                        `resolutionPoints` INTEGER NOT NULL,
+                        `assignedShadowClassName` TEXT NOT NULL,
+                        `shadowGuidanceNote` TEXT NOT NULL,
+                        `createdAtEpochMs` INTEGER NOT NULL,
+                        `acceptedAtEpochMs` INTEGER,
+                        `completedAtEpochMs` INTEGER,
+                        `verifiedAtEpochMs` INTEGER,
+                        `verificationNotes` TEXT,
+                        PRIMARY KEY(`redemptionId`)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_redemption_activities_penaltyId` ON `redemption_activities` (`penaltyId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_redemption_activities_accountOwnerId` ON `redemption_activities` (`accountOwnerId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_redemption_activities_lifecycleStateName` ON `redemption_activities` (`lifecycleStateName`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_redemption_activities_failureRecordId` ON `redemption_activities` (`failureRecordId`)")
+
+                // 2. Create redemption_verifications table
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `redemption_verifications` (
+                        `verificationId` TEXT NOT NULL,
+                        `redemptionId` TEXT NOT NULL,
+                        `accountOwnerId` TEXT NOT NULL,
+                        `submittedAtEpochMs` INTEGER NOT NULL,
+                        `reflectionText` TEXT NOT NULL,
+                        `checklistItemsJson` TEXT NOT NULL,
+                        `externalSessionRefId` TEXT,
+                        `isValid` INTEGER NOT NULL,
+                        `pointsResolved` INTEGER NOT NULL,
+                        `verifiedAtEpochMs` INTEGER NOT NULL,
+                        `notes` TEXT NOT NULL,
+                        PRIMARY KEY(`verificationId`)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_redemption_verifications_redemptionId` ON `redemption_verifications` (`redemptionId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_redemption_verifications_accountOwnerId` ON `redemption_verifications` (`accountOwnerId`)")
+            }
+        }
+
+        // =====================================================================
+        // MIGRATION 20 → 21: Milestone 12 Phase 6.4 Shadow Bond & Loyalty System
+        // =====================================================================
+        val MIGRATION_20_21: Migration = object : Migration(20, 21) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // 1. Create shadow_bond_profiles table
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `shadow_bond_profiles` (
+                        `shadowId` TEXT NOT NULL,
+                        `accountOwnerId` TEXT NOT NULL,
+                        `bondLevel` INTEGER NOT NULL,
+                        `bondPoints` INTEGER NOT NULL,
+                        `loyaltyRating` INTEGER NOT NULL,
+                        `trustRating` INTEGER NOT NULL,
+                        `relationshipStageName` TEXT NOT NULL,
+                        `personalityCharacteristicName` TEXT NOT NULL,
+                        `totalActivitiesCount` INTEGER NOT NULL,
+                        `lastBondActivityEpochMs` INTEGER NOT NULL,
+                        `updatedAtEpochMs` INTEGER NOT NULL,
+                        PRIMARY KEY(`shadowId`),
+                        FOREIGN KEY(`accountOwnerId`) REFERENCES `shadow_monarch_profile`(`accountOwnerId`) ON UPDATE NO ACTION ON DELETE CASCADE,
+                        FOREIGN KEY(`shadowId`) REFERENCES `shadows`(`shadowId`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_shadow_bond_profiles_shadowId` ON `shadow_bond_profiles` (`shadowId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_shadow_bond_profiles_accountOwnerId` ON `shadow_bond_profiles` (`accountOwnerId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_shadow_bond_profiles_accountOwnerId_relationshipStageName` ON `shadow_bond_profiles` (`accountOwnerId`, `relationshipStageName`)")
+
+                // 2. Create shadow_bond_events table
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `shadow_bond_events` (
+                        `eventId` TEXT NOT NULL,
+                        `accountOwnerId` TEXT NOT NULL,
+                        `shadowId` TEXT NOT NULL,
+                        `activityTypeName` TEXT NOT NULL,
+                        `sourceEventId` TEXT NOT NULL,
+                        `bondPointsAwarded` INTEGER NOT NULL,
+                        `loyaltyDelta` INTEGER NOT NULL,
+                        `trustDelta` INTEGER NOT NULL,
+                        `description` TEXT NOT NULL,
+                        `timestampEpochMs` INTEGER NOT NULL,
+                        `idempotencyKey` TEXT NOT NULL,
+                        PRIMARY KEY(`eventId`),
+                        FOREIGN KEY(`accountOwnerId`) REFERENCES `shadow_monarch_profile`(`accountOwnerId`) ON UPDATE NO ACTION ON DELETE CASCADE,
+                        FOREIGN KEY(`shadowId`) REFERENCES `shadows`(`shadowId`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_shadow_bond_events_eventId` ON `shadow_bond_events` (`eventId`)")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_shadow_bond_events_idempotencyKey` ON `shadow_bond_events` (`idempotencyKey`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_shadow_bond_events_accountOwnerId_shadowId_timestampEpochMs` ON `shadow_bond_events` (`accountOwnerId`, `shadowId`, `timestampEpochMs`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_shadow_bond_events_shadowId` ON `shadow_bond_events` (`shadowId`)")
+
+                // 3. Create shadow_bond_milestones table
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `shadow_bond_milestones` (
+                        `milestoneId` TEXT NOT NULL,
+                        `accountOwnerId` TEXT NOT NULL,
+                        `shadowId` TEXT NOT NULL,
+                        `milestoneTypeName` TEXT NOT NULL,
+                        `title` TEXT NOT NULL,
+                        `description` TEXT NOT NULL,
+                        `sourceEventId` TEXT NOT NULL,
+                        `timestampEpochMs` INTEGER NOT NULL,
+                        `verificationStatus` TEXT NOT NULL,
+                        PRIMARY KEY(`milestoneId`),
+                        FOREIGN KEY(`accountOwnerId`) REFERENCES `shadow_monarch_profile`(`accountOwnerId`) ON UPDATE NO ACTION ON DELETE CASCADE,
+                        FOREIGN KEY(`shadowId`) REFERENCES `shadows`(`shadowId`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_shadow_bond_milestones_milestoneId` ON `shadow_bond_milestones` (`milestoneId`)")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_shadow_bond_milestones_accountOwnerId_shadowId_milestoneTypeName` ON `shadow_bond_milestones` (`accountOwnerId`, `shadowId`, `milestoneTypeName`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_shadow_bond_milestones_accountOwnerId` ON `shadow_bond_milestones` (`accountOwnerId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_shadow_bond_milestones_shadowId` ON `shadow_bond_milestones` (`shadowId`)")
+            }
+        }
+
         fun getInstance(context: Context): SoloLevelingDatabase {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
@@ -3569,7 +3815,10 @@ abstract class SoloLevelingDatabase : RoomDatabase() {
                         MIGRATION_14_15,
                         MIGRATION_15_16,
                         MIGRATION_16_17,
-                        MIGRATION_17_18
+                        MIGRATION_17_18,
+                        MIGRATION_18_19,
+                        MIGRATION_19_20,
+                        MIGRATION_20_21
                     )
                     .build()
                     .also { INSTANCE = it }

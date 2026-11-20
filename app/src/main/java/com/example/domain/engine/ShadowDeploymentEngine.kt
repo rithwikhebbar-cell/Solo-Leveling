@@ -27,6 +27,7 @@ class ShadowDeploymentEngine(
     private val deploymentDao: ShadowDeploymentDao,
     private val formationDao: ShadowFormationDao,
     private val monarchProgressionEngine: MonarchProgressionEngine? = null,
+    private val shadowBondEngine: ShadowBondEngine? = null,
     private val database: SoloLevelingDatabase? = null,
     private val mutex: Mutex = Mutex()
 ) {
@@ -101,6 +102,13 @@ class ShadowDeploymentEngine(
                     throw IllegalStateException("Shadow ownership check failed during deploy: $shadowId")
                 }
 
+                shadowBondEngine?.recordBondActivity(
+                    shadowId = shadowId,
+                    accountOwnerId = owner,
+                    activityType = com.example.domain.model.ShadowBondActivityType.DEPLOYMENT_SUCCESS,
+                    sourceEventId = deploymentId
+                )
+
                 record
             }
         }
@@ -134,6 +142,13 @@ class ShadowDeploymentEngine(
                     deployment.shadowId,
                     owner,
                     ShadowDeploymentStatus.IDLE.name
+                )
+
+                shadowBondEngine?.recordBondActivity(
+                    shadowId = deployment.shadowId,
+                    accountOwnerId = owner,
+                    activityType = com.example.domain.model.ShadowBondActivityType.DEPLOYMENT_RECALL,
+                    sourceEventId = deploymentId
                 )
             }
         }

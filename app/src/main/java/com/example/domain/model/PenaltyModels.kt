@@ -51,6 +51,7 @@ enum class PenaltyStatus(val displayName: String, val isOutstanding: Boolean) {
 enum class PenaltyTransactionType(val displayName: String, val isDebit: Boolean) {
     ALLOCATION("Allocation", false),
     RESOLUTION("Resolution", true),
+    REDEMPTION_RESOLUTION("Redemption Resolution", true),
     REVERSAL("Reversal", true),
     ADJUSTMENT("Adjustment", false);
 

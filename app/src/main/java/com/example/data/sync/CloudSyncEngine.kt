@@ -535,6 +535,24 @@ class CloudSyncEngine(
                 if (dto.accountOwnerId != userId) return null
                 CloudDataMapper.shadowResonanceToPostgrestRow(userId, dto)
             }
+            SyncEntityType.SHADOW_BOND_PROFILE -> {
+                val dto = runCatching { CloudDataMapper.json.decodeFromString<com.example.data.remote.CloudShadowBondProfilePayload>(payloadJson) }.getOrNull()
+                    ?: return null
+                if (dto.accountOwnerId != userId) return null
+                CloudDataMapper.shadowBondProfileToPostgrestRow(userId, dto)
+            }
+            SyncEntityType.SHADOW_BOND_EVENT -> {
+                val dto = runCatching { CloudDataMapper.json.decodeFromString<com.example.data.remote.CloudShadowBondEventPayload>(payloadJson) }.getOrNull()
+                    ?: return null
+                if (dto.accountOwnerId != userId) return null
+                CloudDataMapper.shadowBondEventToPostgrestRow(userId, dto)
+            }
+            SyncEntityType.SHADOW_BOND_MILESTONE -> {
+                val dto = runCatching { CloudDataMapper.json.decodeFromString<com.example.data.remote.CloudShadowBondMilestonePayload>(payloadJson) }.getOrNull()
+                    ?: return null
+                if (dto.accountOwnerId != userId) return null
+                CloudDataMapper.shadowBondMilestoneToPostgrestRow(userId, dto)
+            }
             else -> runCatching { CloudDataMapper.json.decodeFromString<JsonObject>(payloadJson) }.getOrNull()
         }
     }

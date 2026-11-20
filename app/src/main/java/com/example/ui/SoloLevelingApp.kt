@@ -848,7 +848,9 @@ private fun RealityOsNavHost(
                 onOpenWidgetHub = { navController.navigate(WidgetHubRoute) },
                 onOpenCelebrationVault = { navController.navigate(CelebrationHistoryRoute) },
                 onOpenShadowRealm = { navController.navigate(ShadowRealmDashboardRoute) },
-                onOpenSocialMastery = { navController.navigate(com.example.ui.navigation.SocialMasteryDashboardRoute) }
+                onOpenSocialMastery = { navController.navigate(com.example.ui.navigation.SocialMasteryDashboardRoute) },
+                onOpenPenaltyStatus = { navController.navigate(com.example.ui.navigation.PenaltyStatusRoute) },
+                onOpenPenaltyAudit = { navController.navigate(com.example.ui.navigation.PenaltyAuditRoute) }
             )
         }
         // Milestone 6: Dungeons, Boss Battles, Skills & RPG Systems (17 Screens)
@@ -1628,7 +1630,9 @@ private fun RealityOsNavHost(
                 onOpenWidgetHub = { navController.navigate(WidgetHubRoute) },
                 onOpenCelebrationVault = { navController.navigate(CelebrationHistoryRoute) },
                 onOpenShadowRealm = { navController.navigate(ShadowRealmDashboardRoute) },
-                onOpenSocialMastery = { navController.navigate(com.example.ui.navigation.SocialMasteryDashboardRoute) }
+                onOpenSocialMastery = { navController.navigate(com.example.ui.navigation.SocialMasteryDashboardRoute) },
+                onOpenPenaltyStatus = { navController.navigate(com.example.ui.navigation.PenaltyStatusRoute) },
+                onOpenPenaltyAudit = { navController.navigate(com.example.ui.navigation.PenaltyAuditRoute) }
             )
         }
         composable<ModuleIntegrationStatusRoute> {
@@ -1744,7 +1748,9 @@ private fun RealityOsNavHost(
                 onOpenWidgetHub = { navController.navigate(WidgetHubRoute) },
                 onOpenCelebrationVault = { navController.navigate(CelebrationHistoryRoute) },
                 onOpenShadowRealm = { navController.navigate(ShadowRealmDashboardRoute) },
-                onOpenSocialMastery = { navController.navigate(com.example.ui.navigation.SocialMasteryDashboardRoute) }
+                onOpenSocialMastery = { navController.navigate(com.example.ui.navigation.SocialMasteryDashboardRoute) },
+                onOpenPenaltyStatus = { navController.navigate(com.example.ui.navigation.PenaltyStatusRoute) },
+                onOpenPenaltyAudit = { navController.navigate(com.example.ui.navigation.PenaltyAuditRoute) }
             )
         }
 
@@ -2062,6 +2068,49 @@ private fun RealityOsNavHost(
                 onNavigateBack = { navController.popBackStack() }
             )
         }
+        composable<com.example.ui.navigation.PenaltyStatusRoute> {
+            val app = LocalContext.current.applicationContext as com.example.SoloLevelingApplication
+            val penaltyViewModel = androidx.lifecycle.viewmodel.compose.viewModel {
+                com.example.ui.viewmodel.PenaltyViewModel(
+                    repository = app.container.penaltyRepository
+                )
+            }
+            com.example.ui.screens.penalty.PenaltyStatusScreen(
+                viewModel = penaltyViewModel,
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToRedemption = { navController.navigate(com.example.ui.navigation.RedemptionDashboardRoute) },
+                onNavigateToAudit = { navController.navigate(com.example.ui.navigation.PenaltyAuditRoute) }
+            )
+        }
+        composable<com.example.ui.navigation.RedemptionDashboardRoute> {
+            val app = LocalContext.current.applicationContext as com.example.SoloLevelingApplication
+            val redemptionViewModel = androidx.lifecycle.viewmodel.compose.viewModel {
+                com.example.ui.viewmodel.RedemptionViewModel(
+                    redemptionRepository = app.container.redemptionRepository,
+                    penaltyRepository = app.container.penaltyRepository
+                )
+            }
+            com.example.ui.screens.penalty.RedemptionDashboardScreen(
+                viewModel = redemptionViewModel,
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+        composable<com.example.ui.navigation.PenaltyAuditRoute> {
+            val app = LocalContext.current.applicationContext as com.example.SoloLevelingApplication
+            val auditViewModel = androidx.lifecycle.viewmodel.compose.viewModel {
+                com.example.ui.viewmodel.PenaltyAuditViewModel(
+                    penaltyRepository = app.container.penaltyRepository,
+                    questCommitmentRepository = app.container.questCommitmentRepository,
+                    redemptionRepository = app.container.redemptionRepository,
+                    database = app.container.database,
+                    backendAiGateway = app.container.backendAiGateway
+                )
+            }
+            com.example.ui.screens.penalty.PenaltyAuditScreen(
+                viewModel = auditViewModel,
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
     }
 }
 
@@ -2108,6 +2157,9 @@ private fun handleDeepLinkRoute(
         "social_mastery" -> navController.navigate(com.example.ui.navigation.SocialMasteryDashboardRoute)
         "social_missions" -> navController.navigate(com.example.ui.navigation.SocialMissionsRoute)
         "social_assessment" -> navController.navigate(com.example.ui.navigation.SocialSkillAssessmentRoute)
+        "penalty_status" -> navController.navigate(com.example.ui.navigation.PenaltyStatusRoute)
+        "redemption_dashboard" -> navController.navigate(com.example.ui.navigation.RedemptionDashboardRoute)
+        "penalty_audit" -> navController.navigate(com.example.ui.navigation.PenaltyAuditRoute)
         "awakening" -> experienceViewModel.replayAwakening()
         else -> Unit
     }

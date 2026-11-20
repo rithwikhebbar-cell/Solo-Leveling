@@ -35,6 +35,12 @@ interface QuestCommitmentDao {
     @Query("SELECT * FROM quest_commitments WHERE logicalCycleId = :logicalCycleId ORDER BY deadlineEpochMs ASC")
     suspend fun getCommitmentsForCycleOnce(logicalCycleId: String): List<QuestCommitmentEntity>
 
+    @Query("SELECT * FROM quest_commitments WHERE accountOwnerId = :accountOwnerId ORDER BY deadlineEpochMs DESC")
+    fun observeAllCommitments(accountOwnerId: String): Flow<List<QuestCommitmentEntity>>
+
+    @Query("SELECT * FROM quest_commitments WHERE accountOwnerId = :accountOwnerId ORDER BY deadlineEpochMs DESC")
+    suspend fun getAllCommitmentsOnce(accountOwnerId: String): List<QuestCommitmentEntity>
+
     @Query("SELECT * FROM quest_commitments WHERE stateName IN ('ACCEPTED', 'ACTIVE', 'RESCHEDULED', 'OVERDUE') AND gracePeriodExpiresAtEpochMs <= :beforeOrAtEpochMs")
     suspend fun getOverdueCommitmentsEligibleForFailure(beforeOrAtEpochMs: Long): List<QuestCommitmentEntity>
 
@@ -93,6 +99,15 @@ interface QuestExemptionDao {
 
     @Query("SELECT * FROM quest_exemptions WHERE commitmentId = :commitmentId ORDER BY requestedAtEpochMs DESC LIMIT 1")
     suspend fun getActiveExemptionForCommitment(commitmentId: String): QuestExemptionEntity?
+
+    @Query("SELECT * FROM quest_exemptions WHERE accountOwnerId = :accountOwnerId ORDER BY requestedAtEpochMs DESC")
+    fun observeAllExemptions(accountOwnerId: String): Flow<List<QuestExemptionEntity>>
+
+    @Query("SELECT * FROM quest_exemptions WHERE accountOwnerId = :accountOwnerId ORDER BY requestedAtEpochMs DESC")
+    suspend fun getAllExemptionsOnce(accountOwnerId: String): List<QuestExemptionEntity>
+
+    @Query("SELECT * FROM quest_exemptions WHERE lifecycleStateName = :lifecycleStateName ORDER BY requestedAtEpochMs DESC")
+    suspend fun getExemptionsByState(lifecycleStateName: String): List<QuestExemptionEntity>
 
     @Query("""
         UPDATE quest_exemptions 

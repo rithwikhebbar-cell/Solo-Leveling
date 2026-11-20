@@ -115,7 +115,20 @@ class ShadowRealmViewModel(
     private val _growthOverview = MutableStateFlow<com.example.domain.model.ShadowGrowthOverview?>(null)
     val growthOverview: StateFlow<com.example.domain.model.ShadowGrowthOverview?> = _growthOverview.asStateFlow()
 
+    private val _shadowBondProfile = MutableStateFlow<com.example.domain.model.ShadowBondProfile?>(null)
+    val shadowBondProfile: StateFlow<com.example.domain.model.ShadowBondProfile?> = _shadowBondProfile.asStateFlow()
+
+    private val _shadowBondEvents = MutableStateFlow<List<com.example.domain.model.ShadowBondEvent>>(emptyList())
+    val shadowBondEvents: StateFlow<List<com.example.domain.model.ShadowBondEvent>> = _shadowBondEvents.asStateFlow()
+
+    private val _shadowBondMilestones = MutableStateFlow<List<com.example.domain.model.ShadowBondMilestone>>(emptyList())
+    val shadowBondMilestones: StateFlow<List<com.example.domain.model.ShadowBondMilestone>> = _shadowBondMilestones.asStateFlow()
+
+    private val _armyBondOverview = MutableStateFlow<com.example.domain.model.ShadowArmyBondOverview?>(null)
+    val armyBondOverview: StateFlow<com.example.domain.model.ShadowArmyBondOverview?> = _armyBondOverview.asStateFlow()
+
     private var ownerScopeJob: Job? = null
+    private var shadowBondJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -130,6 +143,7 @@ class ShadowRealmViewModel(
 
     private fun rebindToAccountOwner(owner: String) {
         ownerScopeJob?.cancel()
+        shadowBondJob?.cancel()
         _activeAccountOwnerId.value = owner
         _selectedShadow.value = null
         _extractionUiState.value = ShadowExtractionUiState()
@@ -137,6 +151,10 @@ class ShadowRealmViewModel(
         _evolutionEvaluation.value = null
         _isEvolving.value = false
         _growthOverview.value = null
+        _shadowBondProfile.value = null
+        _shadowBondEvents.value = emptyList()
+        _shadowBondMilestones.value = emptyList()
+        _armyBondOverview.value = null
         _settingsState.value = ShadowRealmSettings(accountOwnerId = owner)
         _uiState.value = ShadowRealmUiState(
             isLoading = true,
@@ -153,6 +171,12 @@ class ShadowRealmViewModel(
                     loadGrowthOverview(owner)
                 }.onFailure { e ->
                     _uiState.value = _uiState.value.copy(error = e.message)
+                }
+            }
+
+            launch {
+                repository.observeArmyBondOverview(owner).collect {
+                    _armyBondOverview.value = it
                 }
             }
 
@@ -345,11 +369,39 @@ class ShadowRealmViewModel(
         val owner = _activeAccountOwnerId.value
         viewModelScope.launch {
             _selectedShadow.value = repository.getShadowById(shadowId, accountOwnerId = owner)
+            loadShadowBond(shadowId)
         }
     }
 
     fun clearSelectedShadow() {
+        shadowBondJob?.cancel()
         _selectedShadow.value = null
+        _shadowBondProfile.value = null
+        _shadowBondEvents.value = emptyList()
+        _shadowBondMilestones.value = emptyList()
+    }
+
+    fun loadShadowBond(shadowId: String) {
+        val owner = _activeAccountOwnerId.value
+        shadowBondJob?.cancel()
+        shadowBondJob = viewModelScope.launch {
+            launch {
+                repository.getOrCreateShadowBondProfile(shadowId, owner)
+                repository.observeShadowBondProfile(shadowId, owner).collect {
+                    _shadowBondProfile.value = it
+                }
+            }
+            launch {
+                repository.observeShadowBondEvents(shadowId, owner).collect {
+                    _shadowBondEvents.value = it
+                }
+            }
+            launch {
+                repository.observeShadowBondMilestones(shadowId, owner).collect {
+                    _shadowBondMilestones.value = it
+                }
+            }
+        }
     }
 
     // -------------------------------------------------------------------------

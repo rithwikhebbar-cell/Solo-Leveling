@@ -113,9 +113,12 @@ fun HomeScreen(
     monarchProfile: ShadowMonarchProfile? = null,
     shadowEssenceBalance: Int = 0,
     onNavigateRoute: (String) -> Unit = {},
-    reducedMotionEnabled: Boolean = false
+    reducedMotionEnabled: Boolean = false,
+    equippedTitle: String? = null
 ) {
     var showLogSheet by rememberSaveable { mutableStateOf(false) }
+
+    val currentTitle = equippedTitle ?: state.player.title
 
     val dateString = remember {
         SimpleDateFormat("EEE, MMM dd yyyy", Locale.getDefault()).format(Date()).uppercase()
@@ -163,10 +166,10 @@ fun HomeScreen(
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .widthIn(max = 760.dp),
+                .widthIn(max = SystemSpacing.maxContentWidth),
             contentPadding = PaddingValues(
-                horizontal = SystemSpacing.screenEdgePadding,
-                vertical = SystemSpacing.verticalPageSpacing
+                horizontal = SystemSpacing.screenHorizontal,
+                vertical = SystemSpacing.screenVertical
             ),
             verticalArrangement = Arrangement.spacedBy(SystemSpacing.sectionSpacing)
         ) {

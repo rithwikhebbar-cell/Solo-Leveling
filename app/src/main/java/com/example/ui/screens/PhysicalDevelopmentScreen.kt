@@ -109,7 +109,7 @@ fun PhysicalDevelopmentScreen(
                 .testTag("physical_development_screen"),
             contentPadding = PaddingValues(
                 horizontal = SystemSpacing.screenHorizontal,
-                vertical = 20.dp
+                vertical = SystemSpacing.screenVertical
             ),
             verticalArrangement = Arrangement.spacedBy(SystemSpacing.sectionSpacing)
         ) {

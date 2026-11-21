@@ -31,7 +31,13 @@ class SyncQueueManager(private val database: SoloLevelingDatabase) {
             SyncEntityType.SHADOW_QUEST_PROGRESS,
             SyncEntityType.SHADOW_RESOURCE_TRANSACTION,
             SyncEntityType.SHADOW_EVIDENCE_CLAIM,
-            SyncEntityType.SHADOW_RESONANCE_RECORD
+            SyncEntityType.SHADOW_RESONANCE_RECORD,
+            SyncEntityType.SHADOW_BOND_PROFILE,
+            SyncEntityType.SHADOW_BOND_EVENT,
+            SyncEntityType.SHADOW_BOND_MILESTONE,
+            SyncEntityType.SHADOW_SQUAD,
+            SyncEntityType.SHADOW_SQUAD_MEMBER,
+            SyncEntityType.SHADOW_MISSION_ASSIGNMENT
         )
 
         fun isShadowEntityType(entityType: SyncEntityType): Boolean = entityType in SHADOW_SYNC_TYPES
@@ -370,6 +376,62 @@ class SyncQueueManager(private val database: SoloLevelingDatabase) {
             enqueueChange(
                 userId = userId,
                 entityType = SyncEntityType.SHADOW_RESONANCE_RECORD,
+                localKey = key,
+                operation = SyncOperationType.UPSERT,
+                payloadJson = CloudDataMapper.json.encodeToString(payload),
+                nowEpochMs = nowEpochMs
+            )
+        }
+
+        for (bond in database.shadowBondDao().getAllBondProfilesForOwner(userId)) {
+            val key = scopedShadowLocalKey(userId, bond.shadowId)
+            val cloudUuid = resolveOrAssignUuid(userId, SyncEntityType.SHADOW_BOND_PROFILE, key)
+            val payload = CloudDataMapper.shadowBondProfileToPayload(bond, cloudUuid)
+            enqueueChange(
+                userId = userId,
+                entityType = SyncEntityType.SHADOW_BOND_PROFILE,
+                localKey = key,
+                operation = SyncOperationType.UPSERT,
+                payloadJson = CloudDataMapper.json.encodeToString(payload),
+                nowEpochMs = nowEpochMs
+            )
+        }
+
+        for (squad in database.shadowTacticalDao().getAllSquadsForOwnerOnce(userId)) {
+            val key = scopedShadowLocalKey(userId, squad.squadId)
+            val cloudUuid = resolveOrAssignUuid(userId, SyncEntityType.SHADOW_SQUAD, key)
+            val payload = CloudDataMapper.shadowSquadToPayload(squad, cloudUuid)
+            enqueueChange(
+                userId = userId,
+                entityType = SyncEntityType.SHADOW_SQUAD,
+                localKey = key,
+                operation = SyncOperationType.UPSERT,
+                payloadJson = CloudDataMapper.json.encodeToString(payload),
+                nowEpochMs = nowEpochMs
+            )
+        }
+
+        for (member in database.shadowTacticalDao().getAllSquadMembersForOwnerOnce(userId)) {
+            val key = scopedShadowLocalKey(userId, "${member.squadId}_${member.shadowId}")
+            val cloudUuid = resolveOrAssignUuid(userId, SyncEntityType.SHADOW_SQUAD_MEMBER, key)
+            val payload = CloudDataMapper.shadowSquadMemberToPayload(member, cloudUuid)
+            enqueueChange(
+                userId = userId,
+                entityType = SyncEntityType.SHADOW_SQUAD_MEMBER,
+                localKey = key,
+                operation = SyncOperationType.UPSERT,
+                payloadJson = CloudDataMapper.json.encodeToString(payload),
+                nowEpochMs = nowEpochMs
+            )
+        }
+
+        for (assignment in database.shadowTacticalDao().getAllAssignmentsForOwnerOnce(userId)) {
+            val key = scopedShadowLocalKey(userId, assignment.assignmentId)
+            val cloudUuid = resolveOrAssignUuid(userId, SyncEntityType.SHADOW_MISSION_ASSIGNMENT, key)
+            val payload = CloudDataMapper.shadowMissionAssignmentToPayload(assignment, cloudUuid)
+            enqueueChange(
+                userId = userId,
+                entityType = SyncEntityType.SHADOW_MISSION_ASSIGNMENT,
                 localKey = key,
                 operation = SyncOperationType.UPSERT,
                 payloadJson = CloudDataMapper.json.encodeToString(payload),

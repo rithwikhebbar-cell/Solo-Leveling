@@ -97,6 +97,7 @@ import com.example.data.local.dao.ShadowXpTraceDao
 import com.example.data.local.dao.ShadowEvidenceClaimDao
 import com.example.data.local.dao.ShadowResonanceDao
 import com.example.data.local.dao.ShadowBondDao
+import com.example.data.local.dao.ShadowTacticalDao
 import com.example.data.local.dao.SkillDao
 import com.example.data.local.dao.StudySessionDao
 import com.example.data.local.dao.SyncConflictDao
@@ -127,6 +128,9 @@ import com.example.data.local.entity.ShadowResonanceEntity
 import com.example.data.local.entity.ShadowBondProfileEntity
 import com.example.data.local.entity.ShadowBondEventEntity
 import com.example.data.local.entity.ShadowBondMilestoneEntity
+import com.example.data.local.entity.ShadowSquadEntity
+import com.example.data.local.entity.ShadowSquadMemberEntity
+import com.example.data.local.entity.ShadowMissionAssignmentEntity
 import com.example.data.local.entity.AcademicChapterEntity
 import com.example.data.local.entity.AcademicExamEntity
 import com.example.data.local.entity.AcademicModuleEntity
@@ -370,9 +374,13 @@ import com.example.domain.model.VerificationStatus
         // Milestone 12 — Shadow Bond & Loyalty (Phase 6.4)
         ShadowBondProfileEntity::class,
         ShadowBondEventEntity::class,
-        ShadowBondMilestoneEntity::class
+        ShadowBondMilestoneEntity::class,
+        // Milestone 12 — Shadow Army Intelligence & Tactical Command (Phase 6.5)
+        ShadowSquadEntity::class,
+        ShadowSquadMemberEntity::class,
+        ShadowMissionAssignmentEntity::class
     ],
-    version = 21,
+    version = 22,
     exportSchema = false
 )
 abstract class SoloLevelingDatabase : RoomDatabase() {
@@ -441,6 +449,7 @@ abstract class SoloLevelingDatabase : RoomDatabase() {
     abstract fun shadowEvidenceClaimDao(): ShadowEvidenceClaimDao
     abstract fun shadowResonanceDao(): ShadowResonanceDao
     abstract fun shadowBondDao(): ShadowBondDao
+    abstract fun shadowTacticalDao(): ShadowTacticalDao
 
     // Milestone 12 — Social Mastery DAOs
     abstract fun socialProfileDao(): SocialProfileDao
@@ -3791,6 +3800,76 @@ abstract class SoloLevelingDatabase : RoomDatabase() {
             }
         }
 
+        // =====================================================================
+        // MIGRATION 21 → 22: Milestone 12 Phase 6.5 Shadow Tactical Command
+        // =====================================================================
+        val MIGRATION_21_22: Migration = object : Migration(21, 22) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // 1. Create shadow_squads table
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `shadow_squads` (
+                        `squadId` TEXT NOT NULL,
+                        `accountOwnerId` TEXT NOT NULL,
+                        `name` TEXT NOT NULL,
+                        `categoryName` TEXT NOT NULL,
+                        `leaderShadowId` TEXT,
+                        `isActive` INTEGER NOT NULL,
+                        `maxMembers` INTEGER NOT NULL,
+                        `createdAtEpochMs` INTEGER NOT NULL,
+                        `updatedAtEpochMs` INTEGER NOT NULL,
+                        PRIMARY KEY(`squadId`),
+                        FOREIGN KEY(`accountOwnerId`) REFERENCES `shadow_monarch_profile`(`accountOwnerId`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_shadow_squads_squadId` ON `shadow_squads` (`squadId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_shadow_squads_accountOwnerId_isActive` ON `shadow_squads` (`accountOwnerId`, `isActive`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_shadow_squads_accountOwnerId` ON `shadow_squads` (`accountOwnerId`)")
+
+                // 2. Create shadow_squad_members table
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `shadow_squad_members` (
+                        `squadId` TEXT NOT NULL,
+                        `shadowId` TEXT NOT NULL,
+                        `accountOwnerId` TEXT NOT NULL,
+                        `positionIndex` INTEGER NOT NULL,
+                        `assignedTacticalRoleName` TEXT NOT NULL,
+                        PRIMARY KEY(`squadId`, `shadowId`),
+                        FOREIGN KEY(`squadId`) REFERENCES `shadow_squads`(`squadId`) ON UPDATE NO ACTION ON DELETE CASCADE,
+                        FOREIGN KEY(`shadowId`) REFERENCES `shadows`(`shadowId`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_shadow_squad_members_squadId_positionIndex` ON `shadow_squad_members` (`squadId`, `positionIndex`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_shadow_squad_members_accountOwnerId_shadowId` ON `shadow_squad_members` (`accountOwnerId`, `shadowId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_shadow_squad_members_shadowId` ON `shadow_squad_members` (`shadowId`)")
+
+                // 3. Create shadow_mission_assignments table
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `shadow_mission_assignments` (
+                        `assignmentId` TEXT NOT NULL,
+                        `accountOwnerId` TEXT NOT NULL,
+                        `missionId` TEXT NOT NULL,
+                        `missionTypeName` TEXT NOT NULL,
+                        `squadId` TEXT,
+                        `assignedShadowIdsJson` TEXT NOT NULL,
+                        `statusName` TEXT NOT NULL,
+                        `assignedAtEpochMs` INTEGER NOT NULL,
+                        `completedAtEpochMs` INTEGER,
+                        PRIMARY KEY(`assignmentId`),
+                        FOREIGN KEY(`accountOwnerId`) REFERENCES `shadow_monarch_profile`(`accountOwnerId`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_shadow_mission_assignments_assignmentId` ON `shadow_mission_assignments` (`assignmentId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_shadow_mission_assignments_accountOwnerId_missionId` ON `shadow_mission_assignments` (`accountOwnerId`, `missionId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_shadow_mission_assignments_accountOwnerId_statusName` ON `shadow_mission_assignments` (`accountOwnerId`, `statusName`)")
+            }
+        }
+
         fun getInstance(context: Context): SoloLevelingDatabase {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
@@ -3818,7 +3897,8 @@ abstract class SoloLevelingDatabase : RoomDatabase() {
                         MIGRATION_17_18,
                         MIGRATION_18_19,
                         MIGRATION_19_20,
-                        MIGRATION_20_21
+                        MIGRATION_20_21,
+                        MIGRATION_21_22
                     )
                     .build()
                     .also { INSTANCE = it }

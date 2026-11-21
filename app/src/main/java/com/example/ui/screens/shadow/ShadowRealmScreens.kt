@@ -123,7 +123,8 @@ fun ShadowRealmDashboardScreen(
     onNavigateToQuests: () -> Unit,
     onNavigateToAnalytics: () -> Unit,
     onNavigateToArchive: () -> Unit,
-    onNavigateToSettings: () -> Unit
+    onNavigateToSettings: () -> Unit,
+    onNavigateToCommandCenter: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val profile = uiState.monarchProfile
@@ -312,6 +313,17 @@ fun ShadowRealmDashboardScreen(
                 style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace, letterSpacing = 1.5.sp),
                 color = ShadowColors.Muted
             )
+
+            Row(modifier = Modifier.fillMaxWidth()) {
+                CommandCard(
+                    title = "TACTICAL COMMAND CENTER",
+                    subtitle = "Squads, Formation Intelligence & Mission Operations",
+                    icon = Icons.Rounded.Security,
+                    color = ShadowColors.Cyan,
+                    onClick = onNavigateToCommandCenter,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 CommandCard(

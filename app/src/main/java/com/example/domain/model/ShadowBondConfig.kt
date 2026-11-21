@@ -285,6 +285,14 @@ data class ShadowBondProfile(
         }
 }
 
+// Convenience extension aliases for UI compatibility
+val ShadowPersonality.label: String get() = traitName
+val ShadowPersonality.description: String get() = summary
+val ShadowBondMilestone.unlockedAtEpochMs: Long get() = timestampEpochMs
+val ShadowBondEvent.occurredAtEpochMs: Long get() = timestampEpochMs
+val ShadowBondEvent.bondPointsEarned: Int get() = bondPointsAwarded
+
+
 data class ShadowBondEvent(
     val eventId: String,
     val accountOwnerId: String,

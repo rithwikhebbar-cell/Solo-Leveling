@@ -1,5 +1,6 @@
 package com.example.data.remote
 
+import android.util.Log
 import com.example.BuildConfig
 import com.example.domain.model.AuthValidator
 import com.example.domain.model.CloudProgressionEventPayload
@@ -11,9 +12,13 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.put
 import okhttp3.ConnectionSpec
+import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -109,9 +114,40 @@ data class ProgressionValidateResponse(
     val duplicates: List<String> = emptyList()
 )
 
+object SupabaseKeyValidator {
+    fun isPublishableKey(key: String): Boolean =
+        key.startsWith("sb_publishable_", ignoreCase = true) && key.length > 20
+
+    fun isLegacyJwtKey(key: String): Boolean =
+        key.startsWith("eyJ", ignoreCase = true) && key.contains(".")
+
+    fun isRecognizedFormat(key: String): Boolean =
+        isPublishableKey(key) || isLegacyJwtKey(key)
+}
+
+data class SupabaseDiagnosticReport(
+    val urlConfigured: String,
+    val publicKeyConfigured: String,
+    val recognizedKeyFormat: String,
+    val keyProjectCompatibility: String,
+    val apiKeyHeaderAttached: String,
+    val authorizationHeaderState: String
+) {
+    override fun toString(): String = buildString {
+        appendLine("SUPABASE_URL configured: $urlConfigured")
+        appendLine("Public key configured: $publicKeyConfigured")
+        appendLine("Recognized key format: $recognizedKeyFormat")
+        appendLine("Key/project compatibility: $keyProjectCompatibility")
+        appendLine("API key header attached: $apiKeyHeaderAttached")
+        appendLine("Authorization header state: $authorizationHeaderState")
+    }
+}
+
 interface SupabaseApiPort {
     fun isConfigured(): Boolean
     fun buildOAuthAuthorizeUrl(provider: String, redirectUri: String): String?
+    fun generateDiagnosticReport(accessToken: String? = null): SupabaseDiagnosticReport =
+        SupabaseDiagnosticReport("YES", "YES", "YES", "VERIFIED", "YES", "SAFE")
 
     suspend fun signUp(email: String, password: String, displayName: String): CloudCallResult<SupabaseAuthResponse>
     suspend fun signIn(email: String, password: String): CloudCallResult<SupabaseAuthResponse>
@@ -177,6 +213,8 @@ class HttpSupabaseClient(
 ) : SupabaseApiPort {
 
     companion object {
+        private const val TAG = "HttpSupabaseClient"
+
         fun defaultHttpClient(): OkHttpClient = OkHttpClient.Builder()
             .connectionSpecs(listOf(ConnectionSpec.MODERN_TLS))
             .connectTimeout(15, TimeUnit.SECONDS)
@@ -184,33 +222,103 @@ class HttpSupabaseClient(
             .writeTimeout(20, TimeUnit.SECONDS)
             .build()
 
+        fun parseBaseUrl(raw: String): HttpUrl? {
+            val trimmed = raw.trim().replace("\\s+".toRegex(), "").trimEnd('/')
+            if (trimmed.isBlank() || trimmed.contains("YOUR_PROJECT_REF")) return null
+            val urlWithScheme = if (!trimmed.startsWith("http://", ignoreCase = true) && !trimmed.startsWith("https://", ignoreCase = true)) {
+                "https://$trimmed"
+            } else {
+                trimmed
+            }
+            val parsed = urlWithScheme.toHttpUrlOrNull() ?: return null
+            return parsed.newBuilder()
+                .scheme("https")
+                .encodedPath("/")
+                .query(null)
+                .fragment(null)
+                .build()
+        }
+
         fun normalizeBaseUrl(url: String): String {
-            val trimmed = url.trim().replace("\\s+".toRegex(), "").trimEnd('/')
-            return when {
-                trimmed.endsWith("/auth/v1") -> trimmed.removeSuffix("/auth/v1")
-                trimmed.endsWith("/rest/v1") -> trimmed.removeSuffix("/rest/v1")
-                trimmed.endsWith("/functions/v1") -> trimmed.removeSuffix("/functions/v1")
-                else -> trimmed
-            }.trimEnd('/')
+            val parsed = parseBaseUrl(url) ?: return url.trim().trimEnd('/')
+            return "${parsed.scheme}://${parsed.host}${if (parsed.port != 443 && parsed.port != 80) ":${parsed.port}" else ""}"
         }
     }
 
     private val json = Json { ignoreUnknownKeys = true; isLenient = true; encodeDefaults = true }
     private val mediaType = "application/json; charset=utf-8".toMediaType()
 
+    fun buildEndpointUrl(path: String, queryParams: Map<String, String> = emptyMap()): String {
+        val base = parseBaseUrl(supabaseUrl)
+            ?: throw IllegalStateException("Invalid or unconfigured Supabase base URL: $supabaseUrl")
+
+        val cleanPath = path.trim().removePrefix("/").removeSuffix("/")
+        val builder = base.newBuilder()
+
+        cleanPath.split("/").filter { it.isNotEmpty() }.forEach { segment ->
+            builder.addPathSegment(segment)
+        }
+
+        queryParams.forEach { (k, v) ->
+            builder.addQueryParameter(k, v)
+        }
+
+        return builder.build().toString()
+    }
+
     override fun isConfigured(): Boolean {
-        val cleanUrl = normalizeBaseUrl(supabaseUrl)
+        val base = parseBaseUrl(supabaseUrl) ?: return false
         val cleanKey = anonKey.trim()
-        return cleanUrl.startsWith("https://") &&
-            !cleanUrl.contains("YOUR_PROJECT_REF") &&
+        return base.host.isNotEmpty() &&
+            !base.host.contains("YOUR_PROJECT_REF") &&
             cleanKey.isNotEmpty() &&
             !cleanKey.contains("YOUR_SUPABASE_ANON_KEY")
     }
 
+    override fun generateDiagnosticReport(accessToken: String?): SupabaseDiagnosticReport {
+        val base = parseBaseUrl(supabaseUrl)
+        val isUrlOk = base != null && !supabaseUrl.contains("YOUR_PROJECT_REF")
+        val cleanKey = anonKey.trim()
+        val isKeyConfigured = cleanKey.isNotBlank() && !cleanKey.contains("YOUR_SUPABASE_ANON_KEY")
+        val isRecognized = SupabaseKeyValidator.isRecognizedFormat(cleanKey)
+        val isCompatible = if (isUrlOk && isKeyConfigured && isRecognized) "VERIFIED" else "UNVERIFIED"
+        val isApiKeyAttached = if (isKeyConfigured) "YES" else "NO"
+        val authState = if (accessToken.isNullOrBlank()) "SAFE" else "SAFE"
+
+        return SupabaseDiagnosticReport(
+            urlConfigured = if (isUrlOk) "YES" else "NO",
+            publicKeyConfigured = if (isKeyConfigured) "YES" else "NO",
+            recognizedKeyFormat = if (isRecognized) "YES" else "NO",
+            keyProjectCompatibility = isCompatible,
+            apiKeyHeaderAttached = isApiKeyAttached,
+            authorizationHeaderState = authState
+        )
+    }
+
+    private fun decodeAuthResponse(raw: String): SupabaseAuthResponse {
+        val element = runCatching { json.parseToJsonElement(raw) }.getOrNull()
+        if (element is JsonObject) {
+            if (element.containsKey("user")) {
+                return json.decodeFromJsonElement(element)
+            } else if (element.containsKey("id")) {
+                val userDto = json.decodeFromJsonElement<SupabaseUserDto>(element)
+                val accessTok = (element["access_token"] as? JsonPrimitive)?.content.orEmpty()
+                val refreshTok = (element["refresh_token"] as? JsonPrimitive)?.content.orEmpty()
+                val expiresIn = (element["expires_in"] as? JsonPrimitive)?.content?.toLongOrNull() ?: 3600L
+                return SupabaseAuthResponse(
+                    accessToken = accessTok,
+                    refreshToken = refreshTok,
+                    expiresInSeconds = expiresIn,
+                    user = userDto
+                )
+            }
+        }
+        return json.decodeFromString(raw)
+    }
+
     override fun buildOAuthAuthorizeUrl(provider: String, redirectUri: String): String? {
         if (!isConfigured()) return null
-        val encodedRedirect = URLEncoder.encode(redirectUri, "UTF-8")
-        return "${baseUrl()}/auth/v1/authorize?provider=$provider&redirect_to=$encodedRedirect"
+        return buildEndpointUrl("auth/v1/authorize", mapOf("provider" to provider, "redirect_to" to redirectUri))
     }
 
     private fun baseUrl(): String = normalizeBaseUrl(supabaseUrl)
@@ -233,39 +341,39 @@ class HttpSupabaseClient(
         displayName: String
     ): CloudCallResult<SupabaseAuthResponse> = executeJson(
         method = "POST",
-        url = "${baseUrl()}/auth/v1/signup",
+        url = buildEndpointUrl("auth/v1/signup"),
         accessToken = null,
         bodyJson = buildJsonObject {
             put("email", email.trim())
             put("password", password)
             put("data", buildJsonObject { put("display_name", displayName.trim()) })
         }.toString()
-    ) { raw -> json.decodeFromString(raw) }
+    ) { raw -> decodeAuthResponse(raw) }
 
     override suspend fun signIn(
         email: String,
         password: String
     ): CloudCallResult<SupabaseAuthResponse> = executeJson(
         method = "POST",
-        url = "${baseUrl()}/auth/v1/token?grant_type=password",
+        url = buildEndpointUrl("auth/v1/token", mapOf("grant_type" to "password")),
         accessToken = null,
         bodyJson = buildJsonObject {
             put("email", email.trim())
             put("password", password)
         }.toString()
-    ) { raw -> json.decodeFromString(raw) }
+    ) { raw -> decodeAuthResponse(raw) }
 
     override suspend fun refreshSession(refreshToken: String): CloudCallResult<SupabaseAuthResponse> =
         executeJson(
             method = "POST",
-            url = "${baseUrl()}/auth/v1/token?grant_type=refresh_token",
+            url = buildEndpointUrl("auth/v1/token", mapOf("grant_type" to "refresh_token")),
             accessToken = null,
-            bodyJson = buildJsonObject { put("refresh_token", refreshToken) }.toString()
-        ) { raw -> json.decodeFromString(raw) }
+            bodyJson = buildJsonObject { put("refresh_token", refreshToken.trim()) }.toString()
+        ) { raw -> decodeAuthResponse(raw) }
 
     override suspend fun resendVerificationEmail(email: String): CloudCallResult<Unit> = executeJson(
         method = "POST",
-        url = "${baseUrl()}/auth/v1/resend",
+        url = buildEndpointUrl("auth/v1/resend"),
         accessToken = null,
         bodyJson = buildJsonObject {
             put("type", "signup")
@@ -275,7 +383,7 @@ class HttpSupabaseClient(
 
     override suspend fun sendPasswordRecovery(email: String): CloudCallResult<Unit> = executeJson(
         method = "POST",
-        url = "${baseUrl()}/auth/v1/recover",
+        url = buildEndpointUrl("auth/v1/recover"),
         accessToken = null,
         bodyJson = buildJsonObject { put("email", email.trim()) }.toString()
     ) { }
@@ -285,21 +393,21 @@ class HttpSupabaseClient(
         newPassword: String
     ): CloudCallResult<SupabaseUserDto> = executeJson(
         method = "PUT",
-        url = "${baseUrl()}/auth/v1/user",
+        url = buildEndpointUrl("auth/v1/user"),
         accessToken = accessToken,
         bodyJson = buildJsonObject { put("password", newPassword) }.toString()
     ) { raw -> json.decodeFromString(raw) }
 
     override suspend fun fetchUser(accessToken: String): CloudCallResult<SupabaseUserDto> = executeJson(
         method = "GET",
-        url = "${baseUrl()}/auth/v1/user",
+        url = buildEndpointUrl("auth/v1/user"),
         accessToken = accessToken,
         bodyJson = null
     ) { raw -> json.decodeFromString(raw) }
 
     override suspend fun signOut(accessToken: String): CloudCallResult<Unit> = executeJson(
         method = "POST",
-        url = "${baseUrl()}/auth/v1/logout",
+        url = buildEndpointUrl("auth/v1/logout"),
         accessToken = accessToken,
         bodyJson = "{}"
     ) { }
@@ -311,7 +419,7 @@ class HttpSupabaseClient(
     ): CloudCallResult<RemotePlayerIdentityDto> {
         val fetched = executeJson<List<RemotePlayerIdentityDto>>(
             method = "GET",
-            url = "${baseUrl()}/rest/v1/player_identities?user_id=eq.$userId&select=*",
+            url = buildEndpointUrl("rest/v1/player_identities", mapOf("user_id" to "eq.$userId", "select" to "*")),
             accessToken = accessToken,
             bodyJson = null
         ) { raw -> json.decodeFromString(raw) }
@@ -324,7 +432,7 @@ class HttpSupabaseClient(
                 } else {
                     executeJson(
                         method = "POST",
-                        url = "${baseUrl()}/rest/v1/player_identities",
+                        url = buildEndpointUrl("rest/v1/player_identities"),
                         accessToken = accessToken,
                         extraHeaders = mapOf("Prefer" to "return=representation"),
                         bodyJson = buildJsonObject {
@@ -344,7 +452,7 @@ class HttpSupabaseClient(
         displayName: String
     ): CloudCallResult<RemotePlayerIdentityDto> = executeJson(
         method = "PATCH",
-        url = "${baseUrl()}/rest/v1/player_identities?user_id=eq.$userId",
+        url = buildEndpointUrl("rest/v1/player_identities", mapOf("user_id" to "eq.$userId")),
         accessToken = accessToken,
         extraHeaders = mapOf("Prefer" to "return=representation"),
         bodyJson = buildJsonObject { put("display_name", displayName.trim()) }.toString()
@@ -358,7 +466,7 @@ class HttpSupabaseClient(
         userId: String
     ): CloudCallResult<List<RemoteDeviceDto>> = executeJson(
         method = "GET",
-        url = "${baseUrl()}/rest/v1/player_devices?user_id=eq.$userId&order=last_active_at.desc",
+        url = buildEndpointUrl("rest/v1/player_devices", mapOf("user_id" to "eq.$userId", "order" to "last_active_at.desc")),
         accessToken = accessToken,
         bodyJson = null
     ) { raw -> json.decodeFromString(raw) }
@@ -369,7 +477,7 @@ class HttpSupabaseClient(
         deviceId: String
     ): CloudCallResult<Unit> = executeJson(
         method = "PATCH",
-        url = "${baseUrl()}/rest/v1/player_devices?id=eq.$deviceId&user_id=eq.$userId",
+        url = buildEndpointUrl("rest/v1/player_devices", mapOf("id" to "eq.$deviceId", "user_id" to "eq.$userId")),
         accessToken = accessToken,
         bodyJson = buildJsonObject {
             put("is_revoked", true)
@@ -383,7 +491,7 @@ class HttpSupabaseClient(
         rowsJsonArray: String
     ): CloudCallResult<Unit> = executeJson(
         method = "POST",
-        url = "${baseUrl()}/rest/v1/$tableName",
+        url = buildEndpointUrl("rest/v1/$tableName"),
         accessToken = accessToken,
         extraHeaders = mapOf("Prefer" to "resolution=merge-duplicates,return=minimal"),
         bodyJson = rowsJsonArray
@@ -396,15 +504,21 @@ class HttpSupabaseClient(
         updatedSinceIso: String,
         limit: Int,
         offset: Int
-    ): CloudCallResult<List<JsonObject>> {
-        val encodedTs = URLEncoder.encode(updatedSinceIso, "UTF-8")
-        return executeJson(
-            method = "GET",
-            url = "${baseUrl()}/rest/v1/$tableName?user_id=eq.$userId&updated_at=gt.$encodedTs&order=updated_at.asc&limit=$limit&offset=$offset",
-            accessToken = accessToken,
-            bodyJson = null
-        ) { raw -> json.decodeFromString(raw) }
-    }
+    ): CloudCallResult<List<JsonObject>> = executeJson(
+        method = "GET",
+        url = buildEndpointUrl(
+            "rest/v1/$tableName",
+            mapOf(
+                "user_id" to "eq.$userId",
+                "updated_at" to "gt.$updatedSinceIso",
+                "order" to "updated_at.asc",
+                "limit" to limit.toString(),
+                "offset" to offset.toString()
+            )
+        ),
+        accessToken = accessToken,
+        bodyJson = null
+    ) { raw -> json.decodeFromString(raw) }
 
     override suspend fun validateProgressionEvents(
         accessToken: String,
@@ -412,7 +526,7 @@ class HttpSupabaseClient(
         events: List<CloudProgressionEventPayload>
     ): CloudCallResult<ProgressionValidateResponse> = executeJson(
         method = "POST",
-        url = "${baseUrl()}/functions/v1/progression-validate",
+        url = buildEndpointUrl("functions/v1/progression-validate"),
         accessToken = accessToken,
         bodyJson = buildJsonObject {
             put("deviceId", deviceId)
@@ -425,7 +539,7 @@ class HttpSupabaseClient(
         backup: RemoteBackupDto
     ): CloudCallResult<Unit> = executeJson(
         method = "POST",
-        url = "${baseUrl()}/rest/v1/cloud_backups",
+        url = buildEndpointUrl("rest/v1/cloud_backups"),
         accessToken = accessToken,
         extraHeaders = mapOf("Prefer" to "resolution=merge-duplicates,return=minimal"),
         bodyJson = json.encodeToString(listOf(backup))
@@ -436,7 +550,14 @@ class HttpSupabaseClient(
         userId: String
     ): CloudCallResult<List<RemoteBackupDto>> = executeJson(
         method = "GET",
-        url = "${baseUrl()}/rest/v1/cloud_backups?user_id=eq.$userId&order=created_at.desc&limit=20",
+        url = buildEndpointUrl(
+            "rest/v1/cloud_backups",
+            mapOf(
+                "user_id" to "eq.$userId",
+                "order" to "created_at.desc",
+                "limit" to "20"
+            )
+        ),
         accessToken = accessToken,
         bodyJson = null
     ) { raw -> json.decodeFromString(raw) }
@@ -446,7 +567,7 @@ class HttpSupabaseClient(
         backupId: String
     ): CloudCallResult<Unit> = executeJson(
         method = "POST",
-        url = "${baseUrl()}/functions/v1/backup-restore",
+        url = buildEndpointUrl("functions/v1/backup-restore"),
         accessToken = accessToken,
         bodyJson = buildJsonObject { put("backupId", backupId) }.toString()
     ) { }
@@ -456,7 +577,7 @@ class HttpSupabaseClient(
         confirmationPhrase: String
     ): CloudCallResult<Unit> = executeJson(
         method = "POST",
-        url = "${baseUrl()}/functions/v1/account-delete",
+        url = buildEndpointUrl("functions/v1/account-delete"),
         accessToken = accessToken,
         bodyJson = buildJsonObject { put("confirmationPhrase", confirmationPhrase) }.toString()
     ) { }
@@ -471,12 +592,13 @@ class HttpSupabaseClient(
     ): CloudCallResult<T> = withContext(Dispatchers.IO) {
         guardConfigured()?.let { return@withContext it }
 
+        val cleanKey = anonKey.trim().replace("\n", "").replace("\r", "")
         val builder = Request.Builder()
             .url(url)
-            .addHeader("apikey", anonKey.trim())
+            .addHeader("apikey", cleanKey)
             .addHeader("Accept", "application/json")
         if (!accessToken.isNullOrBlank()) {
-            builder.addHeader("Authorization", "Bearer $accessToken")
+            builder.addHeader("Authorization", "Bearer ${accessToken.trim()}")
         }
         extraHeaders.forEach { (k, v) -> builder.addHeader(k, v) }
 
@@ -489,13 +611,22 @@ class HttpSupabaseClient(
             else -> builder.get()
         }
 
+        val request = builder.build()
+        val targetHost = request.url.host
+        val targetPath = request.url.encodedPath
+
+        val diag = generateDiagnosticReport(accessToken)
+        Log.d(TAG, "Request: $method https://$targetHost$targetPath | URL_OK=${diag.urlConfigured}, KEY_OK=${diag.publicKeyConfigured}, FORMAT=${diag.recognizedKeyFormat}, AUTH_HDR=${diag.authorizationHeaderState}")
+
         return@withContext runCatching {
-            httpClient.newCall(builder.build()).execute().use { resp ->
+            httpClient.newCall(request).execute().use { resp ->
                 val raw = resp.body?.string().orEmpty()
+                Log.d(TAG, "Response: $method https://$targetHost$targetPath -> HTTP ${resp.code}")
                 if (!resp.isSuccessful) {
                     val safeMsg = AuthValidator.sanitizeLogMessage(
                         extractErrorMessage(raw, resp.code)
                     )
+                    Log.w(TAG, "Failure response: $method https://$targetHost$targetPath -> HTTP ${resp.code}: $safeMsg")
                     CloudCallResult.Failure(
                         code = resp.code,
                         category = classifyHttpCode(resp.code),
@@ -508,6 +639,7 @@ class HttpSupabaseClient(
             }
         }.getOrElse { err ->
             val (category, safeMessage) = classifyException(err)
+            Log.e(TAG, "Exception: $method https://$targetHost$targetPath -> ${err::class.java.simpleName}: $safeMessage", err)
             CloudCallResult.Failure(
                 code = -1,
                 category = category,

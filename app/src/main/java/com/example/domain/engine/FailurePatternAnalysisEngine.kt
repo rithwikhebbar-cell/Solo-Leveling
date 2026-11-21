@@ -124,7 +124,7 @@ object FailurePatternAnalysisEngine {
 
         // 5. Detect High Fatigue Overexertion
         if (recentRecoveryState != null &&
-            (recentRecoveryState == RecoveryState.REST_RECOMMENDED || recentRecoveryState == RecoveryState.EXHAUSTED)
+            (recentRecoveryState == RecoveryState.REST_RECOMMENDED || recentRecoveryState == RecoveryState.RECOVERY_RECOMMENDED)
         ) {
             val recentFailures = failures.count {
                 nowEpochMs - it.failedAtEpochMs <= 48 * 3600 * 1000L

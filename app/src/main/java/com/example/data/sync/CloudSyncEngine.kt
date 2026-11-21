@@ -553,6 +553,24 @@ class CloudSyncEngine(
                 if (dto.accountOwnerId != userId) return null
                 CloudDataMapper.shadowBondMilestoneToPostgrestRow(userId, dto)
             }
+            SyncEntityType.SHADOW_SQUAD -> {
+                val dto = runCatching { CloudDataMapper.json.decodeFromString<com.example.data.remote.CloudShadowSquadPayload>(payloadJson) }.getOrNull()
+                    ?: return null
+                if (dto.accountOwnerId != userId) return null
+                CloudDataMapper.shadowSquadToPostgrestRow(userId, dto)
+            }
+            SyncEntityType.SHADOW_SQUAD_MEMBER -> {
+                val dto = runCatching { CloudDataMapper.json.decodeFromString<com.example.data.remote.CloudShadowSquadMemberPayload>(payloadJson) }.getOrNull()
+                    ?: return null
+                if (dto.accountOwnerId != userId) return null
+                CloudDataMapper.shadowSquadMemberToPostgrestRow(userId, dto)
+            }
+            SyncEntityType.SHADOW_MISSION_ASSIGNMENT -> {
+                val dto = runCatching { CloudDataMapper.json.decodeFromString<com.example.data.remote.CloudShadowMissionAssignmentPayload>(payloadJson) }.getOrNull()
+                    ?: return null
+                if (dto.accountOwnerId != userId) return null
+                CloudDataMapper.shadowMissionAssignmentToPostgrestRow(userId, dto)
+            }
             else -> runCatching { CloudDataMapper.json.decodeFromString<JsonObject>(payloadJson) }.getOrNull()
         }
     }

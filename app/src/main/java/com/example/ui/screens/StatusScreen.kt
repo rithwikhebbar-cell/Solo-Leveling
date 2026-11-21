@@ -75,10 +75,13 @@ fun StatusScreen(
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .widthIn(max = 760.dp)
+                .widthIn(max = com.example.ui.theme.SystemSpacing.maxContentWidth)
                 .testTag("status_screen_list"),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            contentPadding = PaddingValues(
+                horizontal = com.example.ui.theme.SystemSpacing.screenHorizontal,
+                vertical = com.example.ui.theme.SystemSpacing.screenVertical
+            ),
+            verticalArrangement = Arrangement.spacedBy(com.example.ui.theme.SystemSpacing.sectionSpacing)
         ) {
             // 1. SECTION A: CINEMATIC STATUS HEADER
             item(key = "status_header") {

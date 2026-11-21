@@ -8,6 +8,10 @@ object SystemSpacing {
     val screenVertical: Dp = 16.dp
     val maxContentWidth: Dp = 760.dp
 
+    // Canonical semantic aliases for cross-screen consistency
+    val screenEdgePadding: Dp get() = screenHorizontal
+    val verticalPageSpacing: Dp get() = screenVertical
+
     val sectionSpacing: Dp = 16.dp
     val itemSpacing: Dp = 10.dp
     val rowSpacing: Dp = 8.dp

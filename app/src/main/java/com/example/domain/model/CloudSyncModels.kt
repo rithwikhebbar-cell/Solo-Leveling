@@ -55,7 +55,10 @@ enum class SyncEntityType(val wireTable: String, val label: String) {
     SHADOW_RESONANCE_RECORD("shadow_resonance_records", "Shadow Resonance Record"),
     SHADOW_BOND_PROFILE("shadow_bond_profiles", "Shadow Bond Profile"),
     SHADOW_BOND_EVENT("shadow_bond_events", "Shadow Bond Event"),
-    SHADOW_BOND_MILESTONE("shadow_bond_milestones", "Shadow Bond Milestone")
+    SHADOW_BOND_MILESTONE("shadow_bond_milestones", "Shadow Bond Milestone"),
+    SHADOW_SQUAD("shadow_squads", "Shadow Squad"),
+    SHADOW_SQUAD_MEMBER("shadow_squad_members", "Shadow Squad Member"),
+    SHADOW_MISSION_ASSIGNMENT("shadow_mission_assignments", "Shadow Mission Assignment")
 }
 
 enum class SyncOperationType {

@@ -331,6 +331,7 @@ class AppContainer(application: Application) {
             questProgressDao = database.shadowQuestProgressDao(),
             resourceDao = database.shadowResourceDao(),
             shadowBondDao = database.shadowBondDao(),
+            shadowTacticalDao = database.shadowTacticalDao(),
             monarchProgressionEngine = monarchProgressionEngine,
             extractionEngine = extractionEngine,
             evolutionEngine = evolutionEngine,

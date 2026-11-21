@@ -26,6 +26,15 @@ import com.example.domain.model.ShadowExtractionEvidenceItem
 import com.example.domain.engine.ShadowExtractionEvidenceProvider
 import com.example.domain.model.ShadowSkillCatalog
 import com.example.domain.model.ShadowSkillDefinition
+import com.example.domain.model.ShadowSquad
+import com.example.domain.model.ShadowSquadCategory
+import com.example.domain.model.SquadDetail
+import com.example.domain.model.FormationTacticalAssessment
+import com.example.domain.model.MissionTacticalRequirement
+import com.example.domain.model.MissionSuitabilityEvaluation
+import com.example.domain.model.MissionType
+import com.example.domain.model.ShadowTacticalAnalytics
+import com.example.domain.model.TacticalAlert
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -126,6 +135,28 @@ class ShadowRealmViewModel(
 
     private val _armyBondOverview = MutableStateFlow<com.example.domain.model.ShadowArmyBondOverview?>(null)
     val armyBondOverview: StateFlow<com.example.domain.model.ShadowArmyBondOverview?> = _armyBondOverview.asStateFlow()
+
+    // Phase 6.5 — Tactical Command & Squad StateFlows
+    private val _allSquads = MutableStateFlow<List<SquadDetail>>(emptyList())
+    val allSquads: StateFlow<List<SquadDetail>> = _allSquads.asStateFlow()
+
+    private val _activeSquad = MutableStateFlow<SquadDetail?>(null)
+    val activeSquad: StateFlow<SquadDetail?> = _activeSquad.asStateFlow()
+
+    private val _formationAssessment = MutableStateFlow<FormationTacticalAssessment?>(null)
+    val formationAssessment: StateFlow<FormationTacticalAssessment?> = _formationAssessment.asStateFlow()
+
+    private val _availableMissions = MutableStateFlow<List<MissionTacticalRequirement>>(emptyList())
+    val availableMissions: StateFlow<List<MissionTacticalRequirement>> = _availableMissions.asStateFlow()
+
+    private val _selectedMissionEvaluation = MutableStateFlow<MissionSuitabilityEvaluation?>(null)
+    val selectedMissionEvaluation: StateFlow<MissionSuitabilityEvaluation?> = _selectedMissionEvaluation.asStateFlow()
+
+    private val _tacticalAnalytics = MutableStateFlow<ShadowTacticalAnalytics?>(null)
+    val tacticalAnalytics: StateFlow<ShadowTacticalAnalytics?> = _tacticalAnalytics.asStateFlow()
+
+    private val _tacticalAlerts = MutableStateFlow<List<TacticalAlert>>(emptyList())
+    val tacticalAlerts: StateFlow<List<TacticalAlert>> = _tacticalAlerts.asStateFlow()
 
     private var ownerScopeJob: Job? = null
     private var shadowBondJob: Job? = null
@@ -235,6 +266,30 @@ class ShadowRealmViewModel(
             launch {
                 repository.observeResourceTransactions(owner).collect {
                     refreshResourceBalances(owner)
+                }
+            }
+
+            launch {
+                repository.observeArmyBondOverview(owner).collect { overview ->
+                    _armyBondOverview.value = overview
+                }
+            }
+
+            launch {
+                repository.observeSquadDetailsForOwner(owner).collect { squads ->
+                    _allSquads.value = squads
+                }
+            }
+
+            launch {
+                repository.observeActiveSquadDetailForOwner(owner).collect { active ->
+                    _activeSquad.value = active
+                }
+            }
+
+            launch {
+                repository.observeActiveFormationAssessment(owner).collect { assessment ->
+                    _formationAssessment.value = assessment
                 }
             }
 
@@ -617,6 +672,195 @@ class ShadowRealmViewModel(
     fun loadGrowthOverview(accountOwnerId: String = _activeAccountOwnerId.value) {
         viewModelScope.launch {
             _growthOverview.value = repository.getShadowGrowthOverview(accountOwnerId)
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // PHASE 6.5 — SHADOW ARMY INTELLIGENCE & TACTICAL COMMAND ACTIONS
+    // -------------------------------------------------------------------------
+
+    fun loadTacticalCommandCenter() {
+        val owner = _activeAccountOwnerId.value
+        viewModelScope.launch {
+            _availableMissions.value = repository.getAvailableMissions(owner)
+            _tacticalAnalytics.value = repository.getTacticalAnalytics(owner)
+            _tacticalAlerts.value = repository.getTacticalAlerts(owner)
+        }
+    }
+
+    fun createSquad(
+        name: String,
+        category: ShadowSquadCategory,
+        memberIds: List<String> = emptyList(),
+        leaderId: String? = null,
+        onComplete: ((Boolean, String?) -> Unit)? = null
+    ) {
+        val owner = _activeAccountOwnerId.value
+        viewModelScope.launch {
+            val result = repository.createSquad(name, category, memberIds, leaderId, owner)
+            result.onSuccess {
+                loadTacticalCommandCenter()
+                onComplete?.invoke(true, null)
+            }.onFailure { err ->
+                _uiState.value = _uiState.value.copy(error = err.message)
+                onComplete?.invoke(false, err.message)
+            }
+        }
+    }
+
+    fun updateSquad(
+        squadId: String,
+        name: String,
+        category: ShadowSquadCategory,
+        onComplete: ((Boolean, String?) -> Unit)? = null
+    ) {
+        val owner = _activeAccountOwnerId.value
+        viewModelScope.launch {
+            val result = repository.updateSquad(squadId, name, category, owner)
+            result.onSuccess {
+                loadTacticalCommandCenter()
+                onComplete?.invoke(true, null)
+            }.onFailure { err ->
+                _uiState.value = _uiState.value.copy(error = err.message)
+                onComplete?.invoke(false, err.message)
+            }
+        }
+    }
+
+    fun addMemberToSquad(
+        squadId: String,
+        shadowId: String,
+        onComplete: ((Boolean, String?) -> Unit)? = null
+    ) {
+        val owner = _activeAccountOwnerId.value
+        viewModelScope.launch {
+            val result = repository.addMemberToSquad(squadId, shadowId, owner)
+            result.onSuccess {
+                loadTacticalCommandCenter()
+                onComplete?.invoke(true, null)
+            }.onFailure { err ->
+                _uiState.value = _uiState.value.copy(error = err.message)
+                onComplete?.invoke(false, err.message)
+            }
+        }
+    }
+
+    fun removeMemberFromSquad(
+        squadId: String,
+        shadowId: String,
+        onComplete: ((Boolean, String?) -> Unit)? = null
+    ) {
+        val owner = _activeAccountOwnerId.value
+        viewModelScope.launch {
+            val result = repository.removeMemberFromSquad(squadId, shadowId, owner)
+            result.onSuccess {
+                loadTacticalCommandCenter()
+                onComplete?.invoke(true, null)
+            }.onFailure { err ->
+                _uiState.value = _uiState.value.copy(error = err.message)
+                onComplete?.invoke(false, err.message)
+            }
+        }
+    }
+
+    fun setSquadLeader(
+        squadId: String,
+        leaderShadowId: String,
+        onComplete: ((Boolean, String?) -> Unit)? = null
+    ) {
+        val owner = _activeAccountOwnerId.value
+        viewModelScope.launch {
+            val result = repository.setSquadLeader(squadId, leaderShadowId, owner)
+            result.onSuccess {
+                loadTacticalCommandCenter()
+                onComplete?.invoke(true, null)
+            }.onFailure { err ->
+                _uiState.value = _uiState.value.copy(error = err.message)
+                onComplete?.invoke(false, err.message)
+            }
+        }
+    }
+
+    fun setActiveSquad(
+        squadId: String,
+        onComplete: ((Boolean, String?) -> Unit)? = null
+    ) {
+        val owner = _activeAccountOwnerId.value
+        viewModelScope.launch {
+            val result = repository.setActiveSquad(squadId, owner)
+            result.onSuccess {
+                loadTacticalCommandCenter()
+                onComplete?.invoke(true, null)
+            }.onFailure { err ->
+                _uiState.value = _uiState.value.copy(error = err.message)
+                onComplete?.invoke(false, err.message)
+            }
+        }
+    }
+
+    fun duplicateSquad(
+        squadId: String,
+        onComplete: ((Boolean, String?) -> Unit)? = null
+    ) {
+        val owner = _activeAccountOwnerId.value
+        viewModelScope.launch {
+            val result = repository.duplicateSquad(squadId, owner)
+            result.onSuccess {
+                loadTacticalCommandCenter()
+                onComplete?.invoke(true, null)
+            }.onFailure { err ->
+                _uiState.value = _uiState.value.copy(error = err.message)
+                onComplete?.invoke(false, err.message)
+            }
+        }
+    }
+
+    fun deleteSquad(
+        squadId: String,
+        onComplete: ((Boolean, String?) -> Unit)? = null
+    ) {
+        val owner = _activeAccountOwnerId.value
+        viewModelScope.launch {
+            val result = repository.deleteSquad(squadId, owner)
+            result.onSuccess {
+                loadTacticalCommandCenter()
+                onComplete?.invoke(true, null)
+            }.onFailure { err ->
+                _uiState.value = _uiState.value.copy(error = err.message)
+                onComplete?.invoke(false, err.message)
+            }
+        }
+    }
+
+    fun evaluateMission(
+        mission: MissionTacticalRequirement,
+        squad: ShadowSquad?
+    ) {
+        val owner = _activeAccountOwnerId.value
+        viewModelScope.launch {
+            _selectedMissionEvaluation.value = repository.evaluateMissionSuitability(mission, squad, owner)
+        }
+    }
+
+    fun confirmAndDeployMission(
+        missionId: String,
+        missionType: MissionType,
+        squadId: String?,
+        shadowIdsToDeploy: List<String>,
+        onComplete: ((Boolean, String?) -> Unit)? = null
+    ) {
+        val owner = _activeAccountOwnerId.value
+        viewModelScope.launch {
+            val result = repository.confirmAndDeployMissionAssignment(
+                missionId, missionType, squadId, shadowIdsToDeploy, owner
+            )
+            result.onSuccess {
+                loadTacticalCommandCenter()
+                onComplete?.invoke(true, null)
+            }.onFailure { err ->
+                _uiState.value = _uiState.value.copy(error = err.message)
+                onComplete?.invoke(false, err.message)
+            }
         }
     }
 

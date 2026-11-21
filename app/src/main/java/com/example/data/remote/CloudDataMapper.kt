@@ -19,6 +19,9 @@ import com.example.data.local.entity.ShadowResonanceEntity
 import com.example.data.local.entity.ShadowBondProfileEntity
 import com.example.data.local.entity.ShadowBondEventEntity
 import com.example.data.local.entity.ShadowBondMilestoneEntity
+import com.example.data.local.entity.ShadowSquadEntity
+import com.example.data.local.entity.ShadowSquadMemberEntity
+import com.example.data.local.entity.ShadowMissionAssignmentEntity
 import com.example.domain.model.CloudProgressionEventPayload
 import com.example.domain.model.CloudSettingsPayload
 import com.example.domain.model.CloudTaskPayload
@@ -273,6 +276,52 @@ data class CloudShadowBondMilestonePayload(
     val sourceEventId: String,
     val timestampEpochMs: Long,
     val verificationStatus: String
+)
+
+@Serializable
+data class CloudShadowSquadPayload(
+    val cloudUuid: String,
+    val accountOwnerId: String,
+    val squadId: String,
+    val name: String,
+    val categoryName: String,
+    val formationTypeName: String,
+    val leaderShadowId: String? = null,
+    val maxMembers: Int = 6,
+    val isActive: Boolean = false,
+    val notes: String = "",
+    val createdAtEpochMs: Long,
+    val updatedAtEpochMs: Long
+)
+
+@Serializable
+data class CloudShadowSquadMemberPayload(
+    val cloudUuid: String,
+    val accountOwnerId: String,
+    val squadId: String,
+    val shadowId: String,
+    val positionIndex: Int = 0,
+    val isLeader: Boolean = false,
+    val assignedAtEpochMs: Long
+)
+
+@Serializable
+data class CloudShadowMissionAssignmentPayload(
+    val cloudUuid: String,
+    val accountOwnerId: String,
+    val assignmentId: String,
+    val missionId: String,
+    val missionTitle: String,
+    val missionTypeName: String,
+    val squadId: String? = null,
+    val assignedShadowIdsJson: String,
+    val recommendedStrategy: String,
+    val suitabilityScore: Int,
+    val statusName: String,
+    val assignedAtEpochMs: Long,
+    val completedAtEpochMs: Long? = null,
+    val successRateProjected: Int,
+    val resultOutcome: String? = null
 )
 
 @Serializable
@@ -595,6 +644,58 @@ object CloudDataMapper {
         verificationStatus = entity.verificationStatus
     )
 
+    fun shadowSquadToPayload(
+        entity: ShadowSquadEntity,
+        cloudUuid: String
+    ): CloudShadowSquadPayload = CloudShadowSquadPayload(
+        cloudUuid = cloudUuid,
+        accountOwnerId = entity.accountOwnerId,
+        squadId = entity.squadId,
+        name = entity.name,
+        categoryName = entity.categoryName,
+        formationTypeName = entity.formationTypeName,
+        leaderShadowId = entity.leaderShadowId,
+        maxMembers = entity.maxMembers,
+        isActive = entity.isActive,
+        notes = entity.notes,
+        createdAtEpochMs = entity.createdAtEpochMs,
+        updatedAtEpochMs = entity.updatedAtEpochMs
+    )
+
+    fun shadowSquadMemberToPayload(
+        entity: ShadowSquadMemberEntity,
+        cloudUuid: String
+    ): CloudShadowSquadMemberPayload = CloudShadowSquadMemberPayload(
+        cloudUuid = cloudUuid,
+        accountOwnerId = entity.accountOwnerId,
+        squadId = entity.squadId,
+        shadowId = entity.shadowId,
+        positionIndex = entity.positionIndex,
+        isLeader = entity.isLeader,
+        assignedAtEpochMs = entity.assignedAtEpochMs
+    )
+
+    fun shadowMissionAssignmentToPayload(
+        entity: ShadowMissionAssignmentEntity,
+        cloudUuid: String
+    ): CloudShadowMissionAssignmentPayload = CloudShadowMissionAssignmentPayload(
+        cloudUuid = cloudUuid,
+        accountOwnerId = entity.accountOwnerId,
+        assignmentId = entity.assignmentId,
+        missionId = entity.missionId,
+        missionTitle = entity.missionTitle,
+        missionTypeName = entity.missionTypeName,
+        squadId = entity.squadId,
+        assignedShadowIdsJson = entity.assignedShadowIdsJson,
+        recommendedStrategy = entity.recommendedStrategy,
+        suitabilityScore = entity.suitabilityScore,
+        statusName = entity.statusName,
+        assignedAtEpochMs = entity.assignedAtEpochMs,
+        completedAtEpochMs = entity.completedAtEpochMs,
+        successRateProjected = entity.successRateProjected,
+        resultOutcome = entity.resultOutcome
+    )
+
     fun taskPayloadToPostgrestRow(userId: String, payload: CloudTaskPayload): JsonObject = buildJsonObject {
         put("id", payload.cloudUuid)
         put("user_id", userId)
@@ -867,6 +968,58 @@ object CloudDataMapper {
         put("source_event_id", payload.sourceEventId)
         put("timestamp_epoch_ms", payload.timestampEpochMs)
         put("verification_status", payload.verificationStatus)
+    }
+
+    fun shadowSquadToPostgrestRow(
+        userId: String,
+        payload: CloudShadowSquadPayload
+    ): JsonObject = buildJsonObject {
+        put("id", payload.cloudUuid)
+        put("user_id", userId)
+        put("squad_id", payload.squadId)
+        put("name", payload.name)
+        put("category", payload.categoryName)
+        put("formation_type", payload.formationTypeName)
+        payload.leaderShadowId?.let { put("leader_shadow_id", it) }
+        put("max_members", payload.maxMembers)
+        put("is_active", payload.isActive)
+        put("notes", payload.notes)
+        put("created_at_epoch_ms", payload.createdAtEpochMs)
+        put("updated_at_epoch_ms", payload.updatedAtEpochMs)
+    }
+
+    fun shadowSquadMemberToPostgrestRow(
+        userId: String,
+        payload: CloudShadowSquadMemberPayload
+    ): JsonObject = buildJsonObject {
+        put("id", payload.cloudUuid)
+        put("user_id", userId)
+        put("squad_id", payload.squadId)
+        put("shadow_id", payload.shadowId)
+        put("position_index", payload.positionIndex)
+        put("is_leader", payload.isLeader)
+        put("assigned_at_epoch_ms", payload.assignedAtEpochMs)
+    }
+
+    fun shadowMissionAssignmentToPostgrestRow(
+        userId: String,
+        payload: CloudShadowMissionAssignmentPayload
+    ): JsonObject = buildJsonObject {
+        put("id", payload.cloudUuid)
+        put("user_id", userId)
+        put("assignment_id", payload.assignmentId)
+        put("mission_id", payload.missionId)
+        put("mission_title", payload.missionTitle)
+        put("mission_type", payload.missionTypeName)
+        payload.squadId?.let { put("squad_id", it) }
+        put("assigned_shadow_ids_json", payload.assignedShadowIdsJson)
+        put("recommended_strategy", payload.recommendedStrategy)
+        put("suitability_score", payload.suitabilityScore)
+        put("status", payload.statusName)
+        put("assigned_at_epoch_ms", payload.assignedAtEpochMs)
+        payload.completedAtEpochMs?.let { put("completed_at_epoch_ms", it) }
+        put("success_rate_projected", payload.successRateProjected)
+        payload.resultOutcome?.let { put("result_outcome", it) }
     }
 
     fun joggingToPostgrestRow(userId: String, entity: JoggingSessionEntity, cloudUuid: String): JsonObject =

@@ -69,7 +69,7 @@ class RedemptionRepository(
         // 4. Retrieve recovery status to enforce safety protections
         val physicalState = database.physicalStateDao().getPhysicalStateOnce()
         val recoveryStatus = physicalState?.let {
-            RecoveryStatus.fromName(it.recoveryStatusName)
+            runCatching { RecoveryStatus.valueOf(it.recoveryStatusName) }.getOrDefault(RecoveryStatus.OPTIMAL)
         } ?: RecoveryStatus.OPTIMAL
 
         // 5. Retrieve active redemptions and recent activity history

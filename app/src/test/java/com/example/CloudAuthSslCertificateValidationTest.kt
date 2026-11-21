@@ -12,6 +12,8 @@ import com.example.data.remote.RemoteDeviceDto
 import com.example.data.remote.RemotePlayerIdentityDto
 import com.example.data.remote.SupabaseApiPort
 import com.example.data.remote.SupabaseAuthResponse
+import com.example.data.remote.SupabaseDiagnosticReport
+import com.example.data.remote.SupabaseKeyValidator
 import com.example.data.remote.SupabaseUserDto
 import com.example.data.remote.TokenStorage
 import com.example.data.repository.SyncRepository
@@ -439,6 +441,210 @@ class CloudAuthSslCertificateValidationTest {
         assertEquals("User already registered", httpFailure.message)
     }
 
+    /**
+     * Phase 5 Regression Tests:
+     * 1. Standard base URL normalization
+     * 2. Signup URL construction (asserts exactly https://pakpjwztozfdphqdszjn.supabase.co/auth/v1/signup)
+     * 3. Login URL construction
+     * 4. Token refresh URL construction
+     * 5. Logout URL construction
+     * 6. Authenticated REST requests
+     * 7. Duplicate path prevention
+     * 8. Invalid URL rejection
+     */
+    @Test
+    fun verification13_exactEndpointUrlConstructionAndDuplicatePathPrevention() {
+        val client = HttpSupabaseClient(
+            supabaseUrl = "https://pakpjwztozfdphqdszjn.supabase.co",
+            anonKey = "valid_anon_key_for_url_test"
+        )
+
+        // 1. Standard base URL normalization
+        assertEquals("https://pakpjwztozfdphqdszjn.supabase.co", HttpSupabaseClient.normalizeBaseUrl("https://pakpjwztozfdphqdszjn.supabase.co"))
+
+        // 2. Signup URL construction: Must be EXACTLY https://pakpjwztozfdphqdszjn.supabase.co/auth/v1/signup
+        val signupUrl = client.buildEndpointUrl("auth/v1/signup")
+        assertEquals(
+            "https://pakpjwztozfdphqdszjn.supabase.co/auth/v1/signup",
+            signupUrl
+        )
+
+        // 3. Login URL construction
+        val loginUrl = client.buildEndpointUrl("auth/v1/token", mapOf("grant_type" to "password"))
+        assertEquals(
+            "https://pakpjwztozfdphqdszjn.supabase.co/auth/v1/token?grant_type=password",
+            loginUrl
+        )
+
+        // 4. Token refresh URL construction
+        val refreshUrl = client.buildEndpointUrl("auth/v1/token", mapOf("grant_type" to "refresh_token"))
+        assertEquals(
+            "https://pakpjwztozfdphqdszjn.supabase.co/auth/v1/token?grant_type=refresh_token",
+            refreshUrl
+        )
+
+        // 5. Logout URL construction
+        val logoutUrl = client.buildEndpointUrl("auth/v1/logout")
+        assertEquals(
+            "https://pakpjwztozfdphqdszjn.supabase.co/auth/v1/logout",
+            logoutUrl
+        )
+
+        // 6. Authenticated REST requests
+        val restUrl = client.buildEndpointUrl("rest/v1/player_identities", mapOf("user_id" to "eq.u123", "select" to "*"))
+        assertEquals(
+            "https://pakpjwztozfdphqdszjn.supabase.co/rest/v1/player_identities?user_id=eq.u123&select=*",
+            restUrl
+        )
+
+        // 7. Duplicate path prevention: Even if user configured full path in SUPABASE_URL
+        val clientWithDuplicateAuthPath = HttpSupabaseClient(
+            supabaseUrl = "https://pakpjwztozfdphqdszjn.supabase.co/auth/v1",
+            anonKey = "key"
+        )
+        assertEquals(
+            "https://pakpjwztozfdphqdszjn.supabase.co/auth/v1/signup",
+            clientWithDuplicateAuthPath.buildEndpointUrl("auth/v1/signup")
+        )
+
+        val clientWithTrailingSlashAndRest = HttpSupabaseClient(
+            supabaseUrl = "https://pakpjwztozfdphqdszjn.supabase.co/rest/v1/",
+            anonKey = "key"
+        )
+        assertEquals(
+            "https://pakpjwztozfdphqdszjn.supabase.co/auth/v1/signup",
+            clientWithTrailingSlashAndRest.buildEndpointUrl("auth/v1/signup")
+        )
+
+        val clientWithFullSignupInBase = HttpSupabaseClient(
+            supabaseUrl = "https://pakpjwztozfdphqdszjn.supabase.co/auth/v1/signup",
+            anonKey = "key"
+        )
+        assertEquals(
+            "https://pakpjwztozfdphqdszjn.supabase.co/auth/v1/signup",
+            clientWithFullSignupInBase.buildEndpointUrl("auth/v1/signup")
+        )
+
+        // 8. Invalid URL rejection
+        assertNull(HttpSupabaseClient.parseBaseUrl(""))
+        assertNull(HttpSupabaseClient.parseBaseUrl("YOUR_PROJECT_REF"))
+        assertNull(HttpSupabaseClient.parseBaseUrl("https://YOUR_PROJECT_REF.supabase.co"))
+        val unconfiguredClient = HttpSupabaseClient("https://YOUR_PROJECT_REF.supabase.co", "key")
+        assertFalse(unconfiguredClient.isConfigured())
+    }
+
+    @Test
+    fun verification14_publishableKeyFormatAndLegacyJwtSupport() {
+        // 1. Supabase publishable key format (modern)
+        val publishableKey = "sb_publishable_hd9U_WfxrofHMbH1tJEhOA_lAi-bnfr"
+        assertTrue(SupabaseKeyValidator.isPublishableKey(publishableKey))
+        assertTrue(SupabaseKeyValidator.isRecognizedFormat(publishableKey))
+        assertFalse(SupabaseKeyValidator.isLegacyJwtKey(publishableKey))
+
+        // 2. Supabase legacy JWT anon key format
+        val legacyJwtKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBha3Bqd3p0b3pmZHBocWRzempuIiwicm9sZSI6ImFub24iLCJpYXQiOjE2ODAwMDAwMDAsImV4cCI6MTk5NTU1NTU1NX0.signature"
+        assertTrue(SupabaseKeyValidator.isLegacyJwtKey(legacyJwtKey))
+        assertTrue(SupabaseKeyValidator.isRecognizedFormat(legacyJwtKey))
+        assertFalse(SupabaseKeyValidator.isPublishableKey(legacyJwtKey))
+
+        // 3. Invalid or placeholder keys
+        assertFalse(SupabaseKeyValidator.isRecognizedFormat("YOUR_SUPABASE_ANON_KEY"))
+        assertFalse(SupabaseKeyValidator.isRecognizedFormat("short_key"))
+        assertFalse(SupabaseKeyValidator.isRecognizedFormat(""))
+    }
+
+    @Test
+    fun verification15_safeDiagnosticReportingWithoutSecrets() {
+        val configuredClient = HttpSupabaseClient(
+            supabaseUrl = "https://pakpjwztozfdphqdszjn.supabase.co",
+            anonKey = "sb_publishable_hd9U_WfxrofHMbH1tJEhOA_lAi-bnfr"
+        )
+        val unauthReport = configuredClient.generateDiagnosticReport(null)
+        assertEquals("YES", unauthReport.urlConfigured)
+        assertEquals("YES", unauthReport.publicKeyConfigured)
+        assertEquals("YES", unauthReport.recognizedKeyFormat)
+        assertEquals("VERIFIED", unauthReport.keyProjectCompatibility)
+        assertEquals("YES", unauthReport.apiKeyHeaderAttached)
+        assertEquals("SAFE", unauthReport.authorizationHeaderState)
+
+        // Verify report string representation does not leak any part of the key
+        val reportString = unauthReport.toString()
+        assertFalse(reportString.contains("sb_publishable"))
+        assertFalse(reportString.contains("hd9U"))
+        assertFalse(reportString.contains("Bearer"))
+
+        // Authenticated request report
+        val authReport = configuredClient.generateDiagnosticReport("test_access_token_1234567890")
+        assertEquals("SAFE", authReport.authorizationHeaderState)
+        assertFalse(authReport.toString().contains("test_access_token"))
+
+        // Unconfigured client
+        val unconfigured = HttpSupabaseClient(
+            supabaseUrl = "https://YOUR_PROJECT_REF.supabase.co",
+            anonKey = "YOUR_SUPABASE_ANON_KEY"
+        )
+        val unconfiguredReport = unconfigured.generateDiagnosticReport(null)
+        assertEquals("NO", unconfiguredReport.urlConfigured)
+        assertEquals("NO", unconfiguredReport.publicKeyConfigured)
+        assertEquals("NO", unconfiguredReport.recognizedKeyFormat)
+        assertEquals("UNVERIFIED", unconfiguredReport.keyProjectCompatibility)
+        assertEquals("NO", unconfiguredReport.apiKeyHeaderAttached)
+    }
+
+    @Test
+    fun verification16_emailConfirmationPayloadDecoding() {
+        val client = HttpSupabaseClient(
+            supabaseUrl = "https://pakpjwztozfdphqdszjn.supabase.co",
+            anonKey = "sb_publishable_hd9U_WfxrofHMbH1tJEhOA_lAi-bnfr"
+        )
+
+        // Direct user payload as returned by GoTrue when mailer_autoconfirm is false:
+        val rawGoTrueConfirmationPayload = """
+            {
+              "id": "71ccc661-d6be-4160-abd0-917d15be152c",
+              "aud": "authenticated",
+              "role": "authenticated",
+              "email": "hunter_verify_2026@testmail.com",
+              "confirmation_sent_at": "2026-11-21T02:20:34.921866633Z",
+              "app_metadata": { "provider": "email", "providers": ["email"] },
+              "user_metadata": { "email": "hunter_verify_2026@testmail.com", "email_verified": false },
+              "created_at": "2026-11-21T02:20:34.879535Z",
+              "updated_at": "2026-11-21T02:20:36.466366Z"
+            }
+        """.trimIndent()
+
+        // Test decoding via public signUp with mock engine or reflection
+        val method = HttpSupabaseClient::class.java.getDeclaredMethod("decodeAuthResponse", String::class.java)
+        method.isAccessible = true
+        val decoded = method.invoke(client, rawGoTrueConfirmationPayload) as SupabaseAuthResponse
+
+        assertNotNull(decoded.user)
+        assertEquals("71ccc661-d6be-4160-abd0-917d15be152c", decoded.user?.id)
+        assertEquals("hunter_verify_2026@testmail.com", decoded.user?.email)
+        assertNull(decoded.user?.emailConfirmedAt)
+        assertEquals("", decoded.accessToken)
+    }
+
+    @Test
+    fun verification17_networkTimeoutAndDnsFailureHandling() {
+        val client = HttpSupabaseClient(
+            supabaseUrl = "https://pakpjwztozfdphqdszjn.supabase.co",
+            anonKey = "sb_publishable_hd9U_WfxrofHMbH1tJEhOA_lAi-bnfr"
+        )
+        val method = HttpSupabaseClient::class.java.getDeclaredMethod("classifyException", Throwable::class.java)
+        method.isAccessible = true
+
+        // Timeout
+        val (timeoutCategory, timeoutMsg) = method.invoke(client, java.net.SocketTimeoutException("Read timed out")) as Pair<String, String>
+        assertEquals("TIMEOUT_ERROR", timeoutCategory)
+        assertTrue(timeoutMsg.contains("timed out"))
+
+        // DNS failure
+        val (dnsCategory, dnsMsg) = method.invoke(client, java.net.UnknownHostException("pakpjwztozfdphqdszjn.supabase.co")) as Pair<String, String>
+        assertEquals("DNS_ERROR", dnsCategory)
+        assertTrue(dnsMsg.contains("Cannot resolve Supabase host"))
+    }
+
     // Test helper TokenStorage implementation
     private class TestTokenStorage : TokenStorage {
         private var access: String? = null
@@ -478,6 +684,9 @@ class CloudAuthSslCertificateValidationTest {
         }
 
         override fun isConfigured(): Boolean = true
+
+        override fun generateDiagnosticReport(accessToken: String?): SupabaseDiagnosticReport =
+            SupabaseDiagnosticReport("YES", "YES", "YES", "VERIFIED", "YES", "SAFE")
 
         override fun buildOAuthAuthorizeUrl(provider: String, redirectUri: String): String =
             "https://test.supabase.co/auth/v1/authorize?provider=$provider"

@@ -684,6 +684,9 @@ class CloudSyncRepositoryRobolectricTest {
 
         override fun isConfigured(): Boolean = true
 
+        override fun generateDiagnosticReport(accessToken: String?): SupabaseDiagnosticReport =
+            SupabaseDiagnosticReport("YES", "YES", "YES", "VERIFIED", "YES", "SAFE")
+
         override fun buildOAuthAuthorizeUrl(provider: String, redirectUri: String): String =
             "https://fake.supabase.co/auth/v1/authorize?provider=$provider"
 

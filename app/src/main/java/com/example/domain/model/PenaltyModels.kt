@@ -143,7 +143,9 @@ data class PenaltyRecord(
     val policyVersion: String,
     val createdAtEpochMs: Long = System.currentTimeMillis(),
     val resolvedAtEpochMs: Long? = null
-)
+) {
+    val status: PenaltyStatus get() = penaltyStatus
+}
 
 /**
  * Auditable transaction entry in the independent Penalty Point ledger.

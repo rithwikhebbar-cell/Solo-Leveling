@@ -123,3 +123,73 @@ data class PenaltyAuditTimelineItem(
     val detail: String,
     val statusTag: String
 )
+
+enum class CorrectiveActivityLifecycleState {
+    PENDING,
+    ACTIVE,
+    COMPLETED,
+    VERIFIED,
+    EXPIRED,
+    CANCELLED
+}
+
+enum class VerificationMethod {
+    STRUCTURED_REFLECTION,
+    CHECKLIST_CONFIRMATION,
+    PHYSICAL_SESSION_VERIFIED,
+    ACADEMIC_STUDY_SESSION,
+    USER_ATTESTATION
+}
+
+data class CorrectiveActivityRecord(
+    val activityId: String = "",
+    val penaltyId: String = "",
+    val accountOwnerId: String = "",
+    val title: String = "",
+    val description: String = "",
+    val category: QuestCategory = QuestCategory.DISCIPLINE,
+    val pointValue: Int = 0,
+    val assignedShadowClass: ShadowClass = ShadowClass.VANGUARD,
+    val verificationMethod: VerificationMethod = VerificationMethod.STRUCTURED_REFLECTION,
+    val lifecycleState: CorrectiveActivityLifecycleState = CorrectiveActivityLifecycleState.PENDING,
+    val createdAtEpochMs: Long = System.currentTimeMillis(),
+    val completedAtEpochMs: Long? = null,
+    val verifiedAtEpochMs: Long? = null,
+    val rescheduleCount: Int = 0
+)
+
+fun RedemptionPlan.toCorrectiveActivityRecord(): CorrectiveActivityRecord {
+    return CorrectiveActivityRecord(
+        activityId = activityId,
+        penaltyId = penaltyId,
+        accountOwnerId = accountOwnerId,
+        title = activityTitle,
+        description = instructions,
+        category = when (category) {
+            CorrectiveCategory.ACADEMIC -> QuestCategory.ACADEMIC
+            CorrectiveCategory.PHYSICAL -> QuestCategory.STRENGTH
+            CorrectiveCategory.DISCIPLINE -> QuestCategory.DISCIPLINE
+            CorrectiveCategory.LIFE_MANAGEMENT -> QuestCategory.LIFE
+            CorrectiveCategory.STRATEGIC_PLANNING -> QuestCategory.INTELLIGENCE
+        },
+        pointValue = resolutionPoints,
+        assignedShadowClass = assignedShadowClass,
+        verificationMethod = when (verificationMethod) {
+            RedemptionVerificationMethod.STRUCTURED_REFLECTION -> VerificationMethod.STRUCTURED_REFLECTION
+            RedemptionVerificationMethod.CHECKLIST_CONFIRMATION -> VerificationMethod.CHECKLIST_CONFIRMATION
+            RedemptionVerificationMethod.PHYSICAL_SESSION_VERIFIED -> VerificationMethod.PHYSICAL_SESSION_VERIFIED
+            RedemptionVerificationMethod.ACADEMIC_STUDY_VERIFIED -> VerificationMethod.ACADEMIC_STUDY_SESSION
+            else -> VerificationMethod.USER_ATTESTATION
+        },
+        lifecycleState = when (lifecycleState) {
+            RedemptionLifecycleState.VERIFIED_COMPLETED -> CorrectiveActivityLifecycleState.VERIFIED
+            RedemptionLifecycleState.CANCELLED, RedemptionLifecycleState.REJECTED -> CorrectiveActivityLifecycleState.CANCELLED
+            RedemptionLifecycleState.ACTIVE -> CorrectiveActivityLifecycleState.ACTIVE
+            else -> CorrectiveActivityLifecycleState.PENDING
+        },
+        createdAtEpochMs = createdAtEpochMs,
+        completedAtEpochMs = completedAtEpochMs,
+        verifiedAtEpochMs = verifiedAtEpochMs
+    )
+}
+

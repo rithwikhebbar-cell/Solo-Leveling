@@ -95,10 +95,10 @@ fun QuestBoardScreen(
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .widthIn(max = 760.dp),
+                .widthIn(max = SystemSpacing.maxContentWidth),
             contentPadding = PaddingValues(
-                horizontal = SystemSpacing.screenEdgePadding,
-                vertical = SystemSpacing.verticalPageSpacing
+                horizontal = SystemSpacing.screenHorizontal,
+                vertical = SystemSpacing.screenVertical
             ),
             verticalArrangement = Arrangement.spacedBy(SystemSpacing.sectionSpacing)
         ) {

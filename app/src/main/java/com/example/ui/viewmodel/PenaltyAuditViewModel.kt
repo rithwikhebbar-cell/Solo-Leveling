@@ -77,7 +77,7 @@ class PenaltyAuditViewModel(
 
     private fun loadQuestMetadata() {
         viewModelScope.launch(Dispatchers.IO) {
-            val quests = database.questDao().getAllQuests()
+            val quests = database.questDao().getAllQuestsOnce()
             questCategoryCache = quests.associate { it.id to it.categoryName }
             questTitleCache = quests.associate { it.id to it.title }
         }
@@ -93,11 +93,28 @@ class PenaltyAuditViewModel(
                 questCommitmentRepository.observeAllFailures(),
                 questCommitmentRepository.observeAllExemptions(accountOwnerId),
                 redemptionRepository.observeAllRedemptions(accountOwnerId)
-            ) { balance, penalties, transactions, commitments, failures, exemptions, redemptions ->
+            ) { args: Array<Any?> ->
+                @Suppress("UNCHECKED_CAST")
+                val balance = args[0] as com.example.domain.model.PenaltyPointBalance
+                @Suppress("UNCHECKED_CAST")
+                val penalties = args[1] as List<com.example.domain.model.PenaltyRecord>
+                @Suppress("UNCHECKED_CAST")
+                val transactions = args[2] as List<com.example.domain.model.PenaltyTransaction>
+                @Suppress("UNCHECKED_CAST")
+                val commitments = args[3] as List<com.example.domain.model.QuestCommitment>
+                @Suppress("UNCHECKED_CAST")
+                val failures = args[4] as List<com.example.domain.model.ConfirmedFailureRecord>
+                @Suppress("UNCHECKED_CAST")
+                val exemptions = args[5] as List<com.example.domain.model.QuestExemption>
+                @Suppress("UNCHECKED_CAST")
+                val redemptions = args[6] as List<com.example.domain.model.RedemptionPlan>
+
+                val redemptionActivities = redemptions.map { it.toCorrectiveActivityRecord() }
+
                 withContext(Dispatchers.Default) {
                     val recoveryAssessment = database.recoveryAssessmentDao().getLatestOnce()
                     val recoveryState = recoveryAssessment?.let {
-                        runCatching { RecoveryState.valueOf(it.recoveryStateName) }.getOrNull()
+                        runCatching { RecoveryState.valueOf(it.stateName) }.getOrNull()
                     }
 
                     val overview = PenaltyAnalyticsEngine.calculateOverviewSummary(
@@ -116,7 +133,7 @@ class PenaltyAuditViewModel(
                     )
 
                     val redemptionMetrics = PenaltyAnalyticsEngine.calculateRedemptionMetrics(
-                        activities = redemptions
+                        activities = redemptionActivities
                     )
 
                     val consistency = PenaltyAnalyticsEngine.calculateConsistencyMetrics(
@@ -140,7 +157,7 @@ class PenaltyAuditViewModel(
                         failures = failures,
                         penalties = penalties,
                         transactions = transactions,
-                        redemptions = redemptions,
+                        redemptions = redemptionActivities,
                         exemptions = exemptions
                     )
 

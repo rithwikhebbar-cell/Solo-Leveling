@@ -168,6 +168,8 @@ import com.example.ui.navigation.ShadowQuestBoardRoute
 import com.example.ui.navigation.ShadowArmyAnalyticsRoute
 import com.example.ui.navigation.ShadowArchiveRoute
 import com.example.ui.navigation.ShadowSettingsRoute
+import com.example.ui.navigation.ShadowCommandCenterRoute
+import com.example.ui.screens.shadow.ShadowCommandCenterScreen
 import com.example.ui.viewmodel.ShadowRealmViewModel
 import com.example.ui.screens.shadow.ShadowRealmDashboardScreen
 import com.example.ui.screens.shadow.MonarchStatusScreen
@@ -468,6 +470,7 @@ fun SoloLevelingApp(
             currentDestination?.hasRoute<ShadowArmyAnalyticsRoute>() == true -> "ARMY ANALYTICS"
             currentDestination?.hasRoute<ShadowArchiveRoute>() == true -> "SHADOW ARCHIVE"
             currentDestination?.hasRoute<ShadowSettingsRoute>() == true -> "SHADOW SETTINGS"
+            currentDestination?.hasRoute<ShadowCommandCenterRoute>() == true -> "COMMAND CENTER"
             else -> null
         }
 
@@ -721,6 +724,7 @@ private fun RealityOsNavHost(
         composable<HomeRoute> {
             HomeScreen(
                 state = state,
+                equippedTitle = unlockedTitles.firstOrNull { it.isEquipped }?.name ?: state.player.title,
                 onNavigateToStatus = { navigateTopLevel(navController, StatusRoute) },
                 onNavigateToPhysical = { navigateTopLevel(navController, PhysicalRoute) },
                 onNavigateToQuestBoard = { navigateTopLevel(navController, QuestBoardRoute) },
@@ -1837,7 +1841,8 @@ private fun RealityOsNavHost(
                 onNavigateToQuests = { navController.navigate(ShadowQuestBoardRoute) },
                 onNavigateToAnalytics = { navController.navigate(ShadowArmyAnalyticsRoute) },
                 onNavigateToArchive = { navController.navigate(ShadowArchiveRoute) },
-                onNavigateToSettings = { navController.navigate(ShadowSettingsRoute) }
+                onNavigateToSettings = { navController.navigate(ShadowSettingsRoute) },
+                onNavigateToCommandCenter = { navController.navigate(ShadowCommandCenterRoute) }
             )
         }
         composable<MonarchStatusRoute> {
@@ -1925,6 +1930,15 @@ private fun RealityOsNavHost(
             ShadowSettingsScreen(
                 viewModel = shadowRealmViewModel,
                 onNavigateBack = { navController.popBackStack() }
+            )
+        }
+        composable<ShadowCommandCenterRoute> {
+            ShadowCommandCenterScreen(
+                viewModel = shadowRealmViewModel,
+                onNavigateBack = { navController.popBackStack() },
+                onSelectShadow = { shadowId ->
+                    navController.navigate(ShadowDetailRoute(shadowId))
+                }
             )
         }
         composable<com.example.ui.navigation.SocialMasteryDashboardRoute> {
@@ -2152,6 +2166,7 @@ private fun handleDeepLinkRoute(
         "system_control" -> navController.navigate(SystemOverviewRoute)
         "automation_dashboard" -> navController.navigate(AutomationDashboardRoute)
         "shadow_realm" -> navController.navigate(ShadowRealmDashboardRoute)
+        "shadow_command_center" -> navController.navigate(ShadowCommandCenterRoute)
         "shadow_extraction" -> navController.navigate(ShadowExtractionRoute)
         "shadow_roster" -> navController.navigate(ShadowCollectionListRoute)
         "social_mastery" -> navController.navigate(com.example.ui.navigation.SocialMasteryDashboardRoute)

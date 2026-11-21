@@ -120,6 +120,7 @@ fun ShadowCollectionScreen(
     val uiState by viewModel.uiState.collectAsState()
     val collectionOverview by viewModel.collectionOverview.collectAsState()
     val growthOverview by viewModel.growthOverview.collectAsState()
+    val armyBondOverview by viewModel.armyBondOverview.collectAsState()
 
     var searchQuery by remember { mutableStateOf("") }
     var selectedClassFilter by remember { mutableStateOf<ShadowClass?>(null) }
@@ -372,6 +373,12 @@ fun ShadowCollectionScreen(
             ShadowGrowthOverviewCard(
                 growthOverview = growthOverview,
                 shadows = uiState.allShadows
+            )
+
+            // Phase 6.4 — Shadow Army Bond Overview Card
+            ShadowArmyBondOverviewCard(
+                armyBondOverview = armyBondOverview,
+                onSelectShadow = onSelectShadow
             )
 
             // Search input
@@ -700,6 +707,14 @@ fun ShadowDetailScreen(
     val shadow = uiState.allShadows.find { it.shadowId == shadowId }
     var showDeployDialog by remember { mutableStateOf(false) }
 
+    val bondProfile by viewModel.shadowBondProfile.collectAsState()
+    val bondEvents by viewModel.shadowBondEvents.collectAsState()
+    val bondMilestones by viewModel.shadowBondMilestones.collectAsState()
+
+    LaunchedEffect(shadowId) {
+        viewModel.loadShadowBond(shadowId)
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -826,6 +841,18 @@ fun ShadowDetailScreen(
                         }
                     }
                 }
+
+                // Phase 6.4 — Shadow Bond & Relationship Overview
+                ShadowBondOverviewCard(bondProfile = bondProfile)
+
+                // Phase 6.4 — Personality & Monarch Discourse
+                ShadowPersonalityCard(shadow = shadow, bondProfile = bondProfile)
+
+                // Phase 6.4 — Bond Milestones & Memories
+                ShadowBondMilestonesCard(milestones = bondMilestones)
+
+                // Phase 6.4 — Bond Activity Log
+                ShadowBondHistoryCard(events = bondEvents)
 
                 // Passive Ability
                 Text(text = "PASSIVE ABILITY", style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace), color = ShadowColors.Muted)
@@ -1953,4 +1980,663 @@ fun ShadowQuestBoardScreen(
         }
     }
 }
+
+// ============================================================================
+// PHASE 6.4 — SHADOW BOND & LOYALTY COMPONENTS
+// ============================================================================
+
+fun stageColor(stage: ShadowRelationshipStage): Color = when (stage) {
+    ShadowRelationshipStage.UNFAMILIAR -> Color(0xFF94A3B8)
+    ShadowRelationshipStage.RECOGNIZED -> Color(0xFF38BDF8)
+    ShadowRelationshipStage.TRUSTING -> ShadowColors.Emerald
+    ShadowRelationshipStage.LOYAL -> ShadowColors.Cyan
+    ShadowRelationshipStage.DEVOTED -> ShadowColors.Violet
+    ShadowRelationshipStage.UNBREAKABLE -> ShadowColors.Gold
+}
+
+@Composable
+fun ShadowArmyBondOverviewCard(
+    armyBondOverview: ShadowArmyBondOverview?,
+    onSelectShadow: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    HolographicPanel(
+        accentColor = ShadowColors.Cyan,
+        secondaryColor = ShadowColors.Violet,
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp)
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Icon(Icons.Rounded.Star, contentDescription = null, tint = ShadowColors.Cyan, modifier = Modifier.size(16.dp))
+                    Text(
+                        text = "SHADOW BOND & LOYALTY OVERVIEW",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontFamily = FontFamily.Monospace,
+                            letterSpacing = 2.sp,
+                            fontWeight = FontWeight.Bold
+                        ),
+                        color = ShadowColors.Cyan
+                    )
+                }
+                Text(
+                    text = "${armyBondOverview?.bondedShadowCount ?: 0}/${armyBondOverview?.totalShadows ?: 0} BONDED",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold
+                    ),
+                    color = ShadowColors.Gold
+                )
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Metrics row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column {
+                    Text(text = "Avg Bond Level", style = MaterialTheme.typography.labelSmall, color = ShadowColors.Muted)
+                    Text(
+                        text = "Lv. ${"%.1f".format(armyBondOverview?.averageBondLevel ?: 1.0)}",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = ShadowColors.PureIce
+                    )
+                }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(text = "Avg Loyalty", style = MaterialTheme.typography.labelSmall, color = ShadowColors.Muted)
+                    Text(
+                        text = "${"%.1f".format(armyBondOverview?.averageLoyalty ?: 15.0)}/100",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = ShadowColors.Cyan
+                    )
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(text = "Avg Trust", style = MaterialTheme.typography.labelSmall, color = ShadowColors.Muted)
+                    Text(
+                        text = "${"%.1f".format(armyBondOverview?.averageTrust ?: 10.0)}/100",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = ShadowColors.Emerald
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Expand / Collapse details
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { expanded = !expanded },
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = if (expanded) "▲ HIDE BOND DETAILS" else "▼ VIEW RELATIONSHIP STAGES & TOP LOYAL SHADOWS",
+                    style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace, fontSize = 10.sp),
+                    color = ShadowColors.Muted
+                )
+            }
+
+            AnimatedVisibility(visible = expanded) {
+                Column(modifier = Modifier.padding(top = 10.dp)) {
+                    HorizontalDivider(color = ShadowColors.PanelSurfaceElevated, thickness = 1.dp)
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(text = "RELATIONSHIP STAGE DISTRIBUTION", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = ShadowColors.Muted)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        ShadowRelationshipStage.entries.forEach { stage ->
+                            val count = armyBondOverview?.stageDistribution?.get(stage) ?: 0
+                            val color = stageColor(stage)
+                            Surface(
+                                color = color.copy(alpha = 0.12f),
+                                shape = RoundedCornerShape(4.dp),
+                                border = BorderStroke(1.dp, color.copy(alpha = 0.4f))
+                            ) {
+                                Text(
+                                    text = "${stage.label}: $count",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.SemiBold),
+                                    color = color,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Top Loyal Shadows
+                    val topLoyal = armyBondOverview?.topLoyalShadows ?: emptyList()
+                    if (topLoyal.isNotEmpty()) {
+                        Text(text = "MOST LOYAL SHADOWS", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = ShadowColors.Muted)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            topLoyal.forEach { (shadow, profile) ->
+                                Surface(
+                                    color = ShadowColors.PanelSurface,
+                                    shape = RoundedCornerShape(6.dp),
+                                    border = BorderStroke(1.dp, ShadowColors.PanelSurfaceElevated),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { onSelectShadow(shadow.shadowId) }
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(8.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column {
+                                            Text(
+                                                text = shadow.name,
+                                                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                                                color = ShadowColors.PureIce
+                                            )
+                                            Text(
+                                                text = "Stage: ${profile.relationshipStage.label} • Lv. ${profile.bondLevel}",
+                                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                                                color = stageColor(profile.relationshipStage)
+                                            )
+                                        }
+                                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            Text(
+                                                text = "Loyalty: ${profile.loyaltyRating}",
+                                                style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.SemiBold),
+                                                color = ShadowColors.Cyan
+                                            )
+                                            Text(
+                                                text = "Trust: ${profile.trustRating}",
+                                                style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.SemiBold),
+                                                color = ShadowColors.Emerald
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Recent Milestones
+                    val recentMilestones = armyBondOverview?.recentMilestones ?: emptyList()
+                    if (recentMilestones.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text(text = "RECENT ARMY BOND MILESTONES", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = ShadowColors.Muted)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()) }
+                            recentMilestones.take(3).forEach { milestone ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        Icon(Icons.Rounded.MilitaryTech, contentDescription = null, tint = ShadowColors.Gold, modifier = Modifier.size(12.dp))
+                                        Text(
+                                            text = milestone.title,
+                                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                                            color = ShadowColors.PureIce
+                                        )
+                                    }
+                                    Text(
+                                        text = dateFormat.format(Date(milestone.unlockedAtEpochMs)),
+                                        style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace, fontSize = 9.sp),
+                                        color = ShadowColors.Muted
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ShadowBondOverviewCard(
+    bondProfile: ShadowBondProfile?,
+    modifier: Modifier = Modifier
+) {
+    val profile = bondProfile ?: return
+    val stage = profile.relationshipStage
+    val currentPoints = profile.bondPoints
+    val currentLevel = profile.bondLevel
+    val currentThreshold = ShadowBondConfig.getThresholdForLevel(currentLevel)
+    val nextThreshold = ShadowBondConfig.getThresholdForLevel(currentLevel + 1)
+    val levelProgress = if (currentLevel >= ShadowBondConfig.MAX_BOND_LEVEL) 1f else {
+        val span = (nextThreshold - currentThreshold).coerceAtLeast(1)
+        ((currentPoints - currentThreshold).toFloat() / span).coerceIn(0f, 1f)
+    }
+
+    Text(
+        text = "SHADOW BOND & RELATIONSHIP",
+        style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
+        color = ShadowColors.Muted
+    )
+
+    HolographicPanel(
+        accentColor = stageColor(stage),
+        secondaryColor = ShadowColors.Cyan,
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = "BOND LEVEL $currentLevel",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = ShadowColors.PureIce
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Surface(
+                        color = stageColor(stage).copy(alpha = 0.15f),
+                        shape = RoundedCornerShape(4.dp),
+                        border = BorderStroke(1.dp, stageColor(stage))
+                    ) {
+                        Text(
+                            text = stage.label.uppercase(Locale.getDefault()),
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 9.sp),
+                            color = stageColor(stage),
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        text = "$currentPoints / ${if (currentLevel >= ShadowBondConfig.MAX_BOND_LEVEL) currentThreshold else nextThreshold} PTS",
+                        style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
+                        color = ShadowColors.Cyan
+                    )
+                    Text(
+                        text = if (currentLevel >= ShadowBondConfig.MAX_BOND_LEVEL) "MAX BOND" else "Next: Lv. ${currentLevel + 1}",
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                        color = ShadowColors.Muted
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            LinearProgressIndicator(
+                progress = { levelProgress },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(6.dp)
+                    .clip(RoundedCornerShape(3.dp)),
+                color = stageColor(stage),
+                trackColor = ShadowColors.PanelSurfaceElevated
+            )
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Loyalty & Trust Dual Bars
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                // Loyalty Column
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text(text = "LOYALTY", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold), color = ShadowColors.Cyan)
+                        Text(text = "${profile.loyaltyRating}/100", style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace), color = ShadowColors.PureIce)
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    LinearProgressIndicator(
+                        progress = { (profile.loyaltyRating / 100f).coerceIn(0f, 1f) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(5.dp)
+                            .clip(RoundedCornerShape(2.5.dp)),
+                        color = ShadowColors.Cyan,
+                        trackColor = ShadowColors.PanelSurfaceElevated
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = ShadowBondConfig.getLoyaltyDescription(profile.loyaltyRating),
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                        color = ShadowColors.Muted
+                    )
+                }
+
+                // Trust Column
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text(text = "TRUST", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold), color = ShadowColors.Emerald)
+                        Text(text = "${profile.trustRating}/100", style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace), color = ShadowColors.PureIce)
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    LinearProgressIndicator(
+                        progress = { (profile.trustRating / 100f).coerceIn(0f, 1f) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(5.dp)
+                            .clip(RoundedCornerShape(2.5.dp)),
+                        color = ShadowColors.Emerald,
+                        trackColor = ShadowColors.PanelSurfaceElevated
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = ShadowBondConfig.getTrustDescription(profile.trustRating),
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                        color = ShadowColors.Muted
+                    )
+                }
+            }
+
+            // Next Stage requirements
+            val nextStage = stage.nextStage()
+            if (nextStage != null) {
+                Spacer(modifier = Modifier.height(10.dp))
+                HorizontalDivider(color = ShadowColors.PanelSurfaceElevated, thickness = 1.dp)
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "NEXT RELATIONSHIP STAGE: ${nextStage.label.uppercase(Locale.getDefault())}",
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.SemiBold),
+                    color = ShadowColors.Gold
+                )
+                Text(
+                    text = "Requires: Lv. ${nextStage.minBondLevel} • ${nextStage.minBondPoints} Pts • Loyalty ${nextStage.minLoyalty} • Trust ${nextStage.minTrust}",
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, fontFamily = FontFamily.Monospace),
+                    color = ShadowColors.Muted
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun ShadowPersonalityCard(
+    shadow: Shadow,
+    bondProfile: ShadowBondProfile?,
+    modifier: Modifier = Modifier
+) {
+    val personality = remember(shadow.name) {
+        ShadowBondConfig.getPersonalityForShadow(shadow.name)
+    }
+    val stage = bondProfile?.relationshipStage ?: ShadowRelationshipStage.UNFAMILIAR
+    val relDesc = remember(stage, personality) {
+        ShadowBondConfig.getRelationshipDescription(stage, personality)
+    }
+    val dialogue = remember(stage, personality) {
+        ShadowBondConfig.getDialogueForStage(stage, personality)
+    }
+
+    Text(
+        text = "PERSONALITY & MONARCH DISCOURSE",
+        style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
+        color = ShadowColors.Muted
+    )
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = ShadowColors.PanelSurface),
+        shape = RoundedCornerShape(10.dp),
+        border = BorderStroke(1.dp, ShadowColors.Cyan.copy(alpha = 0.3f)),
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = personality.traitName,
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                        color = ShadowColors.PureIce
+                    )
+                    Text(
+                        text = personality.summary,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = ShadowColors.Muted
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+            HorizontalDivider(color = ShadowColors.PanelSurfaceElevated, thickness = 1.dp)
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = "RELATIONSHIP TO MONARCH",
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Bold),
+                color = ShadowColors.Cyan
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = relDesc,
+                style = MaterialTheme.typography.bodySmall,
+                color = ShadowColors.PureIce
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Dynamic in-character quote
+            Surface(
+                color = ShadowColors.DeepNavy,
+                shape = RoundedCornerShape(6.dp),
+                border = BorderStroke(1.dp, ShadowColors.PanelSurfaceElevated),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = "\"$dialogue\"",
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                        fontFamily = FontFamily.Serif
+                    ),
+                    color = ShadowColors.Gold,
+                    modifier = Modifier.padding(10.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun ShadowBondMilestonesCard(
+    milestones: List<ShadowBondMilestone>,
+    modifier: Modifier = Modifier
+) {
+    Text(
+        text = "BOND MILESTONES & MEMORIES (${milestones.size})",
+        style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
+        color = ShadowColors.Muted
+    )
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = ShadowColors.PanelSurface),
+        shape = RoundedCornerShape(10.dp),
+        border = BorderStroke(1.dp, ShadowColors.Violet.copy(alpha = 0.3f)),
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            if (milestones.isEmpty()) {
+                Text(
+                    text = "No bond milestones unlocked yet.\nDeploy this shadow or conquer dungeons together to forge eternal memories.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = ShadowColors.Muted,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 12.dp)
+                )
+            } else {
+                val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()) }
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    milestones.forEach { milestone ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(
+                                    Icons.Rounded.MilitaryTech,
+                                    contentDescription = null,
+                                    tint = ShadowColors.Gold,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Column {
+                                    Text(
+                                        text = milestone.title,
+                                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                                        color = ShadowColors.PureIce
+                                    )
+                                    Text(
+                                        text = milestone.description,
+                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                        color = ShadowColors.Muted
+                                    )
+                                }
+                            }
+                            Text(
+                                text = dateFormat.format(Date(milestone.timestampEpochMs)),
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontFamily = FontFamily.Monospace,
+                                    fontSize = 9.sp
+                                ),
+                                color = ShadowColors.Cyan
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ShadowBondHistoryCard(
+    events: List<ShadowBondEvent>,
+    modifier: Modifier = Modifier
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    Text(
+        text = "BOND ACTIVITY LOG (${events.size})",
+        style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
+        color = ShadowColors.Muted
+    )
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = ShadowColors.PanelSurface),
+        shape = RoundedCornerShape(10.dp),
+        border = BorderStroke(1.dp, ShadowColors.PanelSurfaceElevated),
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            if (events.isEmpty()) {
+                Text(
+                    text = "No bond activities recorded yet.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = ShadowColors.Muted,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 12.dp)
+                )
+            } else {
+                val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()) }
+                val displayEvents = if (expanded) events else events.take(5)
+
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    displayEvents.forEach { ev ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = ev.activityType.name.replace("_", " "),
+                                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+                                    color = ShadowColors.PureIce
+                                )
+                                Text(
+                                    text = dateFormat.format(Date(ev.timestampEpochMs)),
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontFamily = FontFamily.Monospace,
+                                        fontSize = 9.sp
+                                    ),
+                                    color = ShadowColors.Muted
+                                )
+                            }
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text(
+                                    text = "+${ev.bondPointsAwarded} pts",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontFamily = FontFamily.Monospace,
+                                        fontWeight = FontWeight.Bold
+                                    ),
+                                    color = ShadowColors.Cyan
+                                )
+                                if (ev.loyaltyDelta > 0) {
+                                    Text(
+                                        text = "+${ev.loyaltyDelta} loy",
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            fontFamily = FontFamily.Monospace,
+                                            fontWeight = FontWeight.SemiBold
+                                        ),
+                                        color = ShadowColors.Gold
+                                    )
+                                }
+                                if (ev.trustDelta > 0) {
+                                    Text(
+                                        text = "+${ev.trustDelta} tru",
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            fontFamily = FontFamily.Monospace,
+                                            fontWeight = FontWeight.SemiBold
+                                        ),
+                                        color = ShadowColors.Emerald
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (events.size > 5) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { expanded = !expanded },
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = if (expanded) "▲ SHOW LESS" else "▼ SHOW ALL (${events.size}) ACTIVITIES",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 10.sp
+                            ),
+                            color = ShadowColors.Muted
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
 

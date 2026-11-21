@@ -22,6 +22,25 @@ import com.example.domain.model.MonarchSkillCatalog
 import com.example.domain.model.MonarchSkillDefinition
 import com.example.domain.model.Shadow
 import com.example.data.local.dao.ShadowBondDao
+import com.example.data.local.dao.ShadowTacticalDao
+import com.example.domain.engine.ShadowTacticalIntelligenceEngine
+import com.example.domain.engine.ShadowSquadEngine
+import com.example.domain.engine.ShadowMissionAssignmentEngine
+import com.example.domain.engine.ShadowTacticalAnalyticsEngine
+import com.example.domain.model.ShadowTacticalProfile
+import com.example.domain.model.ShadowTacticalRole
+import com.example.domain.model.ShadowSquad
+import com.example.domain.model.ShadowSquadCategory
+import com.example.domain.model.SquadDetail
+import com.example.domain.model.SquadMemberDetail
+import com.example.domain.model.SquadSynergyReport
+import com.example.domain.model.FormationTacticalAssessment
+import com.example.domain.model.MissionTacticalRequirement
+import com.example.domain.model.MissionSuitabilityEvaluation
+import com.example.domain.model.MissionType
+import com.example.domain.model.ShadowTacticalAnalytics
+import com.example.domain.model.TacticalAlert
+import com.example.domain.model.TacticalCapabilityVector
 import com.example.domain.engine.ShadowBondEngine
 import com.example.domain.model.ShadowArmyBondOverview
 import com.example.domain.model.ShadowBondActivityType
@@ -62,15 +81,67 @@ class ShadowArmyRepository(
     private val questProgressDao: ShadowQuestProgressDao,
     private val resourceDao: ShadowResourceDao,
     private val shadowBondDao: ShadowBondDao? = null,
+    private val shadowTacticalDao: ShadowTacticalDao? = null,
     // Engines
     val monarchProgressionEngine: MonarchProgressionEngine,
     val extractionEngine: ShadowExtractionEngine,
     val evolutionEngine: ShadowEvolutionEngine,
     val deploymentEngine: ShadowDeploymentEngine,
     shadowBondEngine: ShadowBondEngine? = null,
+    tacticalIntelligenceEngine: ShadowTacticalIntelligenceEngine? = null,
+    squadEngine: ShadowSquadEngine? = null,
+    missionAssignmentEngine: ShadowMissionAssignmentEngine? = null,
+    tacticalAnalyticsEngine: ShadowTacticalAnalyticsEngine? = null,
     val database: SoloLevelingDatabase? = null,
     private val mutex: Mutex = Mutex()
 ) {
+
+    val tacticalIntelligence: ShadowTacticalIntelligenceEngine =
+        tacticalIntelligenceEngine ?: ShadowTacticalIntelligenceEngine()
+
+    val squadManager: ShadowSquadEngine =
+        squadEngine ?: run {
+            val dao = shadowTacticalDao ?: database?.shadowTacticalDao()
+            val db = database ?: run {
+                // In-memory fallback if database reference not passed
+                null
+            }
+            if (dao != null && db != null) {
+                ShadowSquadEngine(db, dao, shadowDao, tacticalIntelligence, mutex)
+            } else {
+                ShadowSquadEngine(
+                    database ?: db!!,
+                    dao ?: database!!.shadowTacticalDao(),
+                    shadowDao,
+                    tacticalIntelligence,
+                    mutex
+                )
+            }
+        }
+
+    val missionManager: ShadowMissionAssignmentEngine =
+        missionAssignmentEngine ?: run {
+            val dao = shadowTacticalDao ?: database?.shadowTacticalDao()
+            ShadowMissionAssignmentEngine(
+                database = database!!,
+                shadowTacticalDao = dao ?: database.shadowTacticalDao(),
+                shadowDao = shadowDao,
+                dungeonDefinitionDao = database.dungeonDefinitionDao(),
+                dungeonInstanceDao = database.dungeonInstanceDao(),
+                tacticalIntelligenceEngine = tacticalIntelligence,
+                deploymentEngine = deploymentEngine,
+                mutex = mutex
+            )
+        }
+
+    val analyticsEngine: ShadowTacticalAnalyticsEngine =
+        tacticalAnalyticsEngine ?: ShadowTacticalAnalyticsEngine(
+            shadowDao = shadowDao,
+            deploymentDao = deploymentDao,
+            formationDao = formationDao,
+            shadowTacticalDao = shadowTacticalDao ?: database!!.shadowTacticalDao(),
+            tacticalIntelligenceEngine = tacticalIntelligence
+        )
 
     val bondEngine: ShadowBondEngine = shadowBondEngine ?: run {
         val dao = shadowBondDao ?: database?.shadowBondDao()
@@ -82,19 +153,19 @@ class ShadowArmyRepository(
                 override suspend fun getBondProfile(shadowId: String, accountOwnerId: String) = null
                 override fun observeBondProfile(shadowId: String, accountOwnerId: String) = kotlinx.coroutines.flow.flowOf(null)
                 override suspend fun upsertBondProfile(entity: com.example.data.local.entity.ShadowBondProfileEntity) = 1L
-                override fun observeAllBondProfilesForOwner(accountOwnerId: String) = kotlinx.coroutines.flow.flowOf(emptyList())
+                override fun observeAllBondProfilesForOwner(accountOwnerId: String): kotlinx.coroutines.flow.Flow<List<com.example.data.local.entity.ShadowBondProfileEntity>> = kotlinx.coroutines.flow.flowOf(emptyList())
                 override suspend fun getAllBondProfilesForOwner(accountOwnerId: String) = emptyList<com.example.data.local.entity.ShadowBondProfileEntity>()
                 override suspend fun insertBondEvent(entity: com.example.data.local.entity.ShadowBondEventEntity) = 1L
                 override suspend fun getBondEventByIdempotencyKey(idempotencyKey: String) = null
                 override suspend fun getBondEventsForShadow(shadowId: String, accountOwnerId: String) = emptyList<com.example.data.local.entity.ShadowBondEventEntity>()
-                override fun observeBondEventsForShadow(shadowId: String, accountOwnerId: String) = kotlinx.coroutines.flow.flowOf(emptyList())
+                override fun observeBondEventsForShadow(shadowId: String, accountOwnerId: String): kotlinx.coroutines.flow.Flow<List<com.example.data.local.entity.ShadowBondEventEntity>> = kotlinx.coroutines.flow.flowOf(emptyList())
                 override suspend fun insertBondMilestone(entity: com.example.data.local.entity.ShadowBondMilestoneEntity) = 1L
                 override suspend fun getBondMilestonesForShadow(shadowId: String, accountOwnerId: String) = emptyList<com.example.data.local.entity.ShadowBondMilestoneEntity>()
-                override fun observeBondMilestonesForShadow(shadowId: String, accountOwnerId: String) = kotlinx.coroutines.flow.flowOf(emptyList())
+                override fun observeBondMilestonesForShadow(shadowId: String, accountOwnerId: String): kotlinx.coroutines.flow.Flow<List<com.example.data.local.entity.ShadowBondMilestoneEntity>> = kotlinx.coroutines.flow.flowOf(emptyList())
                 override suspend fun hasMilestone(shadowId: String, accountOwnerId: String, milestoneTypeName: String) = false
-                override fun observeAllMilestonesForOwner(accountOwnerId: String) = kotlinx.coroutines.flow.flowOf(emptyList())
+                override fun observeAllMilestonesForOwner(accountOwnerId: String): kotlinx.coroutines.flow.Flow<List<com.example.data.local.entity.ShadowBondMilestoneEntity>> = kotlinx.coroutines.flow.flowOf(emptyList())
                 override suspend fun getRecentMilestonesForOwner(accountOwnerId: String, limit: Int) = emptyList<com.example.data.local.entity.ShadowBondMilestoneEntity>()
-                override fun observeRecentMilestonesForOwner(accountOwnerId: String, limit: Int) = kotlinx.coroutines.flow.flowOf(emptyList())
+                override fun observeRecentMilestonesForOwner(accountOwnerId: String, limit: Int): kotlinx.coroutines.flow.Flow<List<com.example.data.local.entity.ShadowBondMilestoneEntity>> = kotlinx.coroutines.flow.flowOf(emptyList())
             }, shadowDao, database, mutex)
         }
     }
@@ -658,5 +729,197 @@ class ShadowArmyRepository(
         accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID
     ): Flow<ShadowArmyBondOverview> {
         return bondEngine.observeArmyBondOverview(accountOwnerId)
+    }
+
+    // -------------------------------------------------------------------------
+    // SHADOW ARMY INTELLIGENCE & TACTICAL COMMAND (Milestone 12 - Phase 6.5)
+    // -------------------------------------------------------------------------
+
+    fun observeSquadDetailsForOwner(
+        accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID
+    ): Flow<List<SquadDetail>> {
+        val dao = shadowTacticalDao ?: database?.shadowTacticalDao()
+        if (dao == null) return kotlinx.coroutines.flow.flowOf(emptyList<SquadDetail>())
+
+        return dao.observeSquadsForOwner(accountOwnerId).map { squadEntities ->
+            val allShadows = shadowDao.getAllShadowsForOwnerOnce(accountOwnerId).map { it.toDomain() }
+            val shadowMap = allShadows.associateBy { it.shadowId }
+
+            squadEntities.map { entity ->
+                val memberEntities = dao.getMembersForSquadOnce(entity.squadId)
+                val memberIds = memberEntities.map { it.shadowId }
+                val squad = entity.toDomain(memberIds)
+                val leader = squad.leaderShadowId?.let { shadowMap[it] }
+
+                val memberDetails = memberEntities.mapNotNull { m ->
+                    val shadow = shadowMap[m.shadowId] ?: return@mapNotNull null
+                    val profile = tacticalIntelligence.evaluateTacticalProfile(shadow)
+                    val assignedRole = runCatching { ShadowTacticalRole.valueOf(m.assignedTacticalRoleName) }
+                        .getOrDefault(profile.primaryRole)
+
+                    SquadMemberDetail(
+                        shadow = shadow,
+                        tacticalProfile = profile,
+                        assignedRole = assignedRole,
+                        positionIndex = m.positionIndex,
+                        isLeader = shadow.shadowId == squad.leaderShadowId
+                    )
+                }
+
+                val squadShadows = memberDetails.map { it.shadow }
+                val synergy = tacticalIntelligence.evaluateSquadSynergy(squadShadows, squad.category)
+
+                // Squad average capability vector
+                val avgCaps = if (memberDetails.isEmpty()) TacticalCapabilityVector.ZERO else {
+                    val count = memberDetails.size
+                    TacticalCapabilityVector(
+                        offensiveCapability = memberDetails.sumOf { it.tacticalProfile.capabilities.offensiveCapability } / count,
+                        defensiveCapability = memberDetails.sumOf { it.tacticalProfile.capabilities.defensiveCapability } / count,
+                        mobility = memberDetails.sumOf { it.tacticalProfile.capabilities.mobility } / count,
+                        rangedCapability = memberDetails.sumOf { it.tacticalProfile.capabilities.rangedCapability } / count,
+                        supportCapability = memberDetails.sumOf { it.tacticalProfile.capabilities.supportCapability } / count,
+                        strategicUtility = memberDetails.sumOf { it.tacticalProfile.capabilities.strategicUtility } / count,
+                        survivability = memberDetails.sumOf { it.tacticalProfile.capabilities.survivability } / count
+                    )
+                }
+
+                val readiness = if (memberDetails.isEmpty()) 0 else {
+                    val availableCount = memberDetails.count { it.tacticalProfile.isAvailable }
+                    ((availableCount.toFloat() / memberDetails.size) * synergy.synergyScore).toInt().coerceIn(0, 100)
+                }
+
+                SquadDetail(
+                    squad = squad,
+                    leader = leader,
+                    members = memberDetails,
+                    capabilityVector = avgCaps,
+                    synergyReport = synergy,
+                    readinessScore = readiness
+                )
+            }
+        }
+    }
+
+    fun observeActiveSquadDetailForOwner(
+        accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID
+    ): Flow<SquadDetail?> {
+        return observeSquadDetailsForOwner(accountOwnerId).map { squads ->
+            squads.find { it.squad.isActive }
+        }
+    }
+
+    suspend fun createSquad(
+        name: String,
+        category: ShadowSquadCategory,
+        memberShadowIds: List<String> = emptyList(),
+        leaderShadowId: String? = null,
+        accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID
+    ): Result<ShadowSquad> {
+        return squadManager.createSquad(name, category, memberShadowIds, leaderShadowId, accountOwnerId)
+    }
+
+    suspend fun updateSquad(
+        squadId: String,
+        name: String,
+        category: ShadowSquadCategory,
+        accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID
+    ): Result<ShadowSquad> {
+        return squadManager.updateSquad(squadId, name, category, accountOwnerId)
+    }
+
+    suspend fun addMemberToSquad(
+        squadId: String,
+        shadowId: String,
+        accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID
+    ): Result<ShadowSquad> {
+        return squadManager.addMemberToSquad(squadId, shadowId, accountOwnerId)
+    }
+
+    suspend fun removeMemberFromSquad(
+        squadId: String,
+        shadowId: String,
+        accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID
+    ): Result<ShadowSquad> {
+        return squadManager.removeMemberFromSquad(squadId, shadowId, accountOwnerId)
+    }
+
+    suspend fun setSquadLeader(
+        squadId: String,
+        leaderShadowId: String,
+        accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID
+    ): Result<ShadowSquad> {
+        return squadManager.setSquadLeader(squadId, leaderShadowId, accountOwnerId)
+    }
+
+    suspend fun setActiveSquad(
+        squadId: String,
+        accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID
+    ): Result<Unit> {
+        return squadManager.setActiveSquad(squadId, accountOwnerId)
+    }
+
+    suspend fun duplicateSquad(
+        squadId: String,
+        accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID
+    ): Result<ShadowSquad> {
+        return squadManager.duplicateSquad(squadId, accountOwnerId)
+    }
+
+    suspend fun deleteSquad(
+        squadId: String,
+        accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID
+    ): Result<Unit> {
+        return squadManager.deleteSquad(squadId, accountOwnerId)
+    }
+
+    fun getTacticalProfile(shadow: Shadow): ShadowTacticalProfile {
+        return tacticalIntelligence.evaluateTacticalProfile(shadow)
+    }
+
+    fun observeActiveFormationAssessment(
+        accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID
+    ): Flow<FormationTacticalAssessment?> {
+        return formationDao.observeActiveFormationForOwner(accountOwnerId).map { entity ->
+            val formation = entity?.toDomain() ?: return@map null
+            val shadows = shadowDao.getAllShadowsForOwnerOnce(accountOwnerId).map { it.toDomain() }
+            tacticalIntelligence.evaluateFormation(formation, shadows)
+        }
+    }
+
+    suspend fun getAvailableMissions(
+        accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID
+    ): List<MissionTacticalRequirement> {
+        return missionManager.getAvailableMissions(accountOwnerId)
+    }
+
+    suspend fun evaluateMissionSuitability(
+        mission: MissionTacticalRequirement,
+        squad: ShadowSquad?,
+        accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID
+    ): MissionSuitabilityEvaluation {
+        val roster = shadowDao.getAllShadowsForOwnerOnce(accountOwnerId).map { it.toDomain() }
+        return missionManager.evaluateMissionSuitability(mission, squad, roster)
+    }
+
+    suspend fun confirmAndDeployMissionAssignment(
+        missionId: String,
+        missionType: MissionType,
+        squadId: String?,
+        shadowIdsToDeploy: List<String>,
+        accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID
+    ): Result<com.example.data.local.entity.ShadowMissionAssignmentEntity> {
+        return missionManager.confirmAndDeployMissionAssignment(missionId, missionType, squadId, shadowIdsToDeploy, accountOwnerId)
+    }
+
+    suspend fun getTacticalAnalytics(
+        accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID
+    ): ShadowTacticalAnalytics {
+        return analyticsEngine.generateAnalytics(accountOwnerId)
+    }
+
+    suspend fun getTacticalAlerts(
+        accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID
+    ): List<TacticalAlert> {
+        return analyticsEngine.generateTacticalAlerts(accountOwnerId)
     }
 }

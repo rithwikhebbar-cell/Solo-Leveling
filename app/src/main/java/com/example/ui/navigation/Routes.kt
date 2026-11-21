@@ -360,6 +360,9 @@ data object ShadowArchiveRoute
 @Serializable
 data object ShadowSettingsRoute
 
+@Serializable
+data object ShadowCommandCenterRoute
+
 // ============================================================================
 // Milestone 12: SOCIAL MASTERY — Social Development Engine
 // ============================================================================

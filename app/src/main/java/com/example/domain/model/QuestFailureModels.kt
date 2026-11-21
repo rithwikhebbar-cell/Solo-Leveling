@@ -175,4 +175,8 @@ data class ConfirmedFailureRecord(
     val failureReasonCode: String,
     val policyVersion: Int = 1,
     val exemptionEvaluated: Boolean = false
-)
+) {
+    val failedAtEpochMs: Long get() = confirmedAtEpochMs
+    val reasonCode: String get() = failureReasonCode
+    val triggerSource: String get() = "SYSTEM"
+}

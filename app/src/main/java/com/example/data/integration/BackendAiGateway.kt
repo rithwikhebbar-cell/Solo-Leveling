@@ -97,15 +97,6 @@ class HttpBackendAiGateway(
     private val client: OkHttpClient = defaultHttpClient()
 ) : BackendAiGateway {
 
-    companion object {
-        fun defaultHttpClient(): OkHttpClient = OkHttpClient.Builder()
-            .connectionSpecs(listOf(ConnectionSpec.MODERN_TLS))
-            .connectTimeout(15, TimeUnit.SECONDS)
-            .readTimeout(35, TimeUnit.SECONDS)
-            .writeTimeout(15, TimeUnit.SECONDS)
-            .build()
-    }
-
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
     private val mediaType = "application/json; charset=utf-8".toMediaType()
 
@@ -266,6 +257,13 @@ class HttpBackendAiGateway(
     }
 
     companion object {
+        fun defaultHttpClient(): OkHttpClient = OkHttpClient.Builder()
+            .connectionSpecs(listOf(ConnectionSpec.MODERN_TLS))
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(35, TimeUnit.SECONDS)
+            .writeTimeout(15, TimeUnit.SECONDS)
+            .build()
+
         fun normalizeProxyEndpoint(rawUrl: String): String? {
             val trimmed = rawUrl.trim()
             if (trimmed.isBlank()) return null

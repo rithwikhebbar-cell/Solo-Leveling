@@ -23,6 +23,26 @@ import com.example.domain.model.MonarchSkillDefinition
 import com.example.domain.model.Shadow
 import com.example.data.local.dao.ShadowBondDao
 import com.example.data.local.dao.ShadowTacticalDao
+import com.example.data.local.dao.ShadowDominionDao
+import com.example.domain.engine.ShadowDominionEngine
+import com.example.domain.engine.ShadowTerritoryEngine
+import com.example.domain.engine.ShadowInfrastructureEngine
+import com.example.domain.engine.ShadowGarrisonEngine
+import com.example.domain.engine.ShadowDominionResearchEngine
+import com.example.domain.engine.ShadowDominionAiAdvisor
+import com.example.domain.model.ShadowDominion
+import com.example.domain.model.ShadowTerritory
+import com.example.domain.model.ShadowInfrastructure
+import com.example.domain.model.ShadowGarrison
+import com.example.domain.model.ShadowDominionResearch
+import com.example.domain.model.ShadowDominionActivity
+import com.example.domain.model.DominionTerritoryDetail
+import com.example.domain.model.DominionOverview
+import com.example.domain.model.DominionAiBriefing
+import com.example.domain.model.CitadelUpgradeType
+import com.example.domain.model.ShadowInfrastructureType
+import com.example.domain.model.ShadowTerritoryState
+import com.example.domain.model.ShadowDominionConfig
 import com.example.domain.engine.ShadowTacticalIntelligenceEngine
 import com.example.domain.engine.ShadowSquadEngine
 import com.example.domain.engine.ShadowMissionAssignmentEngine
@@ -82,6 +102,7 @@ class ShadowArmyRepository(
     private val resourceDao: ShadowResourceDao,
     private val shadowBondDao: ShadowBondDao? = null,
     private val shadowTacticalDao: ShadowTacticalDao? = null,
+    private val shadowDominionDao: ShadowDominionDao? = null,
     // Engines
     val monarchProgressionEngine: MonarchProgressionEngine,
     val extractionEngine: ShadowExtractionEngine,
@@ -92,6 +113,12 @@ class ShadowArmyRepository(
     squadEngine: ShadowSquadEngine? = null,
     missionAssignmentEngine: ShadowMissionAssignmentEngine? = null,
     tacticalAnalyticsEngine: ShadowTacticalAnalyticsEngine? = null,
+    dominionEngine: ShadowDominionEngine? = null,
+    territoryEngine: ShadowTerritoryEngine? = null,
+    infrastructureEngine: ShadowInfrastructureEngine? = null,
+    garrisonEngine: ShadowGarrisonEngine? = null,
+    researchEngine: ShadowDominionResearchEngine? = null,
+    dominionAiAdvisor: ShadowDominionAiAdvisor? = null,
     val database: SoloLevelingDatabase? = null,
     private val mutex: Mutex = Mutex()
 ) {
@@ -169,6 +196,92 @@ class ShadowArmyRepository(
             }, shadowDao, database, mutex)
         }
     }
+
+    val dominionDaoInstance: ShadowDominionDao = shadowDominionDao ?: database?.shadowDominionDao()
+        ?: run {
+            object : ShadowDominionDao {
+                override fun observeDominionForOwner(accountOwnerId: String) = kotlinx.coroutines.flow.flowOf(null)
+                override suspend fun getDominionForOwnerOnce(accountOwnerId: String) = null
+                override suspend fun upsertDominion(entity: com.example.data.local.entity.ShadowDominionEntity) = 1L
+                override suspend fun updateDominionLevelAndStage(accountOwnerId: String, level: Int, stageName: String, citadelLevel: Int, updatedAtMs: Long) = 1
+                override suspend fun updateTerritoryCount(accountOwnerId: String, count: Int, updatedAtMs: Long) = 1
+                override suspend fun updateInfrastructureCount(accountOwnerId: String, count: Int, updatedAtMs: Long) = 1
+                override fun observeTerritoriesForOwner(accountOwnerId: String) = kotlinx.coroutines.flow.flowOf(emptyList<com.example.data.local.entity.ShadowTerritoryEntity>())
+                override suspend fun getAllTerritoriesForOwnerOnce(accountOwnerId: String) = emptyList<com.example.data.local.entity.ShadowTerritoryEntity>()
+                override suspend fun getTerritoryById(territoryId: String, accountOwnerId: String) = null
+                override suspend fun insertTerritory(entity: com.example.data.local.entity.ShadowTerritoryEntity) = 1L
+                override suspend fun insertTerritories(entities: List<com.example.data.local.entity.ShadowTerritoryEntity>) = Unit
+                override suspend fun updateTerritory(entity: com.example.data.local.entity.ShadowTerritoryEntity) = 1
+                override suspend fun updateTerritoryExplorationState(territoryId: String, accountOwnerId: String, stateName: String, progressPercent: Int, endsAtMs: Long?) = 1
+                override suspend fun claimTerritory(territoryId: String, accountOwnerId: String, claimedAtMs: Long) = 1
+                override suspend fun assignSquadToTerritory(territoryId: String, accountOwnerId: String, squadId: String?) = 1
+                override fun observeInfrastructuresForOwner(accountOwnerId: String) = kotlinx.coroutines.flow.flowOf(emptyList<com.example.data.local.entity.ShadowInfrastructureEntity>())
+                override fun observeInfrastructuresForTerritory(territoryId: String, accountOwnerId: String) = kotlinx.coroutines.flow.flowOf(emptyList<com.example.data.local.entity.ShadowInfrastructureEntity>())
+                override suspend fun getAllInfrastructuresForOwnerOnce(accountOwnerId: String) = emptyList<com.example.data.local.entity.ShadowInfrastructureEntity>()
+                override suspend fun getInfrastructuresForTerritoryOnce(territoryId: String, accountOwnerId: String) = emptyList<com.example.data.local.entity.ShadowInfrastructureEntity>()
+                override suspend fun getInfrastructureById(structureId: String, accountOwnerId: String) = null
+                override suspend fun insertInfrastructure(entity: com.example.data.local.entity.ShadowInfrastructureEntity) = 1L
+                override suspend fun updateInfrastructure(entity: com.example.data.local.entity.ShadowInfrastructureEntity) = 1
+                override suspend fun deleteInfrastructure(structureId: String, accountOwnerId: String) = 1
+                override fun observeGarrisonsForOwner(accountOwnerId: String) = kotlinx.coroutines.flow.flowOf(emptyList<com.example.data.local.entity.ShadowGarrisonEntity>())
+                override fun observeGarrisonForTerritory(territoryId: String, accountOwnerId: String) = kotlinx.coroutines.flow.flowOf(null)
+                override suspend fun getAllGarrisonsForOwnerOnce(accountOwnerId: String) = emptyList<com.example.data.local.entity.ShadowGarrisonEntity>()
+                override suspend fun getGarrisonForTerritoryOnce(territoryId: String, accountOwnerId: String) = null
+                override suspend fun getGarrisonById(garrisonId: String, accountOwnerId: String) = null
+                override suspend fun upsertGarrison(entity: com.example.data.local.entity.ShadowGarrisonEntity) = 1L
+                override suspend fun deleteGarrison(garrisonId: String, accountOwnerId: String) = 1
+                override fun observeResearchForOwner(accountOwnerId: String) = kotlinx.coroutines.flow.flowOf(emptyList<com.example.data.local.entity.ShadowDominionResearchEntity>())
+                override suspend fun getAllResearchForOwnerOnce(accountOwnerId: String) = emptyList<com.example.data.local.entity.ShadowDominionResearchEntity>()
+                override suspend fun getResearchByProjectKey(accountOwnerId: String, projectKey: String) = null
+                override suspend fun upsertResearch(entity: com.example.data.local.entity.ShadowDominionResearchEntity) = 1L
+                override fun observeRecentActivitiesForOwner(accountOwnerId: String, limit: Int) = kotlinx.coroutines.flow.flowOf(emptyList<com.example.data.local.entity.ShadowDominionActivityEntity>())
+                override suspend fun getAllActivitiesForOwnerOnce(accountOwnerId: String) = emptyList<com.example.data.local.entity.ShadowDominionActivityEntity>()
+                override suspend fun insertActivity(entity: com.example.data.local.entity.ShadowDominionActivityEntity) = 1L
+            }
+        }
+
+    val dominionManager: ShadowDominionEngine = dominionEngine ?: ShadowDominionEngine(
+        database = database,
+        shadowDominionDao = dominionDaoInstance,
+        shadowResourceDao = resourceDao,
+        mutex = mutex
+    )
+
+    val territoryManager: ShadowTerritoryEngine = territoryEngine ?: ShadowTerritoryEngine(
+        database = database,
+        shadowDominionDao = dominionDaoInstance,
+        shadowSquadEngine = squadManager,
+        shadowDeploymentEngine = deploymentEngine,
+        shadowDominionEngine = dominionManager,
+        mutex = mutex
+    )
+
+    val infrastructureManager: ShadowInfrastructureEngine = infrastructureEngine ?: ShadowInfrastructureEngine(
+        database = database,
+        shadowDominionDao = dominionDaoInstance,
+        shadowResourceDao = resourceDao,
+        shadowDominionEngine = dominionManager,
+        mutex = mutex
+    )
+
+    val garrisonManager: ShadowGarrisonEngine = garrisonEngine ?: ShadowGarrisonEngine(
+        database = database,
+        shadowDominionDao = dominionDaoInstance,
+        shadowSquadEngine = squadManager,
+        shadowDeploymentEngine = deploymentEngine,
+        tacticalIntelligenceEngine = tacticalIntelligence,
+        mutex = mutex
+    )
+
+    val researchManager: ShadowDominionResearchEngine = researchEngine ?: ShadowDominionResearchEngine(
+        database = database,
+        shadowDominionDao = dominionDaoInstance,
+        shadowResourceDao = resourceDao,
+        shadowDominionEngine = dominionManager,
+        mutex = mutex
+    )
+
+    val dominionAdvisor: ShadowDominionAiAdvisor = dominionAiAdvisor ?: ShadowDominionAiAdvisor()
 
     private suspend fun <T> withLockedTransaction(block: suspend () -> T): T {
         return mutex.withLock {
@@ -921,5 +1034,171 @@ class ShadowArmyRepository(
         accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID
     ): List<TacticalAlert> {
         return analyticsEngine.generateTacticalAlerts(accountOwnerId)
+    }
+
+    // -------------------------------------------------------------------------
+    // PHASE 6.6 — DOMINION REPOSITORY APIS
+    // -------------------------------------------------------------------------
+
+    fun observeDominionForOwner(
+        accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID
+    ): Flow<ShadowDominion?> {
+        return dominionDaoInstance.observeDominionForOwner(accountOwnerId).map { it?.toDomain() }
+    }
+
+    fun observeTerritoriesForOwner(
+        accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID
+    ): Flow<List<ShadowTerritory>> {
+        return dominionDaoInstance.observeTerritoriesForOwner(accountOwnerId).map { list -> list.map { it.toDomain() } }
+    }
+
+    fun observeInfrastructuresForOwner(
+        accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID
+    ): Flow<List<ShadowInfrastructure>> {
+        return dominionDaoInstance.observeInfrastructuresForOwner(accountOwnerId).map { list -> list.map { it.toDomain() } }
+    }
+
+    fun observeGarrisonsForOwner(
+        accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID
+    ): Flow<List<ShadowGarrison>> {
+        return dominionDaoInstance.observeGarrisonsForOwner(accountOwnerId).map { list -> list.map { it.toDomain() } }
+    }
+
+    fun observeResearchForOwner(
+        accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID
+    ): Flow<List<ShadowDominionResearch>> {
+        return dominionDaoInstance.observeResearchForOwner(accountOwnerId).map { list -> list.map { it.toDomain() } }
+    }
+
+    fun observeDominionActivities(
+        accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID,
+        limit: Int = 50
+    ): Flow<List<ShadowDominionActivity>> {
+        return dominionDaoInstance.observeRecentActivitiesForOwner(accountOwnerId, limit).map { list -> list.map { it.toDomain() } }
+    }
+
+    suspend fun getDominionOverview(
+        accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID
+    ): DominionOverview? {
+        val dominion = dominionManager.getDominion(accountOwnerId) ?: return null
+        val territories = dominionDaoInstance.getAllTerritoriesForOwnerOnce(accountOwnerId).map { it.toDomain() }
+        val structures = dominionDaoInstance.getAllInfrastructuresForOwnerOnce(accountOwnerId).map { it.toDomain() }
+        val garrisons = dominionDaoInstance.getAllGarrisonsForOwnerOnce(accountOwnerId)
+        val alerts = garrisonManager.evaluateRealmSecurityAlerts(accountOwnerId)
+
+        val resourceBalances = ShadowResourceType.entries.associateWith {
+            resourceDao.getCurrentBalanceForOwner(accountOwnerId, it.name)
+        }
+
+        val territorySummary = territories.groupBy { it.state }.mapValues { it.value.size }
+
+        val extractors = structures.filter { it.structureType == ShadowInfrastructureType.RESOURCE_EXTRACTOR }
+        val yieldPerHour = extractors.sumOf { ShadowDominionConfig.getExtractorHourlyYield(it.level) }
+
+        val citadelUpgrades = CitadelUpgradeType.entries.associateWith { dominion.citadelLevel }
+
+        return DominionOverview(
+            dominion = dominion,
+            citadelUpgrades = citadelUpgrades,
+            resourceBalances = resourceBalances,
+            territorySummary = territorySummary,
+            totalResourceYieldPerHour = yieldPerHour,
+            activeGarrisonsCount = garrisons.size,
+            alerts = alerts
+        )
+    }
+
+    suspend fun getTerritoryDetail(
+        accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID,
+        territoryId: String
+    ): DominionTerritoryDetail? {
+        return territoryManager.getTerritoryDetail(accountOwnerId, territoryId)
+    }
+
+    suspend fun ensureDominionInitialized(
+        accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID
+    ): ShadowDominion {
+        return dominionManager.ensureDominionInitialized(accountOwnerId)
+    }
+
+    suspend fun upgradeCitadel(
+        accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID,
+        upgradeType: CitadelUpgradeType
+    ): Result<ShadowDominion> {
+        return dominionManager.upgradeCitadel(accountOwnerId, upgradeType)
+    }
+
+    suspend fun discoverTerritory(
+        accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID,
+        territoryId: String
+    ): Result<ShadowTerritory> {
+        return territoryManager.discoverTerritory(accountOwnerId, territoryId)
+    }
+
+    suspend fun startTerritoryExploration(
+        accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID,
+        territoryId: String,
+        squadId: String
+    ): Result<ShadowTerritory> {
+        return territoryManager.startTerritoryExploration(accountOwnerId, territoryId, squadId)
+    }
+
+    suspend fun claimTerritory(
+        accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID,
+        territoryId: String
+    ): Result<ShadowTerritory> {
+        return territoryManager.claimTerritory(accountOwnerId, territoryId)
+    }
+
+    suspend fun constructInfrastructure(
+        accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID,
+        territoryId: String,
+        structureType: ShadowInfrastructureType
+    ): Result<ShadowInfrastructure> {
+        return infrastructureManager.constructInfrastructure(accountOwnerId, territoryId, structureType)
+    }
+
+    suspend fun upgradeInfrastructure(
+        accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID,
+        structureId: String
+    ): Result<ShadowInfrastructure> {
+        return infrastructureManager.upgradeInfrastructure(accountOwnerId, structureId)
+    }
+
+    suspend fun collectResources(
+        accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID,
+        structureId: String
+    ): Result<Int> {
+        return infrastructureManager.collectResources(accountOwnerId, structureId)
+    }
+
+    suspend fun stationGarrison(
+        accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID,
+        territoryId: String,
+        squadId: String
+    ): Result<ShadowGarrison> {
+        return garrisonManager.stationGarrison(accountOwnerId, territoryId, squadId)
+    }
+
+    suspend fun recallGarrison(
+        accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID,
+        garrisonId: String
+    ): Result<Unit> {
+        return garrisonManager.recallGarrison(accountOwnerId, garrisonId)
+    }
+
+    suspend fun conductResearch(
+        accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID,
+        projectKey: String
+    ): Result<ShadowDominionResearch> {
+        return researchManager.conductResearch(accountOwnerId, projectKey)
+    }
+
+    suspend fun getDominionAiBriefing(
+        accountOwnerId: String = DEFAULT_SHADOW_ACCOUNT_OWNER_ID
+    ): DominionAiBriefing {
+        val overview = getDominionOverview(accountOwnerId)
+        val territories = dominionDaoInstance.getAllTerritoriesForOwnerOnce(accountOwnerId).map { it.toDomain() }
+        return dominionAdvisor.buildDominionBriefing(overview, territories)
     }
 }

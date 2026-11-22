@@ -136,7 +136,9 @@ enum class ShadowDeploymentCategory(val label: String, val description: String) 
     DISCIPLINE("Discipline", "Habit reminders, routine monitoring, consistency reports."),
     STRATEGIC_PLANNING("Strategic Planning", "Task prioritization, weekly planning, goal review."),
     DUNGEON_SUPPORT("Dungeon Support", "Challenge preparation, objective summaries, progress analysis."),
-    RECOVERY_SUPPORT("Recovery Support", "Recovery dashboard awareness, rest reminders, workload review.")
+    RECOVERY_SUPPORT("Recovery Support", "Recovery dashboard awareness, rest reminders, workload review."),
+    TERRITORY_DEFENSE("Territory Defense", "Stationed garrison defending a controlled Dominion territory."),
+    DOMINION_EXPLORATION("Dominion Exploration", "Assigned expedition squad scouting and exploring uncharted territories.")
 }
 
 // ----------------------------------------------------------------------------
@@ -463,7 +465,8 @@ enum class ShadowResourceType(val label: String) {
     SHADOW_ESSENCE("Shadow Essence"),
     MONARCH_FRAGMENTS("Monarch Fragments"),
     EVOLUTION_CORES("Evolution Cores"),
-    SHADOW_CRYSTALS("Shadow Crystals")
+    SHADOW_CRYSTALS("Shadow Crystals"),
+    ABYSSAL_MATERIALS("Abyssal Materials")
 }
 
 enum class ShadowResourceTransactionType(val label: String) {

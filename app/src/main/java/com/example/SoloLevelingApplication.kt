@@ -332,6 +332,7 @@ class AppContainer(application: Application) {
             resourceDao = database.shadowResourceDao(),
             shadowBondDao = database.shadowBondDao(),
             shadowTacticalDao = database.shadowTacticalDao(),
+            shadowDominionDao = database.shadowDominionDao(),
             monarchProgressionEngine = monarchProgressionEngine,
             extractionEngine = extractionEngine,
             evolutionEngine = evolutionEngine,

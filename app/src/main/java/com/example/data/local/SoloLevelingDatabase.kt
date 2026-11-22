@@ -98,6 +98,7 @@ import com.example.data.local.dao.ShadowEvidenceClaimDao
 import com.example.data.local.dao.ShadowResonanceDao
 import com.example.data.local.dao.ShadowBondDao
 import com.example.data.local.dao.ShadowTacticalDao
+import com.example.data.local.dao.ShadowDominionDao
 import com.example.data.local.dao.SkillDao
 import com.example.data.local.dao.StudySessionDao
 import com.example.data.local.dao.SyncConflictDao
@@ -131,6 +132,12 @@ import com.example.data.local.entity.ShadowBondMilestoneEntity
 import com.example.data.local.entity.ShadowSquadEntity
 import com.example.data.local.entity.ShadowSquadMemberEntity
 import com.example.data.local.entity.ShadowMissionAssignmentEntity
+import com.example.data.local.entity.ShadowDominionEntity
+import com.example.data.local.entity.ShadowTerritoryEntity
+import com.example.data.local.entity.ShadowInfrastructureEntity
+import com.example.data.local.entity.ShadowGarrisonEntity
+import com.example.data.local.entity.ShadowDominionResearchEntity
+import com.example.data.local.entity.ShadowDominionActivityEntity
 import com.example.data.local.entity.AcademicChapterEntity
 import com.example.data.local.entity.AcademicExamEntity
 import com.example.data.local.entity.AcademicModuleEntity
@@ -378,9 +385,16 @@ import com.example.domain.model.VerificationStatus
         // Milestone 12 — Shadow Army Intelligence & Tactical Command (Phase 6.5)
         ShadowSquadEntity::class,
         ShadowSquadMemberEntity::class,
-        ShadowMissionAssignmentEntity::class
+        ShadowMissionAssignmentEntity::class,
+        // Milestone 12 — Shadow Army Dominion & Realm Expansion (Phase 6.6)
+        ShadowDominionEntity::class,
+        ShadowTerritoryEntity::class,
+        ShadowInfrastructureEntity::class,
+        ShadowGarrisonEntity::class,
+        ShadowDominionResearchEntity::class,
+        ShadowDominionActivityEntity::class
     ],
-    version = 22,
+    version = 23,
     exportSchema = false
 )
 abstract class SoloLevelingDatabase : RoomDatabase() {
@@ -450,6 +464,7 @@ abstract class SoloLevelingDatabase : RoomDatabase() {
     abstract fun shadowResonanceDao(): ShadowResonanceDao
     abstract fun shadowBondDao(): ShadowBondDao
     abstract fun shadowTacticalDao(): ShadowTacticalDao
+    abstract fun shadowDominionDao(): ShadowDominionDao
 
     // Milestone 12 — Social Mastery DAOs
     abstract fun socialProfileDao(): SocialProfileDao
@@ -3870,6 +3885,138 @@ abstract class SoloLevelingDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_22_23 = object : Migration(22, 23) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // 1. shadow_dominion
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `shadow_dominion` (
+                        `dominionId` TEXT NOT NULL,
+                        `accountOwnerId` TEXT NOT NULL,
+                        `dominionName` TEXT NOT NULL,
+                        `dominionLevel` INTEGER NOT NULL,
+                        `developmentStageName` TEXT NOT NULL,
+                        `citadelLevel` INTEGER NOT NULL,
+                        `controlledTerritoriesCount` INTEGER NOT NULL,
+                        `infrastructureCount` INTEGER NOT NULL,
+                        `totalDevelopmentEvents` INTEGER NOT NULL,
+                        `createdAtEpochMs` INTEGER NOT NULL,
+                        `updatedAtEpochMs` INTEGER NOT NULL,
+                        PRIMARY KEY(`dominionId`),
+                        FOREIGN KEY(`accountOwnerId`) REFERENCES `shadow_monarch_profile`(`accountOwnerId`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_shadow_dominion_accountOwnerId` ON `shadow_dominion` (`accountOwnerId`)")
+
+                // 2. shadow_territories
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `shadow_territories` (
+                        `territoryId` TEXT NOT NULL,
+                        `accountOwnerId` TEXT NOT NULL,
+                        `name` TEXT NOT NULL,
+                        `description` TEXT NOT NULL,
+                        `categoryName` TEXT NOT NULL,
+                        `stateName` TEXT NOT NULL,
+                        `developmentLevel` INTEGER NOT NULL,
+                        `defenseRating` INTEGER NOT NULL,
+                        `assignedSquadId` TEXT,
+                        `discoveredAtEpochMs` INTEGER,
+                        `claimedAtEpochMs` INTEGER,
+                        `explorationProgressPercent` INTEGER NOT NULL,
+                        `explorationEndsAtEpochMs` INTEGER,
+                        PRIMARY KEY(`territoryId`),
+                        FOREIGN KEY(`accountOwnerId`) REFERENCES `shadow_monarch_profile`(`accountOwnerId`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_shadow_territories_accountOwnerId_territoryId` ON `shadow_territories` (`accountOwnerId`, `territoryId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_shadow_territories_accountOwnerId_stateName` ON `shadow_territories` (`accountOwnerId`, `stateName`)")
+
+                // 3. shadow_infrastructures
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `shadow_infrastructures` (
+                        `structureId` TEXT NOT NULL,
+                        `accountOwnerId` TEXT NOT NULL,
+                        `territoryId` TEXT NOT NULL,
+                        `structureTypeName` TEXT NOT NULL,
+                        `level` INTEGER NOT NULL,
+                        `statusName` TEXT NOT NULL,
+                        `lastResourceCollectionEpochMs` INTEGER NOT NULL,
+                        `createdAtEpochMs` INTEGER NOT NULL,
+                        `updatedAtEpochMs` INTEGER NOT NULL,
+                        PRIMARY KEY(`structureId`),
+                        FOREIGN KEY(`accountOwnerId`) REFERENCES `shadow_monarch_profile`(`accountOwnerId`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_shadow_infrastructures_accountOwnerId_territoryId` ON `shadow_infrastructures` (`accountOwnerId`, `territoryId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_shadow_infrastructures_accountOwnerId_structureTypeName` ON `shadow_infrastructures` (`accountOwnerId`, `structureTypeName`)")
+
+                // 4. shadow_garrisons
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `shadow_garrisons` (
+                        `garrisonId` TEXT NOT NULL,
+                        `accountOwnerId` TEXT NOT NULL,
+                        `territoryId` TEXT NOT NULL,
+                        `squadId` TEXT NOT NULL,
+                        `assignedAtEpochMs` INTEGER NOT NULL,
+                        `defensiveRating` INTEGER NOT NULL,
+                        `readinessStatus` TEXT NOT NULL,
+                        PRIMARY KEY(`garrisonId`),
+                        FOREIGN KEY(`accountOwnerId`) REFERENCES `shadow_monarch_profile`(`accountOwnerId`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_shadow_garrisons_accountOwnerId_territoryId` ON `shadow_garrisons` (`accountOwnerId`, `territoryId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_shadow_garrisons_accountOwnerId_squadId` ON `shadow_garrisons` (`accountOwnerId`, `squadId`)")
+
+                // 5. shadow_dominion_research
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `shadow_dominion_research` (
+                        `researchId` TEXT NOT NULL,
+                        `accountOwnerId` TEXT NOT NULL,
+                        `branchName` TEXT NOT NULL,
+                        `projectKey` TEXT NOT NULL,
+                        `title` TEXT NOT NULL,
+                        `description` TEXT NOT NULL,
+                        `level` INTEGER NOT NULL,
+                        `isCompleted` INTEGER NOT NULL,
+                        `startedAtEpochMs` INTEGER,
+                        `completedAtEpochMs` INTEGER,
+                        `unlockedEffectsSummary` TEXT NOT NULL,
+                        PRIMARY KEY(`researchId`),
+                        FOREIGN KEY(`accountOwnerId`) REFERENCES `shadow_monarch_profile`(`accountOwnerId`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_shadow_dominion_research_accountOwnerId_projectKey` ON `shadow_dominion_research` (`accountOwnerId`, `projectKey`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_shadow_dominion_research_accountOwnerId_branchName` ON `shadow_dominion_research` (`accountOwnerId`, `branchName`)")
+
+                // 6. shadow_dominion_activities
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `shadow_dominion_activities` (
+                        `activityId` TEXT NOT NULL,
+                        `accountOwnerId` TEXT NOT NULL,
+                        `activityTypeName` TEXT NOT NULL,
+                        `title` TEXT NOT NULL,
+                        `description` TEXT NOT NULL,
+                        `timestampEpochMs` INTEGER NOT NULL,
+                        `entityReferenceId` TEXT NOT NULL,
+                        PRIMARY KEY(`activityId`),
+                        FOREIGN KEY(`accountOwnerId`) REFERENCES `shadow_monarch_profile`(`accountOwnerId`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_shadow_dominion_activities_accountOwnerId_timestampEpochMs` ON `shadow_dominion_activities` (`accountOwnerId`, `timestampEpochMs`)")
+            }
+        }
+
         fun getInstance(context: Context): SoloLevelingDatabase {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
@@ -3898,7 +4045,8 @@ abstract class SoloLevelingDatabase : RoomDatabase() {
                         MIGRATION_18_19,
                         MIGRATION_19_20,
                         MIGRATION_20_21,
-                        MIGRATION_21_22
+                        MIGRATION_21_22,
+                        MIGRATION_22_23
                     )
                     .build()
                     .also { INSTANCE = it }

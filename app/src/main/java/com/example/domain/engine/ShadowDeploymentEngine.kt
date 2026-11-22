@@ -39,7 +39,9 @@ class ShadowDeploymentEngine(
             ShadowDeploymentCategory.DISCIPLINE to listOf(ShadowClass.SUPPORT, ShadowClass.GUARDIAN),
             ShadowDeploymentCategory.STRATEGIC_PLANNING to listOf(ShadowClass.TACTICIAN, ShadowClass.ARCANIST),
             ShadowDeploymentCategory.DUNGEON_SUPPORT to listOf(ShadowClass.VANGUARD, ShadowClass.TACTICIAN),
-            ShadowDeploymentCategory.RECOVERY_SUPPORT to listOf(ShadowClass.GUARDIAN, ShadowClass.SUPPORT)
+            ShadowDeploymentCategory.RECOVERY_SUPPORT to listOf(ShadowClass.GUARDIAN, ShadowClass.SUPPORT),
+            ShadowDeploymentCategory.TERRITORY_DEFENSE to listOf(ShadowClass.GUARDIAN, ShadowClass.VANGUARD, ShadowClass.TACTICIAN),
+            ShadowDeploymentCategory.DOMINION_EXPLORATION to listOf(ShadowClass.SCOUT, ShadowClass.ASSASSIN, ShadowClass.RANGER)
         )
     }
 

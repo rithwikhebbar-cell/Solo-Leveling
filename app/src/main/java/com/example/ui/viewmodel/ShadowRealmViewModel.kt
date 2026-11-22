@@ -35,6 +35,17 @@ import com.example.domain.model.MissionSuitabilityEvaluation
 import com.example.domain.model.MissionType
 import com.example.domain.model.ShadowTacticalAnalytics
 import com.example.domain.model.TacticalAlert
+import com.example.domain.model.ShadowDominion
+import com.example.domain.model.ShadowTerritory
+import com.example.domain.model.ShadowInfrastructure
+import com.example.domain.model.ShadowGarrison
+import com.example.domain.model.ShadowDominionResearch
+import com.example.domain.model.ShadowDominionActivity
+import com.example.domain.model.DominionTerritoryDetail
+import com.example.domain.model.DominionOverview
+import com.example.domain.model.DominionAiBriefing
+import com.example.domain.model.CitadelUpgradeType
+import com.example.domain.model.ShadowInfrastructureType
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -157,6 +168,31 @@ class ShadowRealmViewModel(
 
     private val _tacticalAlerts = MutableStateFlow<List<TacticalAlert>>(emptyList())
     val tacticalAlerts: StateFlow<List<TacticalAlert>> = _tacticalAlerts.asStateFlow()
+
+    // Phase 6.6 — Dominion StateFlows
+    private val _dominionOverview = MutableStateFlow<DominionOverview?>(null)
+    val dominionOverview: StateFlow<DominionOverview?> = _dominionOverview.asStateFlow()
+
+    private val _allTerritories = MutableStateFlow<List<ShadowTerritory>>(emptyList())
+    val allTerritories: StateFlow<List<ShadowTerritory>> = _allTerritories.asStateFlow()
+
+    private val _selectedTerritoryDetail = MutableStateFlow<DominionTerritoryDetail?>(null)
+    val selectedTerritoryDetail: StateFlow<DominionTerritoryDetail?> = _selectedTerritoryDetail.asStateFlow()
+
+    private val _allInfrastructures = MutableStateFlow<List<ShadowInfrastructure>>(emptyList())
+    val allInfrastructures: StateFlow<List<ShadowInfrastructure>> = _allInfrastructures.asStateFlow()
+
+    private val _allGarrisons = MutableStateFlow<List<ShadowGarrison>>(emptyList())
+    val allGarrisons: StateFlow<List<ShadowGarrison>> = _allGarrisons.asStateFlow()
+
+    private val _allResearch = MutableStateFlow<List<ShadowDominionResearch>>(emptyList())
+    val allResearch: StateFlow<List<ShadowDominionResearch>> = _allResearch.asStateFlow()
+
+    private val _dominionActivities = MutableStateFlow<List<ShadowDominionActivity>>(emptyList())
+    val dominionActivities: StateFlow<List<ShadowDominionActivity>> = _dominionActivities.asStateFlow()
+
+    private val _dominionAiBriefing = MutableStateFlow<DominionAiBriefing?>(null)
+    val dominionAiBriefing: StateFlow<DominionAiBriefing?> = _dominionAiBriefing.asStateFlow()
 
     private var ownerScopeJob: Job? = null
     private var shadowBondJob: Job? = null
@@ -290,6 +326,42 @@ class ShadowRealmViewModel(
             launch {
                 repository.observeActiveFormationAssessment(owner).collect { assessment ->
                     _formationAssessment.value = assessment
+                }
+            }
+
+            launch {
+                repository.observeDominionForOwner(owner).collect {
+                    loadDominionOverview()
+                }
+            }
+
+            launch {
+                repository.observeTerritoriesForOwner(owner).collect { territories ->
+                    _allTerritories.value = territories
+                }
+            }
+
+            launch {
+                repository.observeInfrastructuresForOwner(owner).collect { structures ->
+                    _allInfrastructures.value = structures
+                }
+            }
+
+            launch {
+                repository.observeGarrisonsForOwner(owner).collect { garrisons ->
+                    _allGarrisons.value = garrisons
+                }
+            }
+
+            launch {
+                repository.observeResearchForOwner(owner).collect { research ->
+                    _allResearch.value = research
+                }
+            }
+
+            launch {
+                repository.observeDominionActivities(owner).collect { activities ->
+                    _dominionActivities.value = activities
                 }
             }
 
@@ -856,6 +928,229 @@ class ShadowRealmViewModel(
             )
             result.onSuccess {
                 loadTacticalCommandCenter()
+                onComplete?.invoke(true, null)
+            }.onFailure { err ->
+                _uiState.value = _uiState.value.copy(error = err.message)
+                onComplete?.invoke(false, err.message)
+            }
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // PHASE 6.6 — DOMINION ACTIONS
+    // -------------------------------------------------------------------------
+
+    fun loadDominionOverview() {
+        val owner = _activeAccountOwnerId.value
+        viewModelScope.launch {
+            _dominionOverview.value = repository.getDominionOverview(owner)
+            _dominionAiBriefing.value = repository.getDominionAiBriefing(owner)
+        }
+    }
+
+    fun initializeDominion(onComplete: ((Boolean, String?) -> Unit)? = null) {
+        val owner = _activeAccountOwnerId.value
+        viewModelScope.launch {
+            runCatching {
+                repository.ensureDominionInitialized(owner)
+            }.onSuccess {
+                loadDominionOverview()
+                onComplete?.invoke(true, null)
+            }.onFailure { err ->
+                _uiState.value = _uiState.value.copy(error = err.message)
+                onComplete?.invoke(false, err.message)
+            }
+        }
+    }
+
+    fun upgradeCitadel(
+        upgradeType: CitadelUpgradeType,
+        onComplete: ((Boolean, String?) -> Unit)? = null
+    ) {
+        val owner = _activeAccountOwnerId.value
+        viewModelScope.launch {
+            val res = repository.upgradeCitadel(owner, upgradeType)
+            res.onSuccess {
+                loadDominionOverview()
+                refreshResourceBalances(owner)
+                onComplete?.invoke(true, null)
+            }.onFailure { err ->
+                _uiState.value = _uiState.value.copy(error = err.message)
+                onComplete?.invoke(false, err.message)
+            }
+        }
+    }
+
+    fun selectTerritory(territoryId: String) {
+        val owner = _activeAccountOwnerId.value
+        viewModelScope.launch {
+            _selectedTerritoryDetail.value = repository.getTerritoryDetail(owner, territoryId)
+        }
+    }
+
+    fun discoverTerritory(
+        territoryId: String,
+        onComplete: ((Boolean, String?) -> Unit)? = null
+    ) {
+        val owner = _activeAccountOwnerId.value
+        viewModelScope.launch {
+            val res = repository.discoverTerritory(owner, territoryId)
+            res.onSuccess {
+                loadDominionOverview()
+                selectTerritory(territoryId)
+                onComplete?.invoke(true, null)
+            }.onFailure { err ->
+                _uiState.value = _uiState.value.copy(error = err.message)
+                onComplete?.invoke(false, err.message)
+            }
+        }
+    }
+
+    fun startTerritoryExploration(
+        territoryId: String,
+        squadId: String,
+        onComplete: ((Boolean, String?) -> Unit)? = null
+    ) {
+        val owner = _activeAccountOwnerId.value
+        viewModelScope.launch {
+            val res = repository.startTerritoryExploration(owner, territoryId, squadId)
+            res.onSuccess {
+                loadDominionOverview()
+                selectTerritory(territoryId)
+                onComplete?.invoke(true, null)
+            }.onFailure { err ->
+                _uiState.value = _uiState.value.copy(error = err.message)
+                onComplete?.invoke(false, err.message)
+            }
+        }
+    }
+
+    fun claimTerritory(
+        territoryId: String,
+        onComplete: ((Boolean, String?) -> Unit)? = null
+    ) {
+        val owner = _activeAccountOwnerId.value
+        viewModelScope.launch {
+            val res = repository.claimTerritory(owner, territoryId)
+            res.onSuccess {
+                loadDominionOverview()
+                selectTerritory(territoryId)
+                onComplete?.invoke(true, null)
+            }.onFailure { err ->
+                _uiState.value = _uiState.value.copy(error = err.message)
+                onComplete?.invoke(false, err.message)
+            }
+        }
+    }
+
+    fun constructInfrastructure(
+        territoryId: String,
+        structureType: ShadowInfrastructureType,
+        onComplete: ((Boolean, String?) -> Unit)? = null
+    ) {
+        val owner = _activeAccountOwnerId.value
+        viewModelScope.launch {
+            val res = repository.constructInfrastructure(owner, territoryId, structureType)
+            res.onSuccess {
+                loadDominionOverview()
+                selectTerritory(territoryId)
+                refreshResourceBalances(owner)
+                onComplete?.invoke(true, null)
+            }.onFailure { err ->
+                _uiState.value = _uiState.value.copy(error = err.message)
+                onComplete?.invoke(false, err.message)
+            }
+        }
+    }
+
+    fun upgradeInfrastructure(
+        structureId: String,
+        territoryId: String,
+        onComplete: ((Boolean, String?) -> Unit)? = null
+    ) {
+        val owner = _activeAccountOwnerId.value
+        viewModelScope.launch {
+            val res = repository.upgradeInfrastructure(owner, structureId)
+            res.onSuccess {
+                loadDominionOverview()
+                selectTerritory(territoryId)
+                refreshResourceBalances(owner)
+                onComplete?.invoke(true, null)
+            }.onFailure { err ->
+                _uiState.value = _uiState.value.copy(error = err.message)
+                onComplete?.invoke(false, err.message)
+            }
+        }
+    }
+
+    fun collectResources(
+        structureId: String,
+        territoryId: String,
+        onComplete: ((Boolean, String?) -> Unit)? = null
+    ) {
+        val owner = _activeAccountOwnerId.value
+        viewModelScope.launch {
+            val res = repository.collectResources(owner, structureId)
+            res.onSuccess { collected ->
+                loadDominionOverview()
+                selectTerritory(territoryId)
+                refreshResourceBalances(owner)
+                onComplete?.invoke(true, "Collected $collected resources")
+            }.onFailure { err ->
+                _uiState.value = _uiState.value.copy(error = err.message)
+                onComplete?.invoke(false, err.message)
+            }
+        }
+    }
+
+    fun stationGarrison(
+        territoryId: String,
+        squadId: String,
+        onComplete: ((Boolean, String?) -> Unit)? = null
+    ) {
+        val owner = _activeAccountOwnerId.value
+        viewModelScope.launch {
+            val res = repository.stationGarrison(owner, territoryId, squadId)
+            res.onSuccess {
+                loadDominionOverview()
+                selectTerritory(territoryId)
+                onComplete?.invoke(true, null)
+            }.onFailure { err ->
+                _uiState.value = _uiState.value.copy(error = err.message)
+                onComplete?.invoke(false, err.message)
+            }
+        }
+    }
+
+    fun recallGarrison(
+        garrisonId: String,
+        territoryId: String,
+        onComplete: ((Boolean, String?) -> Unit)? = null
+    ) {
+        val owner = _activeAccountOwnerId.value
+        viewModelScope.launch {
+            val res = repository.recallGarrison(owner, garrisonId)
+            res.onSuccess {
+                loadDominionOverview()
+                selectTerritory(territoryId)
+                onComplete?.invoke(true, null)
+            }.onFailure { err ->
+                _uiState.value = _uiState.value.copy(error = err.message)
+                onComplete?.invoke(false, err.message)
+            }
+        }
+    }
+
+    fun conductResearch(
+        projectKey: String,
+        onComplete: ((Boolean, String?) -> Unit)? = null
+    ) {
+        val owner = _activeAccountOwnerId.value
+        viewModelScope.launch {
+            val res = repository.conductResearch(owner, projectKey)
+            res.onSuccess {
+                loadDominionOverview()
+                refreshResourceBalances(owner)
                 onComplete?.invoke(true, null)
             }.onFailure { err ->
                 _uiState.value = _uiState.value.copy(error = err.message)

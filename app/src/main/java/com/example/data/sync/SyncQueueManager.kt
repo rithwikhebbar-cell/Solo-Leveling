@@ -56,8 +56,12 @@ class SyncQueueManager(private val database: SoloLevelingDatabase) {
     ) {
         val compositeKey = "${entityType.name}:$localKey"
         val existingMeta = metaDao.getByCompositeKey(compositeKey)
-        val cloudUuid = existingMeta?.cloudUuid
-            ?: CloudDataMapper.stableUuid(userId.ifBlank { "local" }, entityType, localKey)
+        val rawUuid = existingMeta?.cloudUuid
+        val cloudUuid = if (CloudDataMapper.isValidUuid(rawUuid)) {
+            rawUuid!!
+        } else {
+            CloudDataMapper.stableUuid(userId.ifBlank { "local" }, entityType, localKey)
+        }
         val payloadHash = SyncConflictResolver.computeSha256("${operation.name}:$payloadJson")
 
         if (existingMeta != null &&
@@ -70,22 +74,43 @@ class SyncQueueManager(private val database: SoloLevelingDatabase) {
         val idemKey = idempotencyKey ?: "${entityType.name}:$cloudUuid:${operation.name}:$payloadHash"
         val existingQueued = queueDao.getByIdempotencyKey(idemKey)
         if (existingQueued == null) {
-            queueDao.insertIgnore(
-                SyncQueueEntity(
-                    entityTypeName = entityType.name,
-                    localKey = localKey,
-                    cloudUuid = cloudUuid,
-                    operationName = operation.name,
-                    payloadJson = payloadJson,
-                    idempotencyKey = idemKey,
-                    syncStateName = SyncState.PENDING_UPLOAD.name,
-                    retryCount = 0,
-                    nextRetryAtEpochMs = 0L,
-                    lastError = null,
-                    createdAtEpochMs = nowEpochMs,
-                    updatedAtEpochMs = nowEpochMs
+            val existingPendingForKey = queueDao.getAllOnce().find {
+                it.entityTypeName == entityType.name &&
+                    it.localKey == localKey &&
+                    it.syncStateName != SyncState.SYNCED.name
+            }
+            if (existingPendingForKey != null) {
+                queueDao.update(
+                    existingPendingForKey.copy(
+                        cloudUuid = cloudUuid,
+                        operationName = operation.name,
+                        payloadJson = payloadJson,
+                        idempotencyKey = idemKey,
+                        syncStateName = SyncState.PENDING_UPLOAD.name,
+                        retryCount = 0,
+                        nextRetryAtEpochMs = 0L,
+                        lastError = null,
+                        updatedAtEpochMs = nowEpochMs
+                    )
                 )
-            )
+            } else {
+                queueDao.insertIgnore(
+                    SyncQueueEntity(
+                        entityTypeName = entityType.name,
+                        localKey = localKey,
+                        cloudUuid = cloudUuid,
+                        operationName = operation.name,
+                        payloadJson = payloadJson,
+                        idempotencyKey = idemKey,
+                        syncStateName = SyncState.PENDING_UPLOAD.name,
+                        retryCount = 0,
+                        nextRetryAtEpochMs = 0L,
+                        lastError = null,
+                        createdAtEpochMs = nowEpochMs,
+                        updatedAtEpochMs = nowEpochMs
+                    )
+                )
+            }
         }
 
         metaDao.upsert(
@@ -446,7 +471,12 @@ class SyncQueueManager(private val database: SoloLevelingDatabase) {
         localKey: String
     ): String {
         val existing = metaDao.getByCompositeKey("${type.name}:$localKey")
-        return existing?.cloudUuid ?: CloudDataMapper.stableUuid(userId.ifBlank { "local" }, type, localKey)
+        val existingUuid = existing?.cloudUuid
+        return if (CloudDataMapper.isValidUuid(existingUuid)) {
+            existingUuid!!
+        } else {
+            CloudDataMapper.stableUuid(userId.ifBlank { "local" }, type, localKey)
+        }
     }
 
     suspend fun getReadyBatch(nowEpochMs: Long, limit: Int = 50): List<SyncQueueEntity> =

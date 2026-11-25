@@ -1,6 +1,7 @@
 package com.example.data.sync
 
 import android.os.Build
+import android.util.Log
 import com.example.data.local.SoloLevelingDatabase
 import com.example.data.local.entity.CloudSyncCursorEntity
 import com.example.data.local.entity.PersonalTaskEntity
@@ -42,6 +43,10 @@ class CloudSyncEngine(
     private val queueManager: SyncQueueManager,
     private val statusTracker: SyncStatusTracker
 ) {
+    companion object {
+        private const val TAG = "CloudSyncEngine"
+    }
+
     private val pageSize = 50
 
     suspend fun runIncrementalSync(
@@ -171,8 +176,14 @@ class CloudSyncEngine(
 
                     val rows = buildJsonArray {
                         items.forEach { item ->
-                            val rowObj = convertQueuePayloadToRow(session.supabaseUserId, type, item.payloadJson)
-                            if (rowObj != null) add(rowObj)
+                            val rowObj = convertQueuePayloadToRow(
+                                userId = session.supabaseUserId,
+                                type = type,
+                                payloadJson = item.payloadJson,
+                                localKey = item.localKey,
+                                cloudUuid = item.cloudUuid
+                            )
+                            if (rowObj != null && rowObj.isNotEmpty()) add(rowObj)
                         }
                     }
                     if (rows.isEmpty()) {
@@ -189,13 +200,15 @@ class CloudSyncEngine(
                             uploaded += items.size
                         }
                         is CloudCallResult.Failure -> {
+                            val safeErr = AuthValidator.sanitizeLogMessage(res.message)
+                            Log.w(TAG, "Upsert failed for table=${type.wireTable} count=${rows.size} code=${res.code} category=${res.category}: $safeErr")
                             items.forEach {
                                 totalRetries += 1
                                 failed += 1
                                 queueManager.markFailed(it, res.message, nowEpochMs)
                             }
                             errorCategory = res.category
-                            safeMessage = res.message
+                            safeMessage = safeErr
                         }
                     }
                 }
@@ -448,12 +461,64 @@ class CloudSyncEngine(
         }
     }
 
-    private fun convertQueuePayloadToRow(
+    private suspend fun convertQueuePayloadToRow(
         userId: String,
         type: SyncEntityType,
-        payloadJson: String
+        payloadJson: String,
+        localKey: String = "",
+        cloudUuid: String = ""
     ): JsonObject? {
         return when (type) {
+            SyncEntityType.ACADEMIC_SUBJECT -> {
+                val parsed = runCatching { CloudDataMapper.json.decodeFromString<JsonObject>(payloadJson) }.getOrNull()
+                val existingUserId = parsed?.get("user_id")?.jsonPrimitive?.contentOrNull
+                val existingId = parsed?.get("id")?.jsonPrimitive?.contentOrNull
+                if (existingUserId != null && existingUserId.isNotBlank() && existingUserId != userId) {
+                    Log.w(TAG, "Skipping ACADEMIC_SUBJECT item due to user_id ownership mismatch.")
+                    return null
+                }
+                if (parsed != null &&
+                    existingUserId == userId &&
+                    CloudDataMapper.isValidUuid(existingId) &&
+                    parsed.containsKey("name")
+                ) {
+                    parsed
+                } else {
+                    val subjectId = localKey.toLongOrNull() ?: return null
+                    val subject = database.academicSubjectDao().getSubjectById(subjectId) ?: return null
+                    val resolvedUuid = if (CloudDataMapper.isValidUuid(cloudUuid)) {
+                        cloudUuid
+                    } else {
+                        CloudDataMapper.stableUuid(userId, SyncEntityType.ACADEMIC_SUBJECT, localKey)
+                    }
+                    CloudDataMapper.academicSubjectToPostgrestRow(userId, subject, resolvedUuid)
+                }
+            }
+            SyncEntityType.PHYSICAL_RECORD -> {
+                val parsed = runCatching { CloudDataMapper.json.decodeFromString<JsonObject>(payloadJson) }.getOrNull()
+                val existingUserId = parsed?.get("user_id")?.jsonPrimitive?.contentOrNull
+                val existingId = parsed?.get("id")?.jsonPrimitive?.contentOrNull
+                if (existingUserId != null && existingUserId.isNotBlank() && existingUserId != userId) {
+                    Log.w(TAG, "Skipping PHYSICAL_RECORD item due to user_id ownership mismatch.")
+                    return null
+                }
+                if (parsed != null &&
+                    existingUserId == userId &&
+                    CloudDataMapper.isValidUuid(existingId) &&
+                    parsed.containsKey("source_id")
+                ) {
+                    parsed
+                } else {
+                    val session = database.joggingSessionDao().getSessionsSince(0L).find { it.sourceId == localKey }
+                        ?: return null
+                    val resolvedUuid = if (CloudDataMapper.isValidUuid(cloudUuid)) {
+                        cloudUuid
+                    } else {
+                        CloudDataMapper.stableUuid(userId, SyncEntityType.PHYSICAL_RECORD, localKey)
+                    }
+                    CloudDataMapper.joggingToPostgrestRow(userId, session, resolvedUuid)
+                }
+            }
             SyncEntityType.PERSONAL_TASK -> {
                 val dto = runCatching { CloudDataMapper.json.decodeFromString<CloudTaskPayload>(payloadJson) }.getOrNull()
                     ?: return null

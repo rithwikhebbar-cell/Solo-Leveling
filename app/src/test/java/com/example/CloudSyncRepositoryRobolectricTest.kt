@@ -8,11 +8,14 @@ import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
 import androidx.test.core.app.ApplicationProvider
 import com.example.data.local.DatabaseInitializer
 import com.example.data.local.SoloLevelingDatabase
+import com.example.data.local.entity.AcademicSubjectEntity
 import com.example.data.local.entity.CloudBackupEntity
 import com.example.data.local.entity.HabitEntity
 import com.example.data.local.entity.JoggingSessionEntity
 import com.example.data.local.entity.PersonalTaskEntity
 import com.example.data.local.entity.SyncConflictEntity
+import com.example.data.local.entity.SyncQueueEntity
+import com.example.data.local.entity.SyncRecordMetaEntity
 import com.example.data.preferences.UserPreferencesRepository
 import com.example.data.remote.CloudCallResult
 import com.example.data.remote.CloudDataMapper
@@ -640,6 +643,127 @@ class CloudSyncRepositoryRobolectricTest {
         context.deleteDatabase(dbName)
     }
 
+    @Test
+    fun academicSubjectsRlsUpsertSevenPendingRecoveryAndIsolation() = runTest {
+        val db = newDb()
+        DatabaseInitializer.ensureSeeded(db)
+        val storage = FakeTokenStorage("device-acad")
+        val repo = buildRepo(db, storage)
+
+        fakeServer.verifyEmail("scholar@solo.org")
+        repo.signUp("scholar@solo.org", "ShadowRank1", "ScholarMonarch").getOrThrow()
+        val identity = repo.signIn("scholar@solo.org", "ShadowRank1").getOrThrow()
+        val userId = identity.supabaseUserId
+
+        // Seed 7 academic subjects locally and simulate 7 pre-existing FAILED queue items with empty "{}" payloads
+        val subjectIds = (1..7).map { idx ->
+            db.academicSubjectDao().insertSubject(
+                AcademicSubjectEntity(
+                    name = "Subject $idx",
+                    code = "SUBJ-10$idx",
+                    programSystem = "University",
+                    colorTokenName = "CYAN",
+                    iconKeyName = "BOOK",
+                    priorityName = "HIGH",
+                    notes = "",
+                    isArchived = false,
+                    createdAtEpochMs = 1_700_000_000_000L + idx
+                )
+            )
+        }
+        subjectIds.forEach { id ->
+            val key = id.toString()
+            val legacyBrokenUuid = "uuid_${userId}_ACADEMIC_SUBJECT_${key}"
+            db.syncMetaDao().upsert(
+                SyncRecordMetaEntity(
+                    compositeKey = "${SyncEntityType.ACADEMIC_SUBJECT.name}:$key",
+                    entityType = SyncEntityType.ACADEMIC_SUBJECT.name,
+                    localKey = key,
+                    cloudUuid = legacyBrokenUuid,
+                    userId = userId,
+                    version = 1,
+                    updatedAtEpochMs = 1_700_000_000_000L,
+                    deletedAtEpochMs = null,
+                    syncStateName = SyncState.FAILED.name,
+                    lastSyncedHash = "",
+                    lastError = "new row violates row-level security policy for table \"academic_subjects\""
+                )
+            )
+            db.syncQueueDao().insertIgnore(
+                SyncQueueEntity(
+                    entityTypeName = SyncEntityType.ACADEMIC_SUBJECT.name,
+                    localKey = key,
+                    cloudUuid = legacyBrokenUuid,
+                    operationName = SyncOperationType.UPSERT.name,
+                    payloadJson = "{}",
+                    idempotencyKey = "ACADEMIC_SUBJECT:$legacyBrokenUuid:UPSERT:legacy",
+                    syncStateName = SyncState.FAILED.name,
+                    retryCount = 1,
+                    nextRetryAtEpochMs = 0L,
+                    lastError = "new row violates row-level security policy for table \"academic_subjects\"",
+                    createdAtEpochMs = 1_700_000_000_000L,
+                    updatedAtEpochMs = 1_700_000_000_000L
+                )
+            )
+        }
+        assertEquals(7, db.syncQueueDao().getAllOnce().size)
+
+        // Retry sync: all 7 pending records are preserved, repaired in-place, and uploaded with valid UUID + user_id
+        val syncLog = repo.syncNow("ACADEMIC_RECOVERY").getOrThrow()
+        assertEquals(SyncState.SYNCED, syncLog.status)
+        assertEquals(0, syncLog.failedOperations)
+        assertEquals(7, syncLog.recordsUploaded)
+        assertTrue(db.syncQueueDao().getAllOnce().isEmpty())
+
+        val remoteRows = fakeServer.getTableRows("academic_subjects")
+        assertEquals(7, remoteRows.size)
+        assertTrue(remoteRows.values.all { it["user_id"]?.jsonPrimitive?.contentOrNull == userId })
+        assertTrue(remoteRows.values.all { CloudDataMapper.isValidUuid(it["id"]?.jsonPrimitive?.contentOrNull) })
+
+        // Duplicate sync must not create duplicate records
+        val secondSync = repo.syncNow("ACADEMIC_IDEMPOTENT").getOrThrow()
+        assertEquals(0, secondSync.recordsUploaded)
+        assertEquals(7, fakeServer.getTableRows("academic_subjects").size)
+
+        // Updating an owned subject performs UPSERT without duplicating rows
+        val firstSubject = db.academicSubjectDao().getSubjectById(subjectIds.first())!!
+        db.academicSubjectDao().updateSubject(firstSubject.copy(name = "Subject 1 Updated"))
+        val updateSync = repo.syncNow("ACADEMIC_UPSERT_UPDATE").getOrThrow()
+        assertEquals(1, updateSync.recordsUploaded)
+        assertEquals(7, fakeServer.getTableRows("academic_subjects").size)
+        assertTrue(fakeServer.getTableRows("academic_subjects").values.any {
+            it["name"]?.jsonPrimitive?.contentOrNull == "Subject 1 Updated"
+        })
+
+        // Another user cannot retrieve or overwrite scholar@solo.org's records
+        val dbOther = newDb()
+        DatabaseInitializer.ensureSeeded(dbOther)
+        val repoOther = buildRepo(dbOther, FakeTokenStorage("device-other"))
+        fakeServer.verifyEmail("other@solo.org")
+        repoOther.signUp("other@solo.org", "ShadowRank1", "OtherHunter").getOrThrow()
+        val otherIdentity = repoOther.signIn("other@solo.org", "ShadowRank1").getOrThrow()
+        val otherToken = fakeServer.latestTokenFor(otherIdentity.supabaseUserId)!!
+        val otherFetch = fakeServer.fetchTableChanges(otherToken, "academic_subjects", otherIdentity.supabaseUserId, "1970-01-01T00:00:00Z")
+        assertTrue((otherFetch as CloudCallResult.Success).data.isEmpty())
+
+        // Attempting to submit a row with another user's user_id is rejected by RLS
+        val spoofedRow = buildJsonObject {
+            put("id", UUID.randomUUID().toString())
+            put("user_id", userId)
+            put("name", "Spoofed")
+            put("code", "SPF-1")
+            put("program_system", "University")
+            put("priority", "HIGH")
+            put("is_archived", false)
+        }
+        val spoofedRes = fakeServer.upsertTableRecords(otherToken, "academic_subjects", "[$spoofedRow]")
+        assertTrue(spoofedRes is CloudCallResult.Failure)
+        assertEquals(403, (spoofedRes as CloudCallResult.Failure).code)
+
+        dbOther.close()
+        db.close()
+    }
+
     private class FakeTokenStorage(private val fixedDeviceId: String) : TokenStorage {
         private var access: String? = null
         private var refresh: String? = null
@@ -681,6 +805,12 @@ class CloudSyncRepositoryRobolectricTest {
         fun verifyEmail(email: String) {
             usersByEmail[email]?.verified = true
         }
+
+        fun getTableRows(tableName: String): Map<String, JsonObject> =
+            tables[tableName]?.toMap().orEmpty()
+
+        fun latestTokenFor(userId: String): String? =
+            tokensToUserId.entries.lastOrNull { it.value == userId }?.key
 
         override fun isConfigured(): Boolean = true
 
@@ -815,11 +945,24 @@ class CloudSyncRepositoryRobolectricTest {
             rowsJsonArray: String
         ): CloudCallResult<Unit> {
             if (failTableUpsert) return CloudCallResult.Failure(503, "TRANSIENT", "Simulated 503 outage")
+            val authedUid = tokensToUserId[accessToken]
+                ?: return CloudCallResult.Failure(401, "AUTH_EXPIRED", "Unauthorized", isSessionExpired = true)
             val arr = CloudDataMapper.json.parseToJsonElement(rowsJsonArray).jsonArray
             val tableMap = tables.getOrPut(tableName) { linkedMapOf() }
             arr.forEach { el ->
                 val obj = el.jsonObject
-                val id = obj["id"]?.jsonPrimitive?.contentOrNull ?: UUID.randomUUID().toString()
+                val rowUserId = obj["user_id"]?.jsonPrimitive?.contentOrNull
+                if (rowUserId.isNullOrBlank() || rowUserId != authedUid) {
+                    return CloudCallResult.Failure(
+                        403,
+                        "RLS_FORBIDDEN",
+                        "new row violates row-level security policy for table \"$tableName\""
+                    )
+                }
+                val id = obj["id"]?.jsonPrimitive?.contentOrNull
+                if (id.isNullOrBlank() || !CloudDataMapper.isValidUuid(id)) {
+                    return CloudCallResult.Failure(400, "CLIENT_ERROR", "invalid input syntax for type uuid")
+                }
                 val enriched = buildJsonObject {
                     obj.forEach { (k, v) -> put(k, v) }
                     put("updated_at", Instant.now().toString())

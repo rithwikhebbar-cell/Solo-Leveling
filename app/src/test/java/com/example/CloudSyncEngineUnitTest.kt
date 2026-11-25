@@ -1,5 +1,6 @@
 package com.example
 
+import com.example.data.local.entity.AcademicSubjectEntity
 import com.example.data.remote.CloudDataMapper
 import com.example.domain.engine.SyncConflictResolver
 import com.example.domain.engine.SyncRetryPolicy
@@ -22,6 +23,9 @@ import com.example.domain.model.RoutineActivityStatus
 import com.example.domain.model.RoutineCompletionRecord
 import com.example.domain.model.SyncEntityType
 import com.example.domain.model.VerificationStatus
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -234,5 +238,34 @@ class CloudSyncEngineUnitTest {
         val hash2 = SyncConflictResolver.computeSha256("""{"xp":900}""")
         assertEquals(64, hash1.length)
         assertEquals(hash1, hash2)
+        assertTrue(CloudDataMapper.isValidUuid(u1))
+    }
+
+    @Test
+    fun academicSubjectToPostgrestRowIncludesUserIdAndValidUuid() {
+        val userId = "11111111-2222-3333-4444-555555555555"
+        val entity = AcademicSubjectEntity(
+            id = 42L,
+            name = "Data Structures",
+            code = "CS-201",
+            programSystem = "University",
+            colorTokenName = "CYAN",
+            iconKeyName = "BOOK",
+            priorityName = "HIGH",
+            notes = "Core",
+            isArchived = false,
+            createdAtEpochMs = 1_700_000_000_000L
+        )
+        val uuid = CloudDataMapper.stableUuid(userId, SyncEntityType.ACADEMIC_SUBJECT, entity.id.toString())
+        val row = CloudDataMapper.academicSubjectToPostgrestRow(userId, entity, uuid)
+
+        assertEquals(uuid, row["id"]?.jsonPrimitive?.contentOrNull)
+        assertTrue(CloudDataMapper.isValidUuid(row["id"]?.jsonPrimitive?.contentOrNull))
+        assertEquals(userId, row["user_id"]?.jsonPrimitive?.contentOrNull)
+        assertEquals("Data Structures", row["name"]?.jsonPrimitive?.contentOrNull)
+        assertEquals("CS-201", row["code"]?.jsonPrimitive?.contentOrNull)
+        assertEquals("University", row["program_system"]?.jsonPrimitive?.contentOrNull)
+        assertEquals("HIGH", row["priority"]?.jsonPrimitive?.contentOrNull)
+        assertEquals(false, row["is_archived"]?.jsonPrimitive?.booleanOrNull)
     }
 }

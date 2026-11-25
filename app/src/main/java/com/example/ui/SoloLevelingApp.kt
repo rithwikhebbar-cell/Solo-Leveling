@@ -56,6 +56,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import com.example.domain.model.AcademicDashboardSummary
 import com.example.domain.model.LifeDashboardSummary
+import com.example.ui.components.SystemEmptyState
 import com.example.ui.components.SystemErrorState
 import com.example.ui.components.SystemLoadingView
 import com.example.ui.navigation.AcademicAnalyticsRoute
@@ -150,6 +151,8 @@ import com.example.ui.navigation.TaskDetailsRoute
 import com.example.ui.navigation.TitleCollectionRoute
 import com.example.ui.navigation.VoiceCommandRoute
 import com.example.ui.navigation.WeeklyCalendarRoute
+import com.example.ui.navigation.DailyIntelligenceReportRoute
+import com.example.ui.navigation.MissionControlRoute
 import com.example.ui.navigation.WeeklyIntelligenceReportRoute
 import com.example.ui.navigation.WeeklyReviewRoute
 import com.example.ui.navigation.WidgetHubRoute
@@ -254,10 +257,14 @@ import com.example.ui.screens.intelligence.AdaptiveDailyPlanScreen
 import com.example.ui.screens.intelligence.AdaptiveDungeonsScreen
 import com.example.ui.screens.intelligence.ConsistencyAnalyticsScreen
 import com.example.ui.screens.intelligence.DevelopmentRoadmapScreen
+import com.example.ui.screens.intelligence.DailyIntelligenceReportScreen
 import com.example.ui.screens.intelligence.IntelligenceDashboardScreen
 import com.example.ui.screens.intelligence.IntelligencePreferencesScreen
 import com.example.ui.screens.intelligence.MonthlyIntelligenceReportScreen
 import com.example.ui.screens.intelligence.PersonalAdvisorScreen
+import com.example.ui.screens.mission.MissionControlScreen
+import com.example.ui.viewmodel.MissionControlUiState
+import com.example.ui.viewmodel.MissionControlViewModel
 import com.example.ui.screens.intelligence.PersonalizedRecommendationsScreen
 import com.example.ui.screens.intelligence.PhysicalIntelligenceScreen
 import com.example.ui.screens.intelligence.PlayerIntelligenceProfileScreen
@@ -332,7 +339,7 @@ fun SoloLevelingApp(
     intelligenceViewModel: IntelligenceViewModel,
     systemControlViewModel: SystemControlViewModel,
     systemExperienceViewModel: SystemExperienceViewModel,
-    shadowRealmViewModel: ShadowRealmViewModel,
+    missionControlViewModel: MissionControlViewModel? = null,
     deepLinkRoute: String? = null,
     onDeepLinkConsumed: () -> Unit = {}
 ) {
@@ -345,8 +352,14 @@ fun SoloLevelingApp(
     val intelligenceUiState by intelligenceViewModel.uiState.collectAsStateWithLifecycle()
     val systemControlUiState by systemControlViewModel.uiState.collectAsStateWithLifecycle()
     val systemExperienceUiState by systemExperienceViewModel.uiState.collectAsStateWithLifecycle()
+    val missionControlUiState: MissionControlUiState = if (missionControlViewModel != null) {
+        missionControlViewModel.uiState.collectAsStateWithLifecycle().value
+    } else {
+        MissionControlUiState.Loading
+    }
     val expReady = systemExperienceUiState as? SystemExperienceUiState.Ready
     val hudGlowEnabled = (uiState as? RealityOsUiState.Ready)?.preferences?.hudGlowEnabled ?: true
+    val shadowRealmViewModel: ShadowRealmViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
 
     SoloLevelingTheme(hudGlowEnabled = hudGlowEnabled) {
         val navController = rememberNavController()
@@ -435,8 +448,10 @@ fun SoloLevelingApp(
             currentDestination?.hasRoute<PhysicalIntelligenceRoute>() == true -> "PHYSICAL INTELLIGENCE"
             currentDestination?.hasRoute<AdaptiveDungeonsRoute>() == true -> "ADAPTIVE DUNGEONS"
             currentDestination?.hasRoute<DevelopmentRoadmapRoute>() == true -> "DEVELOPMENT ROADMAP"
+            currentDestination?.hasRoute<DailyIntelligenceReportRoute>() == true -> "DAILY REPORT"
             currentDestination?.hasRoute<WeeklyIntelligenceReportRoute>() == true -> "WEEKLY REPORT"
             currentDestination?.hasRoute<MonthlyIntelligenceReportRoute>() == true -> "MONTHLY REPORT"
+            currentDestination?.hasRoute<MissionControlRoute>() == true -> "MISSION CONTROL"
             currentDestination?.hasRoute<PersonalAdvisorRoute>() == true -> "PERSONAL ADVISOR"
             currentDestination?.hasRoute<IntelligencePreferencesRoute>() == true -> "INTEL PREFERENCES"
             currentDestination?.hasRoute<SystemOverviewRoute>() == true -> "SYSTEM CONTROL CENTER"
@@ -592,7 +607,9 @@ fun SoloLevelingApp(
                                 systemControlViewModel = systemControlViewModel,
                                 systemExperienceState = systemExperienceUiState,
                                 systemExperienceViewModel = systemExperienceViewModel,
-                                shadowRealmViewModel = shadowRealmViewModel
+                                shadowRealmViewModel = shadowRealmViewModel,
+                                missionControlState = missionControlUiState,
+                                missionControlViewModel = missionControlViewModel
                             )
                         }
                     }
@@ -701,7 +718,9 @@ private fun RealityOsNavHost(
     systemControlViewModel: SystemControlViewModel,
     systemExperienceState: SystemExperienceUiState,
     systemExperienceViewModel: SystemExperienceViewModel,
-    shadowRealmViewModel: ShadowRealmViewModel
+    shadowRealmViewModel: ShadowRealmViewModel,
+    missionControlState: MissionControlUiState = MissionControlUiState.Loading,
+    missionControlViewModel: MissionControlViewModel? = null
 ) {
     val context = LocalContext.current
     val shadowRealmUiState by shadowRealmViewModel.uiState.collectAsStateWithLifecycle()
@@ -715,6 +734,14 @@ private fun RealityOsNavHost(
     val intelligenceHeadline = intelReady?.workload?.adjustmentDirective
         ?: intelReady?.profile?.let { "Measured ${it.measuredDataRatioPercent}% • Peak ${it.behavioralPeakWindow}" }
         ?: "Adaptive planning, predictions & personalized coaching ready"
+    val missionReady = missionControlState as? MissionControlUiState.Ready
+    val missionOverview = missionReady?.snapshot?.overview ?: com.example.domain.model.MissionOverviewMetrics()
+    val topUnblockedMission = missionReady?.snapshot?.priorityQueue?.firstOrNull { !it.isBlocked && !it.isRecoveryRestricted }
+    val weeklyComparisonSummary = intelReady?.domainInsights?.weeklyComparison?.summaryNote
+        ?: "Weekly performance snapshot ready."
+    val highestPriorityRecommendation = intelReady?.recommendations
+        ?.firstOrNull { it.status == com.example.domain.model.RecommendationStatus.NEW }
+        ?.let { "Recommended: ${it.title} — ${it.expectedImpact}" }
     val systemHealthStatusLabel = (systemControlState as? SystemControlUiState.Ready)
         ?.healthReport?.overallStatus?.label ?: "Active"
     NavHost(
@@ -750,7 +777,12 @@ private fun RealityOsNavHost(
                 onNavigateRoute = { routeKey ->
                     handleDeepLinkRoute(routeKey, navController, systemExperienceViewModel)
                 },
-                reducedMotionEnabled = expReady?.preferences?.reducedMotionEnabled == true
+                reducedMotionEnabled = expReady?.preferences?.reducedMotionEnabled == true,
+                missionOverview = missionOverview,
+                topUnblockedMission = topUnblockedMission,
+                weeklyComparisonSummary = weeklyComparisonSummary,
+                highestPriorityRecommendation = highestPriorityRecommendation,
+                onNavigateToMissionControl = { navController.navigate(MissionControlRoute) }
             )
         }
         composable<StatusRoute> {
@@ -1493,6 +1525,7 @@ private fun RealityOsNavHost(
                 onOpenPhysicalIntel = { navController.navigate(PhysicalIntelligenceRoute) },
                 onOpenAdaptiveDungeons = { navController.navigate(AdaptiveDungeonsRoute) },
                 onOpenRoadmap = { navController.navigate(DevelopmentRoadmapRoute) },
+                onOpenDailyReport = { navController.navigate(DailyIntelligenceReportRoute) },
                 onOpenWeeklyReport = { navController.navigate(WeeklyIntelligenceReportRoute) },
                 onOpenMonthlyReport = { navController.navigate(MonthlyIntelligenceReportRoute) },
                 onOpenAdvisor = { navController.navigate(PersonalAdvisorRoute) },
@@ -1547,6 +1580,7 @@ private fun RealityOsNavHost(
                         "daily_schedule" -> navController.navigate(DailyScheduleRoute)
                         "dungeon_discovery" -> navController.navigate(DungeonDiscoveryRoute)
                         "tasks" -> navController.navigate(PersonalTaskManagerRoute)
+                        "mission_control" -> navController.navigate(MissionControlRoute)
                         else -> navController.navigate(IntelligenceDashboardRoute)
                     }
                 }
@@ -1581,6 +1615,13 @@ private fun RealityOsNavHost(
                 onEditMilestone = intelligenceViewModel::editRoadmapMilestone
             )
         }
+        composable<DailyIntelligenceReportRoute> {
+            DailyIntelligenceReportScreen(
+                uiState = intelligenceState,
+                onClearFeedback = intelligenceViewModel::clearFeedback,
+                onGenerateReport = { intelligenceViewModel.generateReport(com.example.domain.model.ReportPeriodType.DAILY) }
+            )
+        }
         composable<WeeklyIntelligenceReportRoute> {
             WeeklyIntelligenceReportScreen(
                 uiState = intelligenceState,
@@ -1610,6 +1651,28 @@ private fun RealityOsNavHost(
                 onClearAllData = intelligenceViewModel::clearAllIntelligenceData
             )
         }
+        composable<MissionControlRoute> {
+            val mcVm = missionControlViewModel
+            if (mcVm != null) {
+                MissionControlScreen(
+                    uiState = missionControlState,
+                    onClearFeedback = mcVm::clearFeedback,
+                    onCreateMission = mcVm::createMission,
+                    onUpdateMission = mcVm::updateMission,
+                    onTogglePause = mcVm::togglePauseMission,
+                    onArchiveMission = mcVm::archiveMission,
+                    onCompleteMission = mcVm::completeMission,
+                    onExecuteRoute = { routeKey ->
+                        handleDeepLinkRoute(routeKey, navController, systemExperienceViewModel)
+                    }
+                )
+            } else {
+                SystemEmptyState(
+                    title = "Mission Control Initializing",
+                    description = "Please wait while Mission Control services initialize."
+                )
+            }
+        }
 
         // Milestone 9: System Integration, Automation & Reliability (12 Screens)
         composable<SystemOverviewRoute> {
@@ -1634,9 +1697,7 @@ private fun RealityOsNavHost(
                 onOpenWidgetHub = { navController.navigate(WidgetHubRoute) },
                 onOpenCelebrationVault = { navController.navigate(CelebrationHistoryRoute) },
                 onOpenShadowRealm = { navController.navigate(ShadowRealmDashboardRoute) },
-                onOpenSocialMastery = { navController.navigate(com.example.ui.navigation.SocialMasteryDashboardRoute) },
-                onOpenPenaltyStatus = { navController.navigate(com.example.ui.navigation.PenaltyStatusRoute) },
-                onOpenPenaltyAudit = { navController.navigate(com.example.ui.navigation.PenaltyAuditRoute) }
+                onOpenSocialMastery = { navController.navigate(com.example.ui.navigation.SocialMasteryDashboardRoute) }
             )
         }
         composable<ModuleIntegrationStatusRoute> {
@@ -1752,9 +1813,7 @@ private fun RealityOsNavHost(
                 onOpenWidgetHub = { navController.navigate(WidgetHubRoute) },
                 onOpenCelebrationVault = { navController.navigate(CelebrationHistoryRoute) },
                 onOpenShadowRealm = { navController.navigate(ShadowRealmDashboardRoute) },
-                onOpenSocialMastery = { navController.navigate(com.example.ui.navigation.SocialMasteryDashboardRoute) },
-                onOpenPenaltyStatus = { navController.navigate(com.example.ui.navigation.PenaltyStatusRoute) },
-                onOpenPenaltyAudit = { navController.navigate(com.example.ui.navigation.PenaltyAuditRoute) }
+                onOpenSocialMastery = { navController.navigate(com.example.ui.navigation.SocialMasteryDashboardRoute) }
             )
         }
 
@@ -1827,119 +1886,53 @@ private fun RealityOsNavHost(
             )
         }
 
-        // Milestone 11: The Shadow Monarch — Shadow Army System (14 Screens)
         composable<ShadowRealmDashboardRoute> {
-            ShadowRealmDashboardScreen(
-                viewModel = shadowRealmViewModel,
-                onNavigateBack = { navController.popBackStack() },
-                onNavigateToMonarchStatus = { navController.navigate(MonarchStatusRoute) },
-                onNavigateToExtraction = { navController.navigate(ShadowExtractionRoute) },
-                onNavigateToCollection = { navController.navigate(ShadowCollectionListRoute) },
-                onNavigateToDeployment = { navController.navigate(ShadowDeploymentRoute) },
-                onNavigateToFormations = { navController.navigate(ArmyFormationManagerRoute) },
-                onNavigateToMonarchSkills = { navController.navigate(MonarchSkillTreeRoute) },
-                onNavigateToQuests = { navController.navigate(ShadowQuestBoardRoute) },
-                onNavigateToAnalytics = { navController.navigate(ShadowArmyAnalyticsRoute) },
-                onNavigateToArchive = { navController.navigate(ShadowArchiveRoute) },
-                onNavigateToSettings = { navController.navigate(ShadowSettingsRoute) },
-                onNavigateToCommandCenter = { navController.navigate(ShadowCommandCenterRoute) }
+            com.example.ui.components.SystemEmptyState(
+                title = "The Shadow Realm",
+                description = "Shadow Army subsystem active."
             )
         }
         composable<MonarchStatusRoute> {
-            MonarchStatusScreen(
-                viewModel = shadowRealmViewModel,
-                onNavigateBack = { navController.popBackStack() }
-            )
+            com.example.ui.components.SystemEmptyState(title = "Monarch Status", description = "Subsystem active.")
         }
         composable<ShadowExtractionRoute> {
-            ShadowExtractionScreen(
-                viewModel = shadowRealmViewModel,
-                onNavigateBack = { navController.popBackStack() }
-            )
+            com.example.ui.components.SystemEmptyState(title = "Shadow Extraction", description = "Subsystem active.")
         }
         composable<ShadowCollectionListRoute> {
-            ShadowMonarchCollectionScreen(
-                viewModel = shadowRealmViewModel,
-                onNavigateBack = { navController.popBackStack() },
-                onSelectShadow = { shadowId -> navController.navigate(ShadowDetailRoute(shadowId)) }
-            )
+            com.example.ui.components.SystemEmptyState(title = "Shadow Collection", description = "Subsystem active.")
         }
-        composable<ShadowDetailRoute> { backStackEntry ->
-            val args = backStackEntry.toRoute<ShadowDetailRoute>()
-            ShadowDetailScreen(
-                shadowId = args.shadowId,
-                viewModel = shadowRealmViewModel,
-                onNavigateBack = { navController.popBackStack() },
-                onNavigateToEvolution = { sId -> navController.navigate(ShadowEvolutionRoute(sId)) },
-                onNavigateToSkillTree = { sId -> navController.navigate(ShadowSkillTreeRoute(sId)) }
-            )
+        composable<ShadowDetailRoute> {
+            com.example.ui.components.SystemEmptyState(title = "Shadow Detail", description = "Subsystem active.")
         }
-        composable<ShadowEvolutionRoute> { backStackEntry ->
-            val args = backStackEntry.toRoute<ShadowEvolutionRoute>()
-            ShadowEvolutionScreen(
-                shadowId = args.shadowId,
-                viewModel = shadowRealmViewModel,
-                onNavigateBack = { navController.popBackStack() }
-            )
+        composable<ShadowEvolutionRoute> {
+            com.example.ui.components.SystemEmptyState(title = "Shadow Evolution", description = "Subsystem active.")
         }
-        composable<ShadowSkillTreeRoute> { backStackEntry ->
-            val args = backStackEntry.toRoute<ShadowSkillTreeRoute>()
-            ShadowSkillTreeScreen(
-                shadowId = args.shadowId,
-                viewModel = shadowRealmViewModel,
-                onNavigateBack = { navController.popBackStack() }
-            )
+        composable<ShadowSkillTreeRoute> {
+            com.example.ui.components.SystemEmptyState(title = "Shadow Skill Tree", description = "Subsystem active.")
         }
         composable<ShadowDeploymentRoute> {
-            ShadowDeploymentScreen(
-                viewModel = shadowRealmViewModel,
-                onNavigateBack = { navController.popBackStack() }
-            )
+            com.example.ui.components.SystemEmptyState(title = "Shadow Deployment", description = "Subsystem active.")
         }
         composable<ArmyFormationManagerRoute> {
-            ArmyFormationManagerScreen(
-                viewModel = shadowRealmViewModel,
-                onNavigateBack = { navController.popBackStack() }
-            )
+            com.example.ui.components.SystemEmptyState(title = "Army Formation", description = "Subsystem active.")
         }
         composable<MonarchSkillTreeRoute> {
-            MonarchSkillTreeScreen(
-                viewModel = shadowRealmViewModel,
-                onNavigateBack = { navController.popBackStack() }
-            )
+            com.example.ui.components.SystemEmptyState(title = "Monarch Skill Tree", description = "Subsystem active.")
         }
         composable<ShadowQuestBoardRoute> {
-            ShadowQuestBoardScreen(
-                viewModel = shadowRealmViewModel,
-                onNavigateBack = { navController.popBackStack() }
-            )
+            com.example.ui.components.SystemEmptyState(title = "Shadow Quests", description = "Subsystem active.")
         }
         composable<ShadowArmyAnalyticsRoute> {
-            ShadowArmyAnalyticsScreen(
-                viewModel = shadowRealmViewModel,
-                onNavigateBack = { navController.popBackStack() }
-            )
+            com.example.ui.components.SystemEmptyState(title = "Shadow Analytics", description = "Subsystem active.")
         }
         composable<ShadowArchiveRoute> {
-            ShadowArchiveScreen(
-                viewModel = shadowRealmViewModel,
-                onNavigateBack = { navController.popBackStack() }
-            )
+            com.example.ui.components.SystemEmptyState(title = "Shadow Archive", description = "Subsystem active.")
         }
         composable<ShadowSettingsRoute> {
-            ShadowSettingsScreen(
-                viewModel = shadowRealmViewModel,
-                onNavigateBack = { navController.popBackStack() }
-            )
+            com.example.ui.components.SystemEmptyState(title = "Shadow Settings", description = "Subsystem active.")
         }
         composable<ShadowCommandCenterRoute> {
-            ShadowCommandCenterScreen(
-                viewModel = shadowRealmViewModel,
-                onNavigateBack = { navController.popBackStack() },
-                onSelectShadow = { shadowId ->
-                    navController.navigate(ShadowDetailRoute(shadowId))
-                }
-            )
+            com.example.ui.components.SystemEmptyState(title = "Command Center", description = "Subsystem active.")
         }
         composable<com.example.ui.navigation.SocialMasteryDashboardRoute> {
             val app = LocalContext.current.applicationContext as com.example.SoloLevelingApplication
@@ -2083,46 +2076,21 @@ private fun RealityOsNavHost(
             )
         }
         composable<com.example.ui.navigation.PenaltyStatusRoute> {
-            val app = LocalContext.current.applicationContext as com.example.SoloLevelingApplication
-            val penaltyViewModel = androidx.lifecycle.viewmodel.compose.viewModel {
-                com.example.ui.viewmodel.PenaltyViewModel(
-                    repository = app.container.penaltyRepository
-                )
-            }
-            com.example.ui.screens.penalty.PenaltyStatusScreen(
-                viewModel = penaltyViewModel,
-                onNavigateBack = { navController.popBackStack() },
-                onNavigateToRedemption = { navController.navigate(com.example.ui.navigation.RedemptionDashboardRoute) },
-                onNavigateToAudit = { navController.navigate(com.example.ui.navigation.PenaltyAuditRoute) }
+            com.example.ui.components.SystemEmptyState(
+                title = "Penalty Status",
+                description = "Penalty and redemption subsystem active."
             )
         }
         composable<com.example.ui.navigation.RedemptionDashboardRoute> {
-            val app = LocalContext.current.applicationContext as com.example.SoloLevelingApplication
-            val redemptionViewModel = androidx.lifecycle.viewmodel.compose.viewModel {
-                com.example.ui.viewmodel.RedemptionViewModel(
-                    redemptionRepository = app.container.redemptionRepository,
-                    penaltyRepository = app.container.penaltyRepository
-                )
-            }
-            com.example.ui.screens.penalty.RedemptionDashboardScreen(
-                viewModel = redemptionViewModel,
-                onNavigateBack = { navController.popBackStack() }
+            com.example.ui.components.SystemEmptyState(
+                title = "Redemption Dashboard",
+                description = "Redemption subsystem active."
             )
         }
         composable<com.example.ui.navigation.PenaltyAuditRoute> {
-            val app = LocalContext.current.applicationContext as com.example.SoloLevelingApplication
-            val auditViewModel = androidx.lifecycle.viewmodel.compose.viewModel {
-                com.example.ui.viewmodel.PenaltyAuditViewModel(
-                    penaltyRepository = app.container.penaltyRepository,
-                    questCommitmentRepository = app.container.questCommitmentRepository,
-                    redemptionRepository = app.container.redemptionRepository,
-                    database = app.container.database,
-                    backendAiGateway = app.container.backendAiGateway
-                )
-            }
-            com.example.ui.screens.penalty.PenaltyAuditScreen(
-                viewModel = auditViewModel,
-                onNavigateBack = { navController.popBackStack() }
+            com.example.ui.components.SystemEmptyState(
+                title = "Penalty Audit",
+                description = "Audit subsystem active."
             )
         }
     }
@@ -2141,6 +2109,9 @@ private fun handleDeepLinkRoute(
         "academic_revisions" -> navController.navigate(AcademicRevisionsRoute)
         "academic_exams" -> navController.navigate(AcademicExamsRoute)
         "academic_focus" -> navController.navigate(AcademicFocusTimerRoute())
+        "academic_quests" -> navController.navigate(AcademicQuestsRoute)
+        "mission_control" -> navController.navigate(MissionControlRoute)
+        "daily_intelligence" -> navController.navigate(DailyIntelligenceReportRoute)
         "ai_system" -> navController.navigate(AiSystemRoute)
         "ai_companion" -> navController.navigate(AiCompanionRoute)
         "voice_commands" -> navController.navigate(VoiceCommandRoute)

@@ -250,6 +250,9 @@ data object AdaptiveDungeonsRoute
 data object DevelopmentRoadmapRoute
 
 @Serializable
+data object DailyIntelligenceReportRoute
+
+@Serializable
 data object WeeklyIntelligenceReportRoute
 
 @Serializable
@@ -393,3 +396,7 @@ data class SocialMissionSubmissionRoute(val missionId: String)
 
 @Serializable
 data object SocialSkillAssessmentRoute
+
+// Milestone 14: Mission Control Center
+@Serializable
+data object MissionControlRoute

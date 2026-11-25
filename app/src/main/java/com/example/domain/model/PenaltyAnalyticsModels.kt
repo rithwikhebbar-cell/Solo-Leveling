@@ -166,11 +166,11 @@ fun RedemptionPlan.toCorrectiveActivityRecord(): CorrectiveActivityRecord {
         title = activityTitle,
         description = instructions,
         category = when (category) {
-            CorrectiveCategory.ACADEMIC -> QuestCategory.ACADEMIC
-            CorrectiveCategory.PHYSICAL -> QuestCategory.STRENGTH
+            CorrectiveCategory.ACADEMIC -> QuestCategory.INTELLECT
+            CorrectiveCategory.PHYSICAL -> QuestCategory.PHYSICAL
             CorrectiveCategory.DISCIPLINE -> QuestCategory.DISCIPLINE
-            CorrectiveCategory.LIFE_MANAGEMENT -> QuestCategory.LIFE
-            CorrectiveCategory.STRATEGIC_PLANNING -> QuestCategory.INTELLIGENCE
+            CorrectiveCategory.LIFE_MANAGEMENT -> QuestCategory.SOCIAL
+            CorrectiveCategory.STRATEGIC_PLANNING -> QuestCategory.INTELLECT
         },
         pointValue = resolutionPoints,
         assignedShadowClass = assignedShadowClass,

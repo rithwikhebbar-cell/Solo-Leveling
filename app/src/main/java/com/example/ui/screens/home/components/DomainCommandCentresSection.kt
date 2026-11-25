@@ -104,7 +104,7 @@ fun DomainCommandCentresSection(
                     icon = Icons.Rounded.FitnessCenter,
                     accentColor = if (recoveryAlert) SystemColors.WarningAmber else SystemColors.VerifiedEmerald,
                     metric1Label = "RANK",
-                    metric1Value = physicalState.conditioningRank.label,
+                    metric1Value = physicalState.conditioningRank,
                     metric2Label = "RECOVERY",
                     metric2Value = recovery.state.label,
                     onClick = onNavigateToPhysical,

@@ -43,7 +43,21 @@ data class PhysicalDevelopmentState(
     val recoveryStatus: RecoveryStatus = RecoveryStatus.OPTIMAL,
     val weeklySessionsCompleted: Int = 0,
     val lastSessionTimestampMs: Long? = null,
-    val aiTrainingNote: String = "30-minute aerobic base protocol active. Verified sessions via Health Connect carry full progression weight."
+    val aiTrainingNote: String = "30-minute aerobic base protocol active. Verified sessions via Health Connect carry full progression weight.",
+    val activeJoggingSession: ActiveJoggingSessionState? = null,
+    val todayWorkout: WorkoutSession? = null,
+    val recoveryAssessment: RecoveryAssessment = RecoveryAssessment(
+        state = RecoveryState.READY,
+        readinessScore = 85,
+        measuredLoadMinutes48h = 60,
+        measuredLoadMinutes7d = 200,
+        measuredSessions7d = 4,
+        consecutiveActiveDays = 3,
+        recommendedActions = emptyList(),
+        summaryMessage = "Readiness optimal."
+    ),
+    val weeklyActivity: List<WorkoutSession> = emptyList(),
+    val conditioningRank: String = "E"
 ) {
     val effectiveJoggingTarget: Int
         get() = aiRecommendedJoggingMinutes.coerceAtLeast(10)

@@ -38,6 +38,7 @@ import com.example.domain.model.AiConsentState
 import com.example.domain.model.AiModelPreferenceState
 import com.example.domain.model.ConsistencyPrediction
 import com.example.domain.model.DevelopmentRoadmap
+import com.example.domain.model.GoalAnalysisInsight
 import com.example.domain.model.IntelligenceReport
 import com.example.domain.model.PersonalizedRecommendation
 import com.example.domain.model.PhysicalDevelopmentIntelligence
@@ -51,6 +52,8 @@ import com.example.domain.model.ReportPeriodType
 import com.example.domain.model.RoadmapHorizon
 import com.example.domain.model.ScheduledSourceType
 import com.example.domain.model.StrengthWeaknessFinding
+import com.example.domain.model.SystemEventType
+import com.example.domain.model.WeeklyComparisonDelta
 import com.example.domain.model.WorkloadAssessment
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -62,27 +65,31 @@ import kotlinx.coroutines.flow.map
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.abs
 
 data class IntelligenceDomainInsights(
     val academic: AcademicLearningIntelligence = AcademicLearningIntelligence(),
     val physical: PhysicalDevelopmentIntelligence = PhysicalDevelopmentIntelligence(),
-    val adaptiveDungeons: List<AdaptiveDungeonRecommendation> = emptyList()
+    val adaptiveDungeons: List<AdaptiveDungeonRecommendation> = emptyList(),
+    val weeklyComparison: WeeklyComparisonDelta = WeeklyComparisonDelta(),
+    val goalAnalysis: List<GoalAnalysisInsight> = emptyList()
 )
 
 /**
- * Milestone 8 Repository: Intelligence, Personalization & Adaptive System.
+ * Milestone 8/14 Repository: Intelligence, Personalization & Adaptive System.
  *
  * INVARIANTS:
- * 1. Read-only consumer of Milestones 0-7 data; NEVER mutates player XP, level, rank, or attributes.
- * 2. 100% deterministic offline operation; cloud AI is strictly optional, consent-gated, and backend-proxied.
+ * 1. Read-only consumer of Milestones 0-7 & 14 Mission data; NEVER mutates player XP, level, rank, or attributes.
+ * 2. 100% deterministic offline operation; cloud AI is strictly optional, consent-gated, cached, and backend-proxied.
  * 3. Incremental fingerprint check prevents unnecessary recalculations when telemetry is unchanged.
  * 4. Adaptive plans and roadmaps require explicit user approval before entering the unified schedule.
  */
 class IntelligenceRepository(
     private val database: SoloLevelingDatabase,
     private val preferencesRepository: UserPreferencesRepository,
-    private val backendAiGateway: BackendAiGateway
+    private val backendAiGateway: BackendAiGateway,
+    private val systemEventRepository: SystemEventRepository? = null
 ) {
     private val profileDao = database.intelligenceProfileDao()
     private val planDao = database.adaptivePlanDao()
@@ -91,6 +98,8 @@ class IntelligenceRepository(
     private val reportDao = database.intelligenceReportDao()
     private val aiConfigDao = database.aiConfigDao()
     private val aiAuditDao = database.aiRequestAuditDao()
+
+    private val aiReportNarrativeCache = ConcurrentHashMap<String, String>()
 
     private val _domainInsights = MutableStateFlow(IntelligenceDomainInsights())
     val domainInsights: StateFlow<IntelligenceDomainInsights> = _domainInsights.asStateFlow()
@@ -272,7 +281,9 @@ class IntelligenceRepository(
                 AdaptiveDungeonDifficultyEngine.recommend(input, workloadNow)
             } else {
                 emptyList()
-            }
+            },
+            weeklyComparison = IntelligenceReportEngine.computeWeeklyComparison(input),
+            goalAnalysis = IntelligenceReportEngine.computeGoalAnalysis(input)
         )
 
         if (!force && cachedProfile != null && cachedProfile.sourceFingerprint == fingerprint) {
@@ -517,20 +528,27 @@ class IntelligenceRepository(
         val prefs = getPreferencesOnce()
         val input = collectTelemetryInput(nowEpochMs = now)
         val baseReport = IntelligenceReportEngine.generateReport(periodType, input)
+        val fingerprint = PlayerIntelligenceEngine.computeSourceFingerprint(input)
+        val cacheKey = "${periodType.name}:$fingerprint"
+        _domainInsights.value = _domainInsights.value.copy(
+            weeklyComparison = IntelligenceReportEngine.computeWeeklyComparison(input),
+            goalAnalysis = IntelligenceReportEngine.computeGoalAnalysis(input)
+        )
 
         val consent = aiConfigDao.getConsentRecordOnce()?.toDomain() ?: AiConsentState()
         val modelPrefs = aiConfigDao.getModelPreferencesOnce()?.toDomain() ?: AiModelPreferenceState()
-        val endpointValid = HttpBackendAiGateway.normalizeProxyEndpoint(modelPrefs.backendBaseUrl) != null
+        val endpointValid = backendAiGateway.supportsDirectCloud ||
+            HttpBackendAiGateway.normalizeProxyEndpoint(modelPrefs.backendBaseUrl) != null
         val canUseCloud = includeAiNarrativeIfConsented &&
             prefs.shareIntelligenceWithCloudAi &&
             consent.cloudAiConsentGranted &&
             modelPrefs.aiEnabled &&
             endpointValid
 
-        var aiNarrative: String? = null
-        var usedFallback = true
+        var aiNarrative: String? = aiReportNarrativeCache[cacheKey]
+        var usedFallback = aiNarrative == null
 
-        if (canUseCloud) {
+        if (canUseCloud && aiNarrative == null) {
             val startMs = System.currentTimeMillis()
             val statsPrompt = buildString {
                 appendLine("Period: ${baseReport.periodType.label} (${baseReport.periodLabel})")
@@ -562,6 +580,7 @@ class IntelligenceRepository(
             if (success) {
                 aiNarrative = safe
                 usedFallback = false
+                aiReportNarrativeCache[cacheKey] = safe
             }
             aiAuditDao.insertAudit(
                 AiRequestAuditEntity(
@@ -583,6 +602,15 @@ class IntelligenceRepository(
             aiUsedFallback = usedFallback
         )
         val id = reportDao.insertReport(finalReport.toEntity())
+        if (periodType == ReportPeriodType.WEEKLY) {
+            systemEventRepository?.publishEvent(
+                eventType = SystemEventType.WEEKLY_REPORT_GENERATED,
+                relatedEntityId = finalReport.reportUuid,
+                sourceModule = "INTELLIGENCE",
+                metadata = mapOf("periodLabel" to finalReport.periodLabel),
+                nowEpochMs = now
+            )
+        }
         return finalReport.copy(id = id)
     }
 
@@ -602,7 +630,8 @@ class IntelligenceRepository(
 
         val consent = aiConfigDao.getConsentRecordOnce()?.toDomain() ?: AiConsentState()
         val modelPrefs = aiConfigDao.getModelPreferencesOnce()?.toDomain() ?: AiModelPreferenceState()
-        val endpointValid = HttpBackendAiGateway.normalizeProxyEndpoint(modelPrefs.backendBaseUrl) != null
+        val endpointValid = backendAiGateway.supportsDirectCloud ||
+            HttpBackendAiGateway.normalizeProxyEndpoint(modelPrefs.backendBaseUrl) != null
         val canUseCloud = prefs.shareIntelligenceWithCloudAi &&
             consent.cloudAiConsentGranted &&
             modelPrefs.aiEnabled &&

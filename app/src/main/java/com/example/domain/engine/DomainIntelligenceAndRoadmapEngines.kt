@@ -10,6 +10,8 @@ import com.example.domain.model.DevelopmentRoadmap
 import com.example.domain.model.DungeonCategory
 import com.example.domain.model.DungeonDifficulty
 import com.example.domain.model.DungeonStatus
+import com.example.domain.model.GoalAnalysisInsight
+import com.example.domain.model.GoalStatus
 import com.example.domain.model.HabitDayStatus
 import com.example.domain.model.IntelligenceReport
 import com.example.domain.model.PersonalTaskStatus
@@ -21,6 +23,7 @@ import com.example.domain.model.ReportPeriodType
 import com.example.domain.model.RoadmapHorizon
 import com.example.domain.model.RoadmapMilestone
 import com.example.domain.model.SubjectMasteryInsight
+import com.example.domain.model.WeeklyComparisonDelta
 import com.example.domain.model.WorkloadAssessment
 import com.example.domain.model.WorkloadLevel
 import java.time.Instant
@@ -361,7 +364,7 @@ object LongTermDevelopmentPlanner {
 }
 
 /**
- * Generates Weekly & Monthly intelligence reports separating deterministic real-world statistics
+ * Generates Daily, Weekly & Monthly intelligence reports separating deterministic real-world statistics
  * from optional AI narrative synthesis. Guards partial/incomplete date windows transparently.
  */
 object IntelligenceReportEngine {
@@ -374,11 +377,23 @@ object IntelligenceReportEngine {
         aiNarrativeSummary: String? = null,
         aiUsedFallback: Boolean = true
     ): IntelligenceReport {
-        val windowDays = if (periodType == ReportPeriodType.WEEKLY) 7 else 30
-        val minDaysForFull = if (periodType == ReportPeriodType.WEEKLY) 4 else 10
+        val windowDays = when (periodType) {
+            ReportPeriodType.DAILY -> 1
+            ReportPeriodType.WEEKLY -> 7
+            ReportPeriodType.MONTHLY -> 30
+        }
+        val minDaysForFull = when (periodType) {
+            ReportPeriodType.DAILY -> 1
+            ReportPeriodType.WEEKLY -> 4
+            ReportPeriodType.MONTHLY -> 10
+        }
         val endDay = input.todayEpochDay
         val startDay = endDay - (windowDays - 1L)
-        val startMs = input.nowEpochMs - (windowDays * DAY_MS)
+        val startMs = if (periodType == ReportPeriodType.DAILY) {
+            LocalDate.ofEpochDay(endDay).atStartOfDay(input.zoneId).toInstant().toEpochMilli()
+        } else {
+            input.nowEpochMs - (windowDays * DAY_MS)
+        }
 
         val jogs = input.joggingSessions.filter { it.startEpochMs >= startMs }
         val workouts = input.workoutSessions.filter { it.startEpochMs >= startMs }
@@ -387,6 +402,9 @@ object IntelligenceReportEngine {
         val habitDone = input.habitCompletions.count { it.dateEpochDay in startDay..endDay && it.status == HabitDayStatus.COMPLETED }
         val tasksDone = input.tasks.count {
             it.status == PersonalTaskStatus.COMPLETED && (it.completedAtEpochMs ?: 0L) >= startMs
+        }
+        val questsDone = input.generalQuests.count {
+            it.isCompleted && (it.completedAtEpochMs ?: 0L) >= startMs
         }
         val dungeonsCleared = input.dungeonCompletions.count { it.completedAtEpochMs >= startMs }
 
@@ -403,6 +421,10 @@ object IntelligenceReportEngine {
             workouts.forEach { add(Instant.ofEpochMilli(it.startEpochMs).atZone(input.zoneId).toLocalDate().toEpochDay()) }
             study.forEach { add(Instant.ofEpochMilli(it.startEpochMs).atZone(input.zoneId).toLocalDate().toEpochDay()) }
             input.habitCompletions.filter { it.dateEpochDay in startDay..endDay && it.status == HabitDayStatus.COMPLETED }.forEach { add(it.dateEpochDay) }
+            input.tasks.filter { it.status == PersonalTaskStatus.COMPLETED && (it.completedAtEpochMs ?: 0L) >= startMs }
+                .forEach { task ->
+                    task.completedAtEpochMs?.let { add(Instant.ofEpochMilli(it).atZone(input.zoneId).toLocalDate().toEpochDay()) }
+                }
         }
 
         val verifiedSessions = jogs.count { it.verificationStatus.isVerified } +
@@ -419,11 +441,16 @@ object IntelligenceReportEngine {
             if (studyMinutes > 0 || revisions.isNotEmpty()) {
                 add("Academic output: ${studyMinutes}m focus study, ${revisions.size} revision review(s).")
             }
-            if (habitDone > 0 || tasksDone > 0) {
-                add("Life execution: $habitDone habit check-ins, $tasksDone completed task(s).")
+            if (habitDone > 0 || tasksDone > 0 || questsDone > 0) {
+                add("Mission & habit execution: $questsDone quest(s), $tasksDone task(s), $habitDone habit check-ins.")
             }
             if (dungeonsCleared > 0) {
                 add("RPG milestones: $dungeonsCleared Dungeon Gate(s) cleared.")
+            }
+            val activeGoals = input.goalsWithDetails.filter { it.goal.status == GoalStatus.ACTIVE }
+            if (activeGoals.isNotEmpty()) {
+                val avgGoalPct = activeGoals.map { it.computedProgressPercent }.average().toInt()
+                add("Active long-term goals: ${activeGoals.size} tracked (avg ${avgGoalPct}% milestone completion).")
             }
             if (isEmpty()) {
                 add("No completed sessions recorded in this ${windowDays}-day window yet.")
@@ -432,33 +459,43 @@ object IntelligenceReportEngine {
 
         val risks = buildList {
             if (isPartial) {
-                add("Partial data window: only ${activeDays.size} active day(s) recorded out of $windowDays days.")
+                add("Partial data window: only ${activeDays.size} active day(s) recorded out of $windowDays day(s).")
             }
-            if (input.recovery.state == RecoveryState.REST_RECOMMENDED) {
-                add("Current readiness requires rest priority before resuming high-strain workouts.")
+            if (input.recovery.state == RecoveryState.REST_RECOMMENDED || input.recovery.state == RecoveryState.RECOVERY_RECOMMENDED) {
+                add("Current readiness (${input.recovery.readinessScore}/100) requires rest priority before resuming high-strain workouts.")
             }
             val overdueTasks = input.tasks.count { it.isOverdue(endDay) }
             if (overdueTasks > 0) {
-                add("$overdueTasks task(s) remain overdue; triage in Personal Tasks.")
+                add("$overdueTasks task/mission item(s) remain overdue; triage in Mission Control.")
             }
+            val behindGoals = input.goalsWithDetails.count { it.isBehindSchedule && it.goal.status == GoalStatus.ACTIVE }
+            if (behindGoals > 0) {
+                add("$behindGoals active goal(s) are trailing expected milestone pace.")
+            }
+        }
+
+        val periodLabel = if (periodType == ReportPeriodType.DAILY) {
+            LocalDate.ofEpochDay(endDay).toString()
+        } else {
+            "${LocalDate.ofEpochDay(startDay)} → ${LocalDate.ofEpochDay(endDay)}"
         }
 
         return IntelligenceReport(
             reportUuid = UUID.randomUUID().toString(),
             periodType = periodType,
-            periodLabel = "${LocalDate.ofEpochDay(startDay)} → ${LocalDate.ofEpochDay(endDay)}",
+            periodLabel = periodLabel,
             periodStartEpochDay = startDay,
             periodEndEpochDay = endDay,
             activeDaysObserved = activeDays.size,
             isPartialDataWindow = isPartial,
             measuredStatsSummary = "Measured/Timer Verified Sessions: $verifiedSessions | Active Days Observed: ${activeDays.size}/$windowDays",
-            selfReportedStatsSummary = "Self-Reported Logs: $selfReportedSessions | Habits Logged: $habitDone | Tasks Completed: $tasksDone",
+            selfReportedStatsSummary = "Self-Reported Logs: $selfReportedSessions | Habits: $habitDone | Tasks & Quests: ${tasksDone + questsDone}",
             workoutsCount = workouts.size,
             joggingMinutes = jogMinutes,
             studyMinutes = studyMinutes,
             revisionsCount = revisions.size,
             habitsCompletedCount = habitDone,
-            tasksCompletedCount = tasksDone,
+            tasksCompletedCount = tasksDone + questsDone,
             dungeonsClearedCount = dungeonsCleared,
             xpGainedWindow = xpWindow,
             deterministicHighlights = highlights,
@@ -467,6 +504,100 @@ object IntelligenceReportEngine {
             aiUsedFallback = aiUsedFallback,
             generatedAtEpochMs = input.nowEpochMs
         )
+    }
+
+    fun computeWeeklyComparison(input: IntelligenceTelemetryInput): WeeklyComparisonDelta {
+        val currentEndMs = input.nowEpochMs
+        val currentStartMs = currentEndMs - (7 * DAY_MS)
+        val prevStartMs = currentEndMs - (14 * DAY_MS)
+
+        val currWorkouts = input.workoutSessions.count { it.startEpochMs in currentStartMs..currentEndMs }
+        val prevWorkouts = input.workoutSessions.count { it.startEpochMs in prevStartMs until currentStartMs }
+
+        val currJogs = input.joggingSessions.filter { it.startEpochMs in currentStartMs..currentEndMs }
+        val prevJogs = input.joggingSessions.filter { it.startEpochMs in prevStartMs until currentStartMs }
+
+        val currStudy = input.studySessions.filter { it.startEpochMs in currentStartMs..currentEndMs }
+        val prevStudy = input.studySessions.filter { it.startEpochMs in prevStartMs until currentStartMs }
+
+        val currTasks = input.tasks.count { it.status == PersonalTaskStatus.COMPLETED && (it.completedAtEpochMs ?: 0L) in currentStartMs..currentEndMs }
+        val prevTasks = input.tasks.count { it.status == PersonalTaskStatus.COMPLETED && (it.completedAtEpochMs ?: 0L) in prevStartMs until currentStartMs }
+
+        val prevRevs = input.revisionRecords.filter { it.revisedAtEpochMs in prevStartMs until currentStartMs }
+        val prevDungeons = input.dungeonCompletions.filter { it.completedAtEpochMs in prevStartMs until currentStartMs }
+        val prevHabits = input.habitCompletions.count {
+            it.dateEpochDay in (input.todayEpochDay - 13L)..(input.todayEpochDay - 7L) && it.status == HabitDayStatus.COMPLETED
+        }
+
+        val hasPreviousBaseline = prevWorkouts > 0 || prevJogs.isNotEmpty() || prevStudy.isNotEmpty() ||
+            prevTasks > 0 || prevRevs.isNotEmpty() || prevDungeons.isNotEmpty() || prevHabits > 0
+
+        val currentLabel = "${LocalDate.ofEpochDay(input.todayEpochDay - 6L)} → ${LocalDate.ofEpochDay(input.todayEpochDay)}"
+        val previousLabel = "${LocalDate.ofEpochDay(input.todayEpochDay - 13L)} → ${LocalDate.ofEpochDay(input.todayEpochDay - 7L)}"
+
+        if (!hasPreviousBaseline) {
+            return WeeklyComparisonDelta(
+                hasPreviousBaseline = false,
+                currentWindowLabel = currentLabel,
+                previousWindowLabel = previousLabel,
+                summaryNote = "No recorded sessions in the prior 7-day window ($previousLabel). Continue logging real activities to unlock week-over-week comparisons."
+            )
+        }
+
+        val currXp = currJogs.sumOf { it.xpAwarded } +
+            input.workoutSessions.filter { it.startEpochMs in currentStartMs..currentEndMs }.sumOf { it.xpAwarded } +
+            currStudy.sumOf { it.xpAwarded } +
+            input.revisionRecords.filter { it.revisedAtEpochMs in currentStartMs..currentEndMs }.sumOf { it.xpAwarded } +
+            input.dungeonCompletions.filter { it.completedAtEpochMs in currentStartMs..currentEndMs }.sumOf { it.xpAwarded }
+
+        val prevXp = prevJogs.sumOf { it.xpAwarded } +
+            input.workoutSessions.filter { it.startEpochMs in prevStartMs until currentStartMs }.sumOf { it.xpAwarded } +
+            prevStudy.sumOf { it.xpAwarded } +
+            prevRevs.sumOf { it.xpAwarded } +
+            prevDungeons.sumOf { it.xpAwarded }
+
+        val studyDelta = currStudy.sumOf { it.durationMinutes } - prevStudy.sumOf { it.durationMinutes }
+        val jogDelta = currJogs.sumOf { it.durationMinutes } - prevJogs.sumOf { it.durationMinutes }
+        val workoutsDelta = currWorkouts - prevWorkouts
+        val tasksDelta = currTasks - prevTasks
+        val xpDelta = currXp - prevXp
+
+        return WeeklyComparisonDelta(
+            hasPreviousBaseline = true,
+            currentWindowLabel = currentLabel,
+            previousWindowLabel = previousLabel,
+            workoutsDelta = workoutsDelta,
+            joggingMinutesDelta = jogDelta,
+            studyMinutesDelta = studyDelta,
+            tasksCompletedDelta = tasksDelta,
+            xpDelta = xpDelta,
+            summaryNote = "Compared against $previousLabel recorded activity."
+        )
+    }
+
+    fun computeGoalAnalysis(input: IntelligenceTelemetryInput): List<GoalAnalysisInsight> {
+        return input.goalsWithDetails
+            .filter { it.goal.status != GoalStatus.ARCHIVED }
+            .map { details ->
+                val daysRemaining = details.goal.targetDateEpochDay - input.todayEpochDay
+                val pace = when {
+                    details.goal.status == GoalStatus.COMPLETED -> "Completed"
+                    details.goal.status == GoalStatus.PAUSED -> "Paused"
+                    daysRemaining < 0 -> "Overdue by ${-daysRemaining}d"
+                    details.isBehindSchedule -> "Behind schedule (${details.computedProgressPercent}%)"
+                    else -> "On track (${details.computedProgressPercent}%)"
+                }
+                GoalAnalysisInsight(
+                    goalId = details.goal.id,
+                    title = details.goal.title,
+                    progressPercent = details.computedProgressPercent,
+                    statusLabel = details.goal.status.label,
+                    daysRemaining = daysRemaining,
+                    completedMilestones = details.completedMilestonesCount,
+                    totalMilestones = details.totalMilestonesCount,
+                    paceAssessment = pace
+                )
+            }
     }
 }
 

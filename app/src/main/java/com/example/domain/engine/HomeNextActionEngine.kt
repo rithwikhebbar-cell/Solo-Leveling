@@ -5,8 +5,8 @@ import com.example.domain.model.LifeDashboardSummary
 import com.example.domain.model.PhysicalDevelopmentState
 import com.example.domain.model.Quest
 import com.example.domain.model.QuestType
-import com.example.domain.model.RecoveryAssessment
 import com.example.domain.model.RecoveryState
+import com.example.domain.model.UnifiedMissionItem
 import com.example.domain.model.WorkoutStatus
 
 data class HomeNextAction(
@@ -28,7 +28,8 @@ object HomeNextActionEngine {
         physicalState: PhysicalDevelopmentState,
         quests: List<Quest>,
         academicSummary: AcademicDashboardSummary,
-        lifeSummary: LifeDashboardSummary
+        lifeSummary: LifeDashboardSummary,
+        topUnblockedMission: UnifiedMissionItem? = null
     ): HomeNextAction {
         // 1. ACTIVE RUNNING SESSION (Highest priority — must offer CONTINUE)
         val activeJog = physicalState.activeJoggingSession
@@ -46,8 +47,7 @@ object HomeNextActionEngine {
             )
         }
 
-        val activeWorkout = physicalState.todayWorkout
-        if (activeWorkout != null && activeWorkout.status == WorkoutStatus.IN_PROGRESS) {
+        if (physicalState.workoutStatus == WorkoutStatus.IN_PROGRESS) {
             return HomeNextAction(
                 id = "continue_active_workout",
                 category = "PHYSICAL",
@@ -95,7 +95,23 @@ object HomeNextActionEngine {
             )
         }
 
-        // 4. INCOMPLETE DAILY QUEST / PROTOCOL
+        // 4. HIGHEST-PRIORITY MISSION CONTROL DIRECTIVE (Unblocked & Recovery-Safe)
+        if (topUnblockedMission != null && !topUnblockedMission.isBlocked && !topUnblockedMission.isRecoveryRestricted) {
+            return HomeNextAction(
+                id = "mission_${topUnblockedMission.missionId}",
+                category = topUnblockedMission.module.label.uppercase(),
+                title = topUnblockedMission.title,
+                description = topUnblockedMission.description.ifBlank {
+                    "Progress: ${topUnblockedMission.currentValue}/${topUnblockedMission.targetValue} ${topUnblockedMission.unit}"
+                },
+                rationale = topUnblockedMission.priorityReason,
+                actionLabel = "OPEN MISSION",
+                destinationRoute = "mission_control",
+                priorityScore = topUnblockedMission.priorityScore.coerceIn(75, 92)
+            )
+        }
+
+        // 5. INCOMPLETE DAILY QUEST / PROTOCOL
         val dailyQuests = quests.filter { it.type == QuestType.DAILY }
         val primaryPendingDaily = dailyQuests.firstOrNull { !it.isCompleted }
         if (primaryPendingDaily != null) {
@@ -114,9 +130,9 @@ object HomeNextActionEngine {
         }
 
         // 5. OPTIMAL READINESS — START SCHEDULED WORKOUT
-        val isWorkoutCompleted = activeWorkout != null && activeWorkout.status == WorkoutStatus.COMPLETED
-        if (!isWorkoutCompleted && (recovery.state == RecoveryState.READY || recovery.state == RecoveryState.OPTIMAL || recovery.readinessScore >= 70)) {
-            val workoutTitle = activeWorkout?.title ?: "Today's Conditioning Workout"
+        val isWorkoutCompleted = physicalState.workoutStatus == WorkoutStatus.COMPLETED
+        if (!isWorkoutCompleted && (recovery.state == RecoveryState.READY || recovery.readinessScore >= 70)) {
+            val workoutTitle = physicalState.todayWorkout?.title ?: "Today's Conditioning Workout"
             return HomeNextAction(
                 id = "start_scheduled_workout",
                 category = "PHYSICAL",

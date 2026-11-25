@@ -213,4 +213,21 @@ class UserPreferencesRepository(private val context: Context) {
             it[Keys.ACADEMIC_WEEKLY_GOAL_MINUTES] = weeklyMinutes.coerceIn(60, 3000)
         }
     }
+
+    private fun missionMetadataKey(accountOwnerId: String) =
+        stringPreferencesKey("${shadowPrefix(accountOwnerId)}_mission_metadata_json")
+
+    fun observeMissionMetadataJson(accountOwnerId: String): Flow<String> {
+        val owner = normalizeShadowOwner(accountOwnerId)
+        return context.realityOsDataStore.data.map { prefs ->
+            prefs[missionMetadataKey(owner)].orEmpty()
+        }
+    }
+
+    suspend fun saveMissionMetadataJson(accountOwnerId: String, json: String) {
+        val owner = normalizeShadowOwner(accountOwnerId)
+        context.realityOsDataStore.edit { prefs ->
+            prefs[missionMetadataKey(owner)] = json
+        }
+    }
 }

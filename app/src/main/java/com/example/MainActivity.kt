@@ -17,11 +17,11 @@ import com.example.ui.viewmodel.AiSystemViewModel
 import com.example.ui.viewmodel.CloudSyncViewModel
 import com.example.ui.viewmodel.IntelligenceViewModel
 import com.example.ui.viewmodel.LifeManagementViewModel
+import com.example.ui.viewmodel.MissionControlViewModel
 import com.example.ui.viewmodel.RealityOsViewModel
 import com.example.ui.viewmodel.RpgViewModel
 import com.example.ui.viewmodel.SystemControlViewModel
 import com.example.ui.viewmodel.SystemExperienceViewModel
-import com.example.ui.viewmodel.ShadowRealmViewModel
 import com.example.worker.SystemNotificationWorker
 
 class MainActivity : ComponentActivity() {
@@ -88,11 +88,9 @@ class MainActivity : ComponentActivity() {
                     realityOsRepository = app.container.repository
                 )
             )
-            val shadowRealmViewModel: ShadowRealmViewModel = viewModel(
-                factory = ShadowRealmViewModel.factory(
-                    repository = app.container.shadowArmyRepository,
-                    accountOwnerIdFlow = app.container.activeAccountOwnerIdFlow,
-                    preferencesRepository = app.container.preferencesRepository
+            val missionControlViewModel: MissionControlViewModel = viewModel(
+                factory = MissionControlViewModel.factory(
+                    repository = app.container.missionControlRepository
                 )
             )
             SoloLevelingApp(
@@ -105,7 +103,7 @@ class MainActivity : ComponentActivity() {
                 intelligenceViewModel = intelligenceViewModel,
                 systemControlViewModel = systemControlViewModel,
                 systemExperienceViewModel = systemExperienceViewModel,
-                shadowRealmViewModel = shadowRealmViewModel,
+                missionControlViewModel = missionControlViewModel,
                 deepLinkRoute = deepLinkRouteState,
                 onDeepLinkConsumed = { deepLinkRouteState = null }
             )

@@ -86,6 +86,7 @@ enum class AdaptivePlanBlockStatus(val label: String) {
 }
 
 enum class ReportPeriodType(val label: String) {
+    DAILY("Daily Report"),
     WEEKLY("Weekly Report"),
     MONTHLY("Monthly Report")
 }
@@ -357,6 +358,29 @@ data class IntelligenceReport(
     val aiNarrativeSummary: String? = null,
     val aiUsedFallback: Boolean = true,
     val generatedAtEpochMs: Long = System.currentTimeMillis()
+)
+
+data class WeeklyComparisonDelta(
+    val hasPreviousBaseline: Boolean = false,
+    val currentWindowLabel: String = "",
+    val previousWindowLabel: String = "",
+    val workoutsDelta: Int? = null,
+    val joggingMinutesDelta: Int? = null,
+    val studyMinutesDelta: Int? = null,
+    val tasksCompletedDelta: Int? = null,
+    val xpDelta: Int? = null,
+    val summaryNote: String = "No previous-week baseline records available for comparison."
+)
+
+data class GoalAnalysisInsight(
+    val goalId: Long,
+    val title: String,
+    val progressPercent: Int,
+    val statusLabel: String,
+    val daysRemaining: Long?,
+    val completedMilestones: Int,
+    val totalMilestones: Int,
+    val paceAssessment: String
 )
 
 data class PlayerIntelligencePreferences(

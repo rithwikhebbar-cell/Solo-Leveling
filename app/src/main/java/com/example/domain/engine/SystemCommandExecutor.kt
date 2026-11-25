@@ -442,7 +442,7 @@ class SystemCommandExecutor(
             }
             SystemCommandId.GET_SHADOW_ARMY_STATUS -> {
                 val ownerId = activeAccountOwnerIdProvider()
-                val monarch = shadowArmyRepository?.getMonarchProfile(ownerId)
+                val monarch = shadowArmyRepository?.let { runCatching { it.getMonarchProfileOnce(ownerId) }.getOrNull() }
                 val shadows = database.shadowDao().getAllShadowsForOwnerOnce(ownerId).filter { !it.isRetired }
                 val deployments = database.shadowDeploymentDao().getActiveDeploymentsForOwnerOnce(ownerId)
                 val msg = if (monarch != null) {

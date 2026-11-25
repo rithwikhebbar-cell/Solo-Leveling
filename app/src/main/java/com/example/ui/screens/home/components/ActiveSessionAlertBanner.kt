@@ -1,26 +1,20 @@
 package com.example.ui.screens.home.components
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -42,8 +36,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.domain.model.ActiveJoggingSessionState
-import com.example.domain.model.WorkoutPlan
-import com.example.domain.model.WorkoutStatus
+import com.example.domain.model.WorkoutSession
 import com.example.ui.theme.LocalHudGlowEnabled
 import com.example.ui.theme.SystemColors
 import com.example.ui.theme.SystemSpacing
@@ -51,13 +44,13 @@ import com.example.ui.theme.SystemSpacing
 @Composable
 fun ActiveSessionAlertBanner(
     activeJoggingSession: ActiveJoggingSessionState?,
-    activeWorkout: WorkoutPlan?,
+    activeWorkout: WorkoutSession?,
     onContinueSession: (String) -> Unit,
     reducedMotionEnabled: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val isJoggingActive = activeJoggingSession != null
-    val isWorkoutActive = activeWorkout != null && activeWorkout.status == WorkoutStatus.IN_PROGRESS
+    val isWorkoutActive = activeWorkout != null
 
     if (!isJoggingActive && !isWorkoutActive) return
 
@@ -82,7 +75,8 @@ fun ActiveSessionAlertBanner(
 
     val title = if (isJoggingActive) "AEROBIC SESSION IN PROGRESS" else "TRAINING WORKOUT ACTIVE"
     val subtitle = if (isJoggingActive) {
-        "Jogging Session • Target: ${activeJoggingSession?.targetMinutes ?: 0} min"
+        val mins = (activeJoggingSession?.currentElapsedSeconds() ?: 0L) / 60L
+        "Jogging Session • Elapsed: $mins min"
     } else {
         "${activeWorkout?.title} • Active Exercise Protocol"
     }

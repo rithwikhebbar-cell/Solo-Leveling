@@ -57,12 +57,14 @@ import androidx.compose.ui.unit.dp
 import com.example.domain.engine.HomeNextActionEngine
 import com.example.domain.model.AcademicDashboardSummary
 import com.example.domain.model.LifeDashboardSummary
+import com.example.domain.model.MissionOverviewMetrics
 import com.example.domain.model.NotificationCategory
 import com.example.domain.model.QuestCategory
 import com.example.domain.model.QuestType
 import com.example.domain.model.ShadowMonarchProfile
 import com.example.domain.model.SystemAnnouncementRecord
 import com.example.domain.model.SystemNotification
+import com.example.domain.model.UnifiedMissionItem
 import com.example.domain.model.WorkoutStatus
 import com.example.ui.components.HolographicPanel
 import com.example.ui.components.ProvenanceChip
@@ -114,7 +116,12 @@ fun HomeScreen(
     shadowEssenceBalance: Int = 0,
     onNavigateRoute: (String) -> Unit = {},
     reducedMotionEnabled: Boolean = false,
-    equippedTitle: String? = null
+    equippedTitle: String? = null,
+    missionOverview: MissionOverviewMetrics = MissionOverviewMetrics(),
+    topUnblockedMission: UnifiedMissionItem? = null,
+    weeklyComparisonSummary: String = "Weekly metrics synchronized.",
+    highestPriorityRecommendation: String? = null,
+    onNavigateToMissionControl: () -> Unit = {}
 ) {
     var showLogSheet by rememberSaveable { mutableStateOf(false) }
 
@@ -134,12 +141,13 @@ fun HomeScreen(
     }
 
     // Deterministic Next Best Action Evaluator
-    val nextAction = remember(state.physicalState, state.quests, academicSummary, lifeSummary) {
+    val nextAction = remember(state.physicalState, state.quests, academicSummary, lifeSummary, topUnblockedMission) {
         HomeNextActionEngine.evaluate(
             physicalState = state.physicalState,
             quests = state.quests,
             academicSummary = academicSummary,
-            lifeSummary = lifeSummary
+            lifeSummary = lifeSummary,
+            topUnblockedMission = topUnblockedMission
         )
     }
 
@@ -153,6 +161,7 @@ fun HomeScreen(
             "status" -> onNavigateToStatus()
             "shadow" -> onNavigateToShadowRealm()
             "intelligence" -> onNavigateToIntelligence()
+            "mission_control" -> onNavigateToMissionControl()
             else -> onNavigateRoute(destination)
         }
     }
@@ -175,7 +184,7 @@ fun HomeScreen(
         ) {
             // 1. ACTIVE RUNNING / WORKOUT SESSION ALERT (Contextual)
             if (state.physicalState.activeJoggingSession != null ||
-                (state.physicalState.todayWorkout != null && state.physicalState.todayWorkout.status == WorkoutStatus.IN_PROGRESS)
+                state.physicalState.workoutStatus == WorkoutStatus.IN_PROGRESS
             ) {
                 item {
                     ActiveSessionAlertBanner(
@@ -235,10 +244,78 @@ fun HomeScreen(
                 )
             }
 
+            // 6B. MISSION CONTROL & PERSONAL INTELLIGENCE SUMMARY CARDS
+            item {
+                HolographicPanel(
+                    accentColor = SystemColors.ElectricCyan,
+                    modifier = Modifier.testTag("home_mission_control_card")
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            SystemSectionTitle(
+                                title = "Mission Control",
+                                subtitle = "${missionOverview.activeCount} active • ${missionOverview.overdueCount} overdue • Weekly ${missionOverview.weeklyProgressPercent}%"
+                            )
+                            OutlinedButton(
+                                onClick = onNavigateToMissionControl,
+                                modifier = Modifier.testTag("home_open_mission_control_btn")
+                            ) {
+                                Text("OPEN")
+                            }
+                        }
+                        val nextDl = missionOverview.upcomingDeadlines.firstOrNull()
+                        Text(
+                            text = if (nextDl != null) {
+                                "Next deadline: ${nextDl.title} (${nextDl.module.label})"
+                            } else {
+                                "All tracked deadlines on schedule. Daily completion: ${missionOverview.dailyCompletionRatePercent}%."
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = SystemColors.MetallicSilver
+                        )
+                    }
+                }
+            }
+
+            item {
+                HolographicPanel(
+                    accentColor = SystemColors.ArcaneViolet,
+                    modifier = Modifier.testTag("home_intelligence_summary_card")
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            SystemSectionTitle(
+                                title = "Personal Intelligence",
+                                subtitle = intelligenceHeadline
+                            )
+                            OutlinedButton(
+                                onClick = onNavigateToIntelligence,
+                                modifier = Modifier.testTag("home_open_intelligence_btn")
+                            ) {
+                                Text("INSIGHTS")
+                            }
+                        }
+                        Text(
+                            text = highestPriorityRecommendation ?: weeklyComparisonSummary,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = SystemColors.PureIce
+                        )
+                    }
+                }
+            }
+
             // 7. DAILY EXECUTION PROGRESS SNAPSHOT
             item {
-                val isWorkoutDone = state.physicalState.todayWorkout?.status == WorkoutStatus.COMPLETED
-                val jogMinutes = state.physicalState.weeklyActivity.todayJoggingMinutes
+                val isWorkoutDone = state.physicalState.workoutStatus == WorkoutStatus.COMPLETED
+                val jogMinutes = state.physicalState.completedJoggingMinutesToday
                 DailyProgressSnapshotSection(
                     dailyQuestsCompleted = completedDailyCount,
                     dailyQuestsTotal = dailyQuests.size,
@@ -288,10 +365,12 @@ fun HomeScreen(
                     onNavigateToLife = onNavigateToLife,
                     onNavigateToIntelligence = onNavigateToIntelligence,
                     onNavigateToSystemControl = onNavigateToSystemControl,
+                    onNavigateToMissionControl = onNavigateToMissionControl,
                     academicSummary = academicSummary,
                     lifeSummary = lifeSummary,
                     intelligenceHeadline = intelligenceHeadline,
-                    systemHealthStatusLabel = systemHealthStatusLabel
+                    systemHealthStatusLabel = systemHealthStatusLabel,
+                    activeMissionsCount = missionOverview.activeCount
                 )
             }
 

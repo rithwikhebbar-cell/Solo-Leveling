@@ -24,6 +24,7 @@ import com.example.data.repository.AcademicRepository
 import com.example.data.repository.AiSystemRepository
 import com.example.data.repository.IntelligenceRepository
 import com.example.data.repository.LifeManagementRepository
+import com.example.data.repository.MissionControlRepository
 import com.example.data.repository.PenaltyRepository
 import com.example.data.repository.QuestCommitmentRepository
 import com.example.data.repository.RedemptionRepository
@@ -33,7 +34,6 @@ import com.example.data.repository.SyncRepository
 import com.example.data.repository.SystemControlRepository
 import com.example.data.repository.SystemEventRepository
 import com.example.data.repository.SystemExperienceRepository
-import com.example.data.repository.ShadowArmyRepository
 import com.example.data.repository.SocialRepository
 import com.example.data.repository.SocialRepositoryImpl
 import com.example.worker.QuestDeadlineWorker
@@ -45,10 +45,6 @@ import com.example.service.SocialMasteryAiCoach
 import com.example.service.SocialPrivacyService
 import com.example.service.SocialVoiceCoachController
 import com.example.domain.engine.GeminiIntentEngine
-import com.example.domain.engine.MonarchProgressionEngine
-import com.example.domain.engine.ShadowDeploymentEngine
-import com.example.domain.engine.ShadowEvolutionEngine
-import com.example.domain.engine.ShadowExtractionEngine
 import com.example.domain.engine.SystemCommandExecutor
 import com.example.data.sync.CloudSyncEngine
 import com.example.data.sync.SyncQueueManager
@@ -72,7 +68,7 @@ class AppContainer(application: Application) {
         const val DEFAULT_LOCAL_ACCOUNT_OWNER_ID = "local_vault_player_1"
     }
 
-    private val database by lazy { SoloLevelingDatabase.getInstance(application) }
+    val database by lazy { SoloLevelingDatabase.getInstance(application) }
 
     val activeAccountOwnerIdFlow: Flow<String> by lazy {
         database.cloudAuthDao().observeSession()
@@ -194,19 +190,24 @@ class AppContainer(application: Application) {
         IntelligenceRepository(
             database = database,
             preferencesRepository = preferencesRepository,
-            backendAiGateway = backendAiGateway
+            backendAiGateway = backendAiGateway,
+            systemEventRepository = systemEventRepository
+        )
+    }
+
+    val missionControlRepository: MissionControlRepository by lazy {
+        MissionControlRepository(
+            database = database,
+            preferencesRepository = preferencesRepository,
+            realityOsRepository = repository,
+            lifeManagementRepository = lifeManagementRepository,
+            systemEventRepository = systemEventRepository,
+            activeAccountOwnerIdFlow = activeAccountOwnerIdFlow
         )
     }
 
     val questCommitmentRepository: QuestCommitmentRepository by lazy {
         QuestCommitmentRepository(
-            database = database,
-            systemEventRepository = systemEventRepository
-        )
-    }
-
-    val penaltyRepository: PenaltyRepository by lazy {
-        PenaltyRepository(
             database = database,
             systemEventRepository = systemEventRepository
         )
@@ -257,7 +258,6 @@ class AppContainer(application: Application) {
             lifeManagementRepository = lifeManagementRepository,
             academicRepository = academicRepository,
             aiSystemRepository = aiSystemRepository,
-            shadowArmyRepository = shadowArmyRepository,
             activeAccountOwnerIdProvider = {
                 activeAccountOwnerIdFlow.firstOrNull() ?: DEFAULT_LOCAL_ACCOUNT_OWNER_ID
             }
@@ -273,73 +273,6 @@ class AppContainer(application: Application) {
             geminiIntentEngine = geminiIntentEngine,
             systemCommandExecutor = systemCommandExecutor,
             aiSystemRepository = aiSystemRepository
-        )
-    }
-
-    val shadowArmyRepository: ShadowArmyRepository by lazy {
-        val shadowMutex = Mutex()
-        val monarchProgressionEngine = MonarchProgressionEngine(
-            monarchProfileDao = database.shadowMonarchProfileDao(),
-            monarchSkillUnlockDao = database.monarchSkillUnlockDao(),
-            shadowDao = database.shadowDao(),
-            shadowResourceDao = database.shadowResourceDao(),
-            shadowQuestProgressDao = database.shadowQuestProgressDao(),
-            shadowXpTraceDao = database.shadowXpTraceDao(),
-            database = database,
-            mutex = shadowMutex
-        )
-        val bondEngine = com.example.domain.engine.ShadowBondEngine(
-            shadowBondDao = database.shadowBondDao(),
-            shadowDao = database.shadowDao(),
-            database = database,
-            mutex = shadowMutex
-        )
-        val extractionEngine = ShadowExtractionEngine(
-            database = database,
-            shadowDao = database.shadowDao(),
-            extractionDao = database.shadowExtractionDao(),
-            monarchProfileDao = database.shadowMonarchProfileDao(),
-            monarchProgressionEngine = monarchProgressionEngine,
-            mutex = shadowMutex
-        )
-        val evolutionEngine = ShadowEvolutionEngine(
-            shadowDao = database.shadowDao(),
-            shadowSkillUnlockDao = database.shadowSkillUnlockDao(),
-            monarchProgressionEngine = monarchProgressionEngine,
-            shadowXpTraceDao = database.shadowXpTraceDao(),
-            shadowBondEngine = bondEngine,
-            database = database,
-            mutex = shadowMutex
-        )
-        val deploymentEngine = ShadowDeploymentEngine(
-            shadowDao = database.shadowDao(),
-            deploymentDao = database.shadowDeploymentDao(),
-            formationDao = database.shadowFormationDao(),
-            monarchProgressionEngine = monarchProgressionEngine,
-            shadowBondEngine = bondEngine,
-            database = database,
-            mutex = shadowMutex
-        )
-        ShadowArmyRepository(
-            monarchProfileDao = database.shadowMonarchProfileDao(),
-            shadowDao = database.shadowDao(),
-            extractionDao = database.shadowExtractionDao(),
-            skillUnlockDao = database.shadowSkillUnlockDao(),
-            deploymentDao = database.shadowDeploymentDao(),
-            formationDao = database.shadowFormationDao(),
-            monarchSkillUnlockDao = database.monarchSkillUnlockDao(),
-            questProgressDao = database.shadowQuestProgressDao(),
-            resourceDao = database.shadowResourceDao(),
-            shadowBondDao = database.shadowBondDao(),
-            shadowTacticalDao = database.shadowTacticalDao(),
-            shadowDominionDao = database.shadowDominionDao(),
-            monarchProgressionEngine = monarchProgressionEngine,
-            extractionEngine = extractionEngine,
-            evolutionEngine = evolutionEngine,
-            deploymentEngine = deploymentEngine,
-            shadowBondEngine = bondEngine,
-            database = database,
-            mutex = shadowMutex
         )
     }
 
@@ -406,11 +339,11 @@ class SoloLevelingApplication : Application() {
             container.systemExperienceRepository.syncCelebrationsFromPlayerProfile()
             val activeOwnerId = container.activeAccountOwnerIdFlow.firstOrNull()
                 ?: AppContainer.DEFAULT_LOCAL_ACCOUNT_OWNER_ID
-            container.shadowArmyRepository.getMonarchProfile(activeOwnerId)
             container.socialRepository.seedInitialScenariosIfEmpty()
             container.socialRepository.getOrCreateProfile(activeOwnerId)
             container.socialRepository.initializeMissingModuleProgress(activeOwnerId)
             container.audioLifecycleManager.reconcileOrphanFiles(activeOwnerId)
+            container.missionControlRepository.evaluateOverdueEvents()
         }
         CloudSyncWorker.enqueueImmediateSync(this, "APP_STARTUP")
         QuestDeadlineWorker.schedule(this)
@@ -431,7 +364,11 @@ class SoloLevelingApplication : Application() {
             SystemEventType.TASK_COMPLETED,
             SystemEventType.GOAL_MILESTONE_COMPLETED,
             SystemEventType.DUNGEON_COMPLETED,
-            SystemEventType.BOSS_BATTLE_COMPLETED
+            SystemEventType.BOSS_BATTLE_COMPLETED,
+            SystemEventType.MISSION_CREATED,
+            SystemEventType.MISSION_UPDATED,
+            SystemEventType.MISSION_COMPLETED,
+            SystemEventType.GOAL_MILESTONE_REACHED
         )
         refreshTypes.forEach { type ->
             busRepo.registerHandler(type) {
@@ -442,24 +379,6 @@ class SoloLevelingApplication : Application() {
         }
         busRepo.registerHandler(SystemEventType.DAILY_RESET_COMPLETED) {
             container.systemControlRepository.evaluateSystemHealthAndPerformance()
-            Result.success(Unit)
-        }
-        busRepo.registerHandler(SystemEventType.DUNGEON_COMPLETED) {
-            val activeOwnerId = container.activeAccountOwnerIdFlow.firstOrNull()
-                ?: AppContainer.DEFAULT_LOCAL_ACCOUNT_OWNER_ID
-            container.shadowArmyRepository.syncShadowQuestProgress(
-                dungeonCompletions = 1,
-                accountOwnerId = activeOwnerId
-            )
-            Result.success(Unit)
-        }
-        busRepo.registerHandler(SystemEventType.BOSS_BATTLE_COMPLETED) {
-            val activeOwnerId = container.activeAccountOwnerIdFlow.firstOrNull()
-                ?: AppContainer.DEFAULT_LOCAL_ACCOUNT_OWNER_ID
-            container.shadowArmyRepository.syncShadowQuestProgress(
-                dungeonCompletions = 1,
-                accountOwnerId = activeOwnerId
-            )
             Result.success(Unit)
         }
         SystemEventType.entries.forEach { eventType ->

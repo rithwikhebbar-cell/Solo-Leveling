@@ -55,11 +55,13 @@ fun QuickActionCommandDeck(
     onNavigateToLife: () -> Unit,
     onNavigateToIntelligence: () -> Unit,
     onNavigateToSystemControl: () -> Unit,
+    onNavigateToMissionControl: () -> Unit = {},
     modifier: Modifier = Modifier,
     academicSummary: AcademicDashboardSummary = AcademicDashboardSummary(),
     lifeSummary: LifeDashboardSummary = LifeDashboardSummary(),
     intelligenceHeadline: String = "Adaptive planning, predictions & personalized coaching ready",
-    systemHealthStatusLabel: String = "Healthy"
+    systemHealthStatusLabel: String = "Healthy",
+    activeMissionsCount: Int = 0
 ) {
     val academicSubtitle = if (academicSummary.pendingRevisionsCount > 0) {
         "${academicSummary.todayStudyMinutes}m today • ${academicSummary.pendingRevisionsCount} due"
@@ -177,6 +179,16 @@ fun QuickActionCommandDeck(
                 accentColor = SystemColors.ElectricCyan,
                 testTag = "open_intelligence_center_button",
                 onClick = onNavigateToIntelligence,
+                modifier = Modifier.weight(1f)
+            )
+
+            CommandTile(
+                title = "MISSION CONTROL",
+                subtitle = if (activeMissionsCount > 0) "$activeMissionsCount active directives" else "Unified Objectives",
+                icon = Icons.Rounded.Assignment,
+                accentColor = SystemColors.ElectricCyan,
+                testTag = "open_mission_control_button",
+                onClick = onNavigateToMissionControl,
                 modifier = Modifier.weight(1f)
             )
 

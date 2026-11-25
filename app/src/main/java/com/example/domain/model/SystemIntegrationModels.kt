@@ -71,7 +71,15 @@ enum class SystemEventType(val label: String, val defaultModule: String) {
     PENALTY_AUDIT_COMPLETED("Penalty Audit Completed", "PENALTY"),
     LEDGER_RECONCILIATION_FAILED("Ledger Reconciliation Failed", "PENALTY"),
     REDEMPTION_INTEGRITY_WARNING("Redemption Integrity Warning", "REDEMPTION"),
-    SYSTEM_INTEGRITY_WARNING("System Integrity Warning", "SYSTEM")
+    SYSTEM_INTEGRITY_WARNING("System Integrity Warning", "SYSTEM"),
+    // Milestone 14 — Mission Control & Personal Intelligence Events
+    MISSION_CREATED("Mission Created", "MISSION_CONTROL"),
+    MISSION_UPDATED("Mission Updated", "MISSION_CONTROL"),
+    MISSION_COMPLETED("Mission Completed", "MISSION_CONTROL"),
+    MISSION_OVERDUE("Mission Overdue", "MISSION_CONTROL"),
+    MISSION_BLOCKED("Mission Blocked", "MISSION_CONTROL"),
+    WEEKLY_REPORT_GENERATED("Weekly Report Generated", "INTELLIGENCE"),
+    GOAL_MILESTONE_REACHED("Goal Milestone Reached", "MISSION_CONTROL")
 }
 
 enum class EventProcessingStatus(val label: String) {

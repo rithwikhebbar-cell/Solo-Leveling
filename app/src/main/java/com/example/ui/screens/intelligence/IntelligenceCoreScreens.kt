@@ -216,6 +216,7 @@ fun IntelligenceDashboardScreen(
     onOpenPhysicalIntel: () -> Unit,
     onOpenAdaptiveDungeons: () -> Unit,
     onOpenRoadmap: () -> Unit,
+    onOpenDailyReport: () -> Unit = {},
     onOpenWeeklyReport: () -> Unit,
     onOpenMonthlyReport: () -> Unit,
     onOpenAdvisor: () -> Unit,
@@ -328,7 +329,7 @@ fun IntelligenceDashboardScreen(
         item {
             SystemSectionTitle(
                 title = "Intelligence Subsystems",
-                subtitle = "14 dedicated advisory, planning, and analytics views"
+                subtitle = "15 dedicated advisory, planning, and analytics views"
             )
         }
 
@@ -343,7 +344,8 @@ fun IntelligenceDashboardScreen(
             Triple("Physical Intel", "Recovery-guarded guidance", Icons.Rounded.FitnessCenter to onOpenPhysicalIntel),
             Triple("Adaptive Dungeons", "${state.domainInsights.adaptiveDungeons.size} ranked gates", Icons.Rounded.Security to onOpenAdaptiveDungeons),
             Triple("Dev Roadmap", "${state.roadmaps.size} saved roadmaps", Icons.Rounded.CalendarMonth to onOpenRoadmap),
-            Triple("Weekly Report", "7-day synthesis & review", Icons.Rounded.VerifiedUser to onOpenWeeklyReport),
+            Triple("Daily Report", "Today's verified snapshot", Icons.Rounded.VerifiedUser to onOpenDailyReport),
+            Triple("Weekly Report", "7-day synthesis & comparison", Icons.Rounded.VerifiedUser to onOpenWeeklyReport),
             Triple("Monthly Report", "30-day trend synthesis", Icons.Rounded.CalendarMonth to onOpenMonthlyReport),
             Triple("AI Advisor Q&A", "Consent-gated coaching", Icons.Rounded.Psychology to onOpenAdvisor),
             Triple("Intel Preferences", "Bounds, rest days & privacy", Icons.Rounded.Tune to onOpenPreferences)

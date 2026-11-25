@@ -246,6 +246,45 @@ object SystemAnnouncementEngine {
                 priority = TtsSpeechPriority.HIGH,
                 createdAtEpochMs = event.timestampEpochMs
             )
+            SystemEventType.MISSION_COMPLETED -> SystemAnnouncementRecord(
+                announcementKey = "EVENT|${event.eventId}",
+                eventId = event.eventId,
+                category = SystemAnnouncementCategory.QUEST_COMPLETED,
+                channelSpec = SystemNotificationChannelSpec.DAILY_REPORT,
+                title = "Mission Objective Completed",
+                message = "Completed: ${event.metadata["title"] ?: event.relatedEntityId}.",
+                voiceSummary = "Mission objective completed.",
+                deepLinkRoute = "mission_control",
+                actionLabel = "Mission Control",
+                priority = TtsSpeechPriority.NORMAL,
+                createdAtEpochMs = event.timestampEpochMs
+            )
+            SystemEventType.GOAL_MILESTONE_REACHED -> SystemAnnouncementRecord(
+                announcementKey = "EVENT|${event.eventId}",
+                eventId = event.eventId,
+                category = SystemAnnouncementCategory.QUEST_COMPLETED,
+                channelSpec = SystemNotificationChannelSpec.QUEST_COMPLETED,
+                title = "Goal Milestone Reached",
+                message = "Milestone cleared: ${event.metadata["milestone"] ?: "Objective advanced"}.",
+                voiceSummary = "Goal milestone reached.",
+                deepLinkRoute = "mission_control",
+                actionLabel = "Inspect Goals",
+                priority = TtsSpeechPriority.NORMAL,
+                createdAtEpochMs = event.timestampEpochMs
+            )
+            SystemEventType.WEEKLY_REPORT_GENERATED -> SystemAnnouncementRecord(
+                announcementKey = "EVENT|${event.eventId}",
+                eventId = event.eventId,
+                category = SystemAnnouncementCategory.RECOMMENDATION,
+                channelSpec = SystemNotificationChannelSpec.DAILY_REPORT,
+                title = "Weekly Intelligence Report Ready",
+                message = "Performance briefing compiled for ${event.metadata["periodLabel"] ?: "this week"}.",
+                voiceSummary = "Weekly intelligence report ready for review.",
+                deepLinkRoute = "weekly_intelligence",
+                actionLabel = "View Report",
+                priority = TtsSpeechPriority.LOW,
+                createdAtEpochMs = event.timestampEpochMs
+            )
             SystemEventType.SHADOW_RANK_INCREASED -> SystemAnnouncementRecord(
                 announcementKey = "EVENT|${event.eventId}",
                 eventId = event.eventId,

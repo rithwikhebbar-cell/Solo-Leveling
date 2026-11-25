@@ -223,7 +223,19 @@ fun DevelopmentRoadmapScreen(
     }
 }
 
-// SCREEN 12 & 13: WEEKLY & MONTHLY INTELLIGENCE REPORTS
+// SCREEN 12, 13 & 14 (Daily): DAILY, WEEKLY & MONTHLY INTELLIGENCE REPORTS
+@Composable
+fun DailyIntelligenceReportScreen(
+    uiState: IntelligenceUiState,
+    onClearFeedback: () -> Unit,
+    onGenerateReport: () -> Unit
+) = IntelligenceReportScreenTemplate(
+    periodType = ReportPeriodType.DAILY,
+    uiState = uiState,
+    onClearFeedback = onClearFeedback,
+    onGenerateReport = onGenerateReport
+)
+
 @Composable
 fun WeeklyIntelligenceReportScreen(
     uiState: IntelligenceUiState,
@@ -278,6 +290,46 @@ private fun IntelligenceReportScreenTemplate(
             }
         }
 
+        if (periodType == ReportPeriodType.WEEKLY) {
+            val comp = state.domainInsights.weeklyComparison
+            item {
+                HolographicPanel(accentColor = SystemColors.ArcaneViolet) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        SystemSectionTitle(
+                            title = "Week-over-Week Comparison",
+                            subtitle = comp.summaryNote
+                        )
+                        if (comp.hasPreviousBaseline) {
+                            MetricLine("Workouts Delta", formatSignedDelta(comp.workoutsDelta ?: 0, "sessions"))
+                            MetricLine("Jogging Delta", formatSignedDelta(comp.joggingMinutesDelta ?: 0, "min"))
+                            MetricLine("Study Delta", formatSignedDelta(comp.studyMinutesDelta ?: 0, "min"))
+                            MetricLine("Tasks Completed Delta", formatSignedDelta(comp.tasksCompletedDelta ?: 0, "tasks"))
+                            MetricLine("XP Observed Delta", formatSignedDelta(comp.xpDelta ?: 0, "XP"))
+                        }
+                    }
+                }
+            }
+        }
+
+        if (state.domainInsights.goalAnalysis.isNotEmpty()) {
+            item {
+                HolographicPanel(accentColor = SystemColors.VerifiedEmerald) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        SystemSectionTitle(
+                            title = "Goal Progress Analysis",
+                            subtitle = "${state.domainInsights.goalAnalysis.size} tracked goal(s)"
+                        )
+                        state.domainInsights.goalAnalysis.forEach { goal ->
+                            MetricLine(
+                                label = "${goal.title} (${goal.completedMilestones}/${goal.totalMilestones} milestones)",
+                                value = goal.paceAssessment
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
         val reports = state.reports.filter { it.periodType == periodType }
         if (reports.isEmpty()) {
             item {
@@ -301,7 +353,7 @@ private fun IntelligenceReportScreenTemplate(
                         Text(report.selfReportedStatsSummary, style = MaterialTheme.typography.bodySmall, color = SystemColors.SystemBlue)
                         MetricLine("Workouts / Jogging", "${report.workoutsCount} sessions / ${report.joggingMinutes} min")
                         MetricLine("Study / Revisions", "${report.studyMinutes} min / ${report.revisionsCount} reviews")
-                        MetricLine("Habits / Tasks / Dungeons", "${report.habitsCompletedCount} / ${report.tasksCompletedCount} / ${report.dungeonsClearedCount}")
+                        MetricLine("Habits / Missions / Dungeons", "${report.habitsCompletedCount} / ${report.tasksCompletedCount} / ${report.dungeonsClearedCount}")
                         MetricLine("Window XP Observed", "${report.xpGainedWindow} XP")
 
                         if (report.deterministicHighlights.isNotEmpty()) {
@@ -331,6 +383,11 @@ private fun IntelligenceReportScreenTemplate(
             }
         }
     }
+}
+
+private fun formatSignedDelta(value: Int, unit: String): String {
+    val prefix = if (value > 0) "+" else ""
+    return "$prefix$value $unit"
 }
 
 // SCREEN 14: AI PERSONAL DEVELOPMENT ADVISOR

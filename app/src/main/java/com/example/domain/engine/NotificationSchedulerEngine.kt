@@ -197,17 +197,24 @@ object NotificationSchedulerEngine {
             }
         }
 
-        // 7. Personal task due today
+        // 7. Personal task / mission due today or within 24h
         if (prefs.enableTaskDeadlines) {
-            val dueToday = tasks.filter { it.isDueToday(todayEpochDay) && it.status != PersonalTaskStatus.COMPLETED }
-            if (dueToday.isNotEmpty()) {
+            val dueSoon = tasks.filter {
+                it.status != PersonalTaskStatus.COMPLETED &&
+                    it.status != PersonalTaskStatus.ARCHIVED &&
+                    it.dueDateEpochDay != null &&
+                    it.dueDateEpochDay in todayEpochDay..(todayEpochDay + 1L)
+            }
+            if (dueSoon.isNotEmpty()) {
+                val dueTodayCount = dueSoon.count { it.dueDateEpochDay == todayEpochDay }
+                val header = if (dueTodayCount > 0) "Missions Due Today ($dueTodayCount)" else "Approaching Deadlines (${dueSoon.size})"
                 candidates.add(
                     PlannedSystemNotification(
-                        title = "Tasks Due Today (${dueToday.size})",
-                        message = "${dueToday.first().title}${if (dueToday.size > 1) " (+${dueToday.size - 1} more)" else ""} scheduled for today.",
+                        title = header,
+                        message = "${dueSoon.first().title}${if (dueSoon.size > 1) " (+${dueSoon.size - 1} more)" else ""} scheduled soon.",
                         category = NotificationCategory.TASK_DEADLINE,
                         dedupKey = "tasks_due_$today",
-                        deepLinkRoute = "tasks"
+                        deepLinkRoute = "mission_control"
                     )
                 )
             }
@@ -263,7 +270,7 @@ object NotificationSchedulerEngine {
                         message = "'${urgentMilestone.title}' target falls within 3 days.",
                         category = NotificationCategory.GOAL_MILESTONE,
                         dedupKey = "milestone_${urgentMilestone.id}_$today",
-                        deepLinkRoute = "goals"
+                        deepLinkRoute = "mission_control"
                     )
                 )
             }
@@ -274,23 +281,23 @@ object NotificationSchedulerEngine {
             candidates.add(
                 PlannedSystemNotification(
                     title = "Daily Schedule Briefing",
-                    message = "Review today's timeline, resolve conflicts, and lock keystone habits.",
+                    message = "Review today's missions, resolve conflicts, and lock keystone habits.",
                     category = NotificationCategory.DAILY_PLANNING_REMINDER,
                     dedupKey = "daily_plan_$today",
-                    deepLinkRoute = "daily_schedule"
+                    deepLinkRoute = "mission_control"
                 )
             )
         }
 
-        // 12. Weekly Review Reminder (Sunday afternoon/evening)
+        // 12. Weekly Intelligence & Review Reminder (Sunday afternoon/evening)
         if (prefs.enableWeeklyReviewReminders && today.dayOfWeek == DayOfWeek.SUNDAY && hourOfDay >= 16) {
             candidates.add(
                 PlannedSystemNotification(
-                    title = "Weekly Discipline Review Ready",
-                    message = "Inspect your 7-day consistency, missed commitments, and recalibrate next week.",
+                    title = "Weekly Intelligence Report Available",
+                    message = "Inspect your 7-day performance comparison, goal pace, and recalibrate next week.",
                     category = NotificationCategory.WEEKLY_REVIEW_REMINDER,
                     dedupKey = "weekly_review_$today",
-                    deepLinkRoute = "weekly_review"
+                    deepLinkRoute = "weekly_intelligence"
                 )
             )
         }

@@ -26,6 +26,7 @@ import com.example.data.remote.RemoteDeviceDto
 import com.example.data.remote.RemotePlayerIdentityDto
 import com.example.data.remote.SupabaseApiPort
 import com.example.data.remote.SupabaseAuthResponse
+import com.example.data.remote.SupabaseDiagnosticReport
 import com.example.data.remote.SupabaseUserDto
 import com.example.data.remote.TokenStorage
 import com.example.data.repository.SyncRepository
